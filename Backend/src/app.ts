@@ -10,8 +10,18 @@ dotenv.config();
 
 const app = express();
 
+const origenesPermitidos = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map(s => s.trim());
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || origenesPermitidos.some(o => origin === o)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Origin no permitido: ${origin}`));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
 }));
