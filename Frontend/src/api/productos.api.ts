@@ -1,0 +1,80 @@
+import axios from 'axios';
+import type {
+  ProductosPaginados,
+  Producto,
+  Categoria,
+  CrearProductoDTO,
+  ActualizarProductoDTO,
+  CrearCategoriaDTO,
+  ActualizarCategoriaDTO,
+} from '../types';
+
+const api = axios.create({ baseURL: '/api' });
+
+export interface FiltrosProducto {
+  categoria?: string;
+  busqueda?: string;
+  codigo_barras?: string;
+  en_oferta?: boolean;
+  precio_min?: number;
+  precio_max?: number;
+  stock_min?: number;
+  stock_max?: number;
+  vencimiento_desde?: string;
+  vencimiento_hasta?: string;
+  pagina?: number;
+  limite?: number;
+  ordenar?: 'nombre_asc' | 'nombre_desc' | 'precio_asc' | 'precio_desc';
+}
+
+export async function fetchProductos(filtros: FiltrosProducto = {}): Promise<ProductosPaginados> {
+  const { data } = await api.get<ProductosPaginados>('/productos', { params: filtros });
+  return data;
+}
+
+export async function fetchProductoPorId(id: string): Promise<Producto> {
+  const { data } = await api.get<Producto>(`/productos/${id}`);
+  return data;
+}
+
+export async function crearProducto(dto: CrearProductoDTO): Promise<Producto> {
+  const { data } = await api.post<Producto>('/productos', dto);
+  return data;
+}
+
+export async function actualizarProducto(id: string, dto: ActualizarProductoDTO): Promise<Producto> {
+  const { data } = await api.put<Producto>(`/productos/${id}`, dto);
+  return data;
+}
+
+export async function eliminarProducto(id: string): Promise<void> {
+  await api.delete(`/productos/${id}`);
+}
+
+export async function fetchCategorias(): Promise<Categoria[]> {
+  const { data } = await api.get<Categoria[]>('/categorias');
+  return data;
+}
+
+export async function crearCategoria(dto: CrearCategoriaDTO): Promise<Categoria> {
+  const { data } = await api.post<Categoria>('/categorias', dto);
+  return data;
+}
+
+export async function actualizarCategoria(id: string, dto: ActualizarCategoriaDTO): Promise<Categoria> {
+  const { data } = await api.put<Categoria>(`/categorias/${id}`, dto);
+  return data;
+}
+
+export async function eliminarCategoria(id: string): Promise<void> {
+  await api.delete(`/categorias/${id}`);
+}
+
+export async function subirImagenes(archivos: File[]): Promise<string[]> {
+  const formData = new FormData();
+  archivos.forEach(archivo => formData.append('imagenes', archivo));
+  const { data } = await api.post<{ urls: string[] }>('/uploads', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data.urls;
+}
