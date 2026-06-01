@@ -8,8 +8,19 @@ import type {
   CrearCategoriaDTO,
   ActualizarCategoriaDTO,
 } from '../types';
+import { supabase } from '../lib/supabase';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '/api' });
+
+api.interceptors.request.use(async (config) => {
+  if (config.method && config.method.toLowerCase() !== 'get') {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
+    }
+  }
+  return config;
+});
 
 export interface FiltrosProducto {
   categoria?: string;
@@ -53,6 +64,11 @@ export async function eliminarProducto(id: string): Promise<void> {
 
 export async function fetchCategorias(): Promise<Categoria[]> {
   const { data } = await api.get<Categoria[]>('/categorias');
+  return data;
+}
+
+export async function fetchCategoriasArbol(): Promise<Categoria[]> {
+  const { data } = await api.get<Categoria[]>('/categorias/arbol');
   return data;
 }
 

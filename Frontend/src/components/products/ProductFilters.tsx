@@ -3,7 +3,7 @@ import type { Categoria } from '../../types';
 interface Props {
   categorias: Categoria[];
   categoriaSeleccionada: string | undefined;
-  onCambiarCategoria: (slug: string | undefined) => void;
+  onCambiarCategoria: (id: string | undefined) => void;
 }
 
 export function ProductFilters({ categorias, categoriaSeleccionada, onCambiarCategoria }: Props) {
@@ -19,8 +19,8 @@ export function ProductFilters({ categorias, categoriaSeleccionada, onCambiarCat
         {categorias.map(cat => (
           <button
             key={cat.id}
-            className={`filter-btn ${categoriaSeleccionada === cat.slug ? 'filter-btn--active' : ''}`}
-            onClick={() => onCambiarCategoria(cat.slug)}
+            className={`filter-btn ${categoriaSeleccionada === cat.id ? 'filter-btn--active' : ''}`}
+            onClick={() => onCambiarCategoria(cat.id)}
           >
             {cat.nombre}
           </button>

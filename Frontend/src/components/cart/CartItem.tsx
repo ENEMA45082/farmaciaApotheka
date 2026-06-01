@@ -1,5 +1,5 @@
 import type { ItemCarrito } from '../../types';
-import { precioEfectivo } from '../../types';
+import { precioEfectivo, formatPrecio } from '../../types';
 import { useCarritoContext } from '../../context/CartContext';
 
 interface Props {
@@ -21,9 +21,9 @@ export function CartItem({ item }: Props) {
       <div className="cart-item__info">
         <p className="cart-item__name">{producto.nombre}</p>
         <p className="cart-item__price">
-          ${efectivo.toFixed(2)}
+          ${formatPrecio(efectivo)}
           {producto.en_oferta && (
-            <span className="cart-item__precio-lista">${producto.precio.toFixed(2)}</span>
+            <span className="cart-item__precio-lista">${formatPrecio(producto.precio)}</span>
           )}
         </p>
         <div className="cart-item__qty">
@@ -33,7 +33,7 @@ export function CartItem({ item }: Props) {
         </div>
       </div>
       <div className="cart-item__right">
-        <p className="cart-item__subtotal">${(efectivo * cantidad).toFixed(2)}</p>
+        <p className="cart-item__subtotal">${formatPrecio(efectivo * cantidad)}</p>
         <button className="cart-item__remove" onClick={() => quitarItem(producto.id)}>✕</button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useProductos } from '../hooks/useProductos';
 import { useCategorias } from '../hooks/useCategorias';
 import {
@@ -10,9 +10,100 @@ import {
   eliminarCategoria,
   subirImagenes,
 } from '../api/productos.api';
-import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO } from '../types';
+import { fetchPedidosAdmin, cambiarEstadoPedido } from '../api/pedidos.api';
+import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO, Pedido } from '../types';
+import { formatPrecio } from '../types';
 
-type Tab = 'productos' | 'categorias';
+type Tab = 'productos' | 'categorias' | 'pedidos';
+
+const ESTADOS_PEDIDO: { value: Pedido['estado']; label: string }[] = [
+  { value: 'pendiente',      label: 'Pendiente' },
+  { value: 'confirmado',     label: 'Confirmado' },
+  { value: 'en_preparacion', label: 'En preparación' },
+  { value: 'enviado',        label: 'Enviado' },
+  { value: 'entregado',      label: 'Entregado' },
+  { value: 'cancelado',      label: 'Cancelado' },
+  { value: 'anulado',        label: 'Anulado' },
+];
+
+const ESTADO_COLORS: Record<Pedido['estado'], { bg: string; color: string }> = {
+  pendiente:      { bg: '#fef3c7', color: '#92400e' },
+  confirmado:     { bg: '#dbeafe', color: '#1e40af' },
+  en_preparacion: { bg: '#ede9fe', color: '#5b21b6' },
+  enviado:        { bg: '#cffafe', color: '#155e75' },
+  entregado:      { bg: '#d1fae5', color: '#065f46' },
+  cancelado:      { bg: '#fee2e2', color: '#991b1b' },
+  anulado:        { bg: '#fee2e2', color: '#991b1b' },
+};
+
+function EstadoDropdown({
+  estado,
+  disabled,
+  onChange,
+}: {
+  estado: Pedido['estado'];
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const cfg    = ESTADO_COLORS[estado];
+  const label  = ESTADOS_PEDIDO.find(e => e.value === estado)?.label ?? estado;
+
+  return (
+    <div className="estado-dropdown" ref={ref}>
+      <button
+        className="estado-dropdown__trigger"
+        style={{ background: cfg.bg, color: cfg.color }}
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+        type="button"
+      >
+        {label}
+        <svg viewBox="0 0 20 20" width="12" height="12" fill="currentColor" style={{ opacity: 0.7, flexShrink: 0 }}>
+          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="estado-dropdown__menu">
+          {ESTADOS_PEDIDO.map(e => {
+            const ec = ESTADO_COLORS[e.value];
+            return (
+              <button
+                key={e.value}
+                className={`estado-dropdown__option${e.value === estado ? ' estado-dropdown__option--activo' : ''}`}
+                style={{ background: ec.bg, color: ec.color }}
+                onClick={() => { onChange(e.value); setOpen(false); }}
+                type="button"
+              >
+                {e.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const METODO_ENVIO_LABEL: Record<string, string> = {
+  retiro_farmacia: 'Retiro farmacia',
+  domicilio:       'Domicilio',
+  retiro_sucursal: 'Sucursal Andreani',
+};
+
+function formatFechaPedido(iso: string) {
+  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 const MAX_IMAGENES = 5;
 
@@ -27,9 +118,11 @@ const FORM_PRODUCTO_VACIO = {
   en_oferta: false,
   precio_oferta: '',
   porcentaje_oferta: '',
+  es_venta_libre: true,
+  peso_gramos: '500',
 };
 
-const FORM_CATEGORIA_VACIO = { nombre: '', icono: '' };
+const FORM_CATEGORIA_VACIO = { nombre: '', id_padre: '' };
 
 const FILTRO_FORM_VACIO = {
   busqueda: '',
@@ -147,6 +240,8 @@ export function AdminPage() {
       en_oferta: p.en_oferta,
       precio_oferta: p.precio_oferta != null ? String(p.precio_oferta) : '',
       porcentaje_oferta: p.porcentaje_oferta != null ? String(p.porcentaje_oferta) : '',
+      es_venta_libre: p.es_venta_libre,
+      peso_gramos: String(p.peso_gramos ?? 500),
     });
     setImagenesExistentes(
       p.imagenes?.length ? p.imagenes : p.imagen_url ? [p.imagen_url] : []
@@ -199,6 +294,8 @@ export function AdminPage() {
         imagenes: todasLasImagenes,
         codigo_barras: formProducto.codigo_barras.trim() || undefined,
         fecha_vencimiento: formProducto.fecha_vencimiento || undefined,
+        es_venta_libre: formProducto.es_venta_libre,
+        peso_gramos: formProducto.peso_gramos !== '' ? parseInt(formProducto.peso_gramos) : 500,
       };
 
       if (productoEditando) {
@@ -228,6 +325,39 @@ export function AdminPage() {
     }
   }
 
+  // — Pedidos (admin) —
+  const [pedidosAdmin, setPedidosAdmin] = useState<Pedido[]>([]);
+  const [cargandoPedidos, setCargandoPedidos] = useState(false);
+  const [errorPedidos, setErrorPedidos] = useState<string | null>(null);
+  const [filtroPedidoEstado, setFiltroPedidoEstado] = useState<string>('');
+  const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tabActiva !== 'pedidos') return;
+    setCargandoPedidos(true);
+    setErrorPedidos(null);
+    fetchPedidosAdmin()
+      .then(setPedidosAdmin)
+      .catch(() => setErrorPedidos('No se pudieron cargar los pedidos.'))
+      .finally(() => setCargandoPedidos(false));
+  }, [tabActiva]);
+
+  async function handleCambiarEstado(pedidoId: string, nuevoEstado: string) {
+    setCambiandoEstado(pedidoId);
+    try {
+      const actualizado = await cambiarEstadoPedido(pedidoId, nuevoEstado);
+      setPedidosAdmin(prev => prev.map(p => p.id === pedidoId ? actualizado : p));
+    } catch {
+      alert('No se pudo cambiar el estado.');
+    } finally {
+      setCambiandoEstado(null);
+    }
+  }
+
+  const pedidosFiltrados = filtroPedidoEstado
+    ? pedidosAdmin.filter(p => p.estado === filtroPedidoEstado)
+    : pedidosAdmin;
+
   // — Categorías —
   const [formCategoria, setFormCategoria] = useState(FORM_CATEGORIA_VACIO);
   const [categoriaEditando, setCategoriaEditando] = useState<Categoria | null>(null);
@@ -236,8 +366,9 @@ export function AdminPage() {
 
   function iniciarEdicionCategoria(c: Categoria) {
     setCategoriaEditando(c);
-    setFormCategoria({ nombre: c.nombre, icono: c.icono ?? '' });
+    setFormCategoria({ nombre: c.nombre, id_padre: c.id_padre ?? '' });
     setErrorCategoriaForm(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function cancelarEdicionCategoria() {
@@ -257,10 +388,13 @@ export function AdminPage() {
     try {
       const payload = {
         nombre: formCategoria.nombre.trim(),
-        icono: formCategoria.icono.trim() || undefined,
+        id_padre: formCategoria.id_padre || undefined,
       };
       if (categoriaEditando) {
-        await actualizarCategoria(categoriaEditando.id, payload);
+        await actualizarCategoria(categoriaEditando.id, {
+          nombre: payload.nombre,
+          id_padre: formCategoria.id_padre || null,
+        });
       } else {
         await crearCategoria(payload);
       }
@@ -302,6 +436,12 @@ export function AdminPage() {
           onClick={() => setTabActiva('categorias')}
         >
           Categorías
+        </button>
+        <button
+          className={`admin-tab ${tabActiva === 'pedidos' ? 'admin-tab--activa' : ''}`}
+          onClick={() => setTabActiva('pedidos')}
+        >
+          Pedidos
         </button>
       </div>
 
@@ -398,6 +538,31 @@ export function AdminPage() {
                   />
                 </div>
 
+                <div className="form-group">
+                  <label htmlFor="p-peso">Peso (gramos)</label>
+                  <input
+                    id="p-peso"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={formProducto.peso_gramos}
+                    onChange={e => setFormProducto(f => ({ ...f, peso_gramos: e.target.value }))}
+                    placeholder="500"
+                  />
+                </div>
+
+              </div>
+
+              {/* Venta libre */}
+              <div className="oferta-section">
+                <label className="oferta-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={formProducto.es_venta_libre}
+                    onChange={e => setFormProducto(f => ({ ...f, es_venta_libre: e.target.checked }))}
+                  />
+                  ¿Venta libre? <span style={{ fontSize: '0.8rem', color: 'var(--text-light)', fontWeight: 400 }}>(si no está activado, el producto no se muestra en la tienda)</span>
+                </label>
               </div>
 
               {/* Sección oferta */}
@@ -739,7 +904,7 @@ export function AdminPage() {
       {/* ======= TAB CATEGORÍAS ======= */}
       {tabActiva === 'categorias' && (
         <div className="admin-section">
-          <div className="admin-form-card">
+          <div className={`admin-form-card${categoriaEditando ? ' admin-form-card--editando' : ''}`}>
             <h2>{categoriaEditando ? `Editando: ${categoriaEditando.nombre}` : 'Agregar categoría'}</h2>
 
             {errorCategoriaForm && <div className="admin-error">{errorCategoriaForm}</div>}
@@ -759,14 +924,20 @@ export function AdminPage() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="c-icono">Ícono (nombre)</label>
-                  <input
-                    id="c-icono"
-                    type="text"
-                    value={formCategoria.icono}
-                    onChange={e => setFormCategoria(f => ({ ...f, icono: e.target.value }))}
-                    placeholder="Ej: pill, heart, thermometer"
-                  />
+                  <label htmlFor="c-parent">Categoría padre (opcional)</label>
+                  <select
+                    id="c-parent"
+                    value={formCategoria.id_padre}
+                    onChange={e => setFormCategoria(f => ({ ...f, id_padre: e.target.value }))}
+                  >
+                    <option value="">— Categoría raíz —</option>
+                    {categorias
+                      .filter(c => c.id !== categoriaEditando?.id)
+                      .map(c => (
+                        <option key={c.id} value={c.id}>{c.nombre}</option>
+                      ))
+                    }
+                  </select>
                 </div>
               </div>
 
@@ -799,8 +970,7 @@ export function AdminPage() {
                   <thead>
                     <tr>
                       <th>Nombre</th>
-                      <th>Slug</th>
-                      <th>Ícono</th>
+                      <th>Categoría padre</th>
                       <th>Acciones</th>
                     </tr>
                   </thead>
@@ -808,8 +978,7 @@ export function AdminPage() {
                     {categorias.map(c => (
                       <tr key={c.id} className={categoriaEditando?.id === c.id ? 'row-editando' : ''}>
                         <td>{c.nombre}</td>
-                        <td><code>{c.slug}</code></td>
-                        <td>{c.icono ?? '—'}</td>
+                        <td>{c.id_padre ? (categorias.find(p => p.id === c.id_padre)?.nombre ?? '—') : <span style={{color:'#aaa'}}>Raíz</span>}</td>
                         <td className="acciones">
                           <button className="btn-tabla btn-editar" onClick={() => iniciarEdicionCategoria(c)}>
                             Editar
@@ -827,6 +996,69 @@ export function AdminPage() {
           </div>
         </div>
       )}
+      {/* ======= TAB PEDIDOS ======= */}
+      {tabActiva === 'pedidos' && (
+        <div className="admin-section">
+          <div className="admin-table-card">
+            <div className="admin-filtros-header">
+              <h2>Pedidos ({pedidosFiltrados.length})</h2>
+              <select
+                className="admin-pedidos-filtro-estado"
+                value={filtroPedidoEstado}
+                onChange={e => setFiltroPedidoEstado(e.target.value)}
+              >
+                <option value="">Todos los estados</option>
+                {ESTADOS_PEDIDO.map(e => (
+                  <option key={e.value} value={e.value}>{e.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {cargandoPedidos && <p className="admin-loading">Cargando pedidos...</p>}
+            {errorPedidos && <div className="admin-error">{errorPedidos}</div>}
+
+            {!cargandoPedidos && pedidosFiltrados.length === 0 && (
+              <p className="admin-empty">No hay pedidos{filtroPedidoEstado ? ' con ese estado' : ''}.</p>
+            )}
+
+            {pedidosFiltrados.length > 0 && (
+              <div className="admin-table-wrapper">
+                <table className="admin-table admin-pedidos-tabla">
+                  <thead>
+                    <tr>
+                      <th># Pedido</th>
+                      <th>Fecha</th>
+                      <th>Envío</th>
+                      <th>Total</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pedidosFiltrados.map(p => (
+                      <tr key={p.id}>
+                        <td className="admin-pedidos-nro">
+                          APO-{String(p.nro_pedido).padStart(5, '0')}
+                        </td>
+                        <td>{formatFechaPedido(p.fecha_pedido)}</td>
+                        <td>{METODO_ENVIO_LABEL[p.metodo_envio] ?? p.metodo_envio}</td>
+                        <td>${formatPrecio(p.total)}</td>
+                        <td>
+                          <EstadoDropdown
+                            estado={p.estado}
+                            disabled={cambiandoEstado === p.id}
+                            onChange={v => handleCambiarEstado(p.id, v)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

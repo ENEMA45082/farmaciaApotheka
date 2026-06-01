@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchProductoPorId } from '../api/productos.api';
 import type { Producto } from '../types';
-import { precioEfectivo } from '../types';
+import { precioEfectivo, formatPrecio } from '../types';
 import { useCarritoContext } from '../context/CartContext';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
@@ -73,14 +73,14 @@ export function ProductDetailPage() {
           )}
           {producto.en_oferta && producto.precio_oferta != null ? (
             <div className="product-card__precios product-detail__precios">
-              <span className="precio--oferta">${precioEfectivo(producto).toFixed(2)}</span>
-              <span className="precio--lista">${producto.precio.toFixed(2)}</span>
+              <span className="precio--oferta">${formatPrecio(precioEfectivo(producto))}</span>
+              <span className="precio--lista">${formatPrecio(producto.precio)}</span>
               {producto.porcentaje_oferta != null && (
                 <span className="oferta-badge">-{producto.porcentaje_oferta}%</span>
               )}
             </div>
           ) : (
-            <p className="product-detail__price">${producto.precio.toFixed(2)}</p>
+            <p className="product-detail__price">${formatPrecio(producto.precio)}</p>
           )}
           <p className="product-detail__stock">
             {producto.stock > 0 ? `Stock disponible: ${producto.stock}` : 'Sin stock'}

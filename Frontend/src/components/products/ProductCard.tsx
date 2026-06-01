@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import type { Producto } from '../../types';
-import { precioEfectivo } from '../../types';
+import { precioEfectivo, formatPrecio } from '../../types';
 import { useCarritoContext } from '../../context/CartContext';
+import { useFavoritos } from '../../context/FavoritosContext';
 
 interface Props {
   producto: Producto;
@@ -9,6 +10,9 @@ interface Props {
 
 export function ProductCard({ producto }: Props) {
   const { agregarItem, abrirCarrito } = useCarritoContext();
+  const { esFavorito, toggleFavorito } = useFavoritos();
+
+  const favorito = esFavorito(producto.id);
 
   const handleAgregar = () => {
     agregarItem(producto, 1);
@@ -27,6 +31,18 @@ export function ProductCard({ producto }: Props) {
           className="product-card__image"
         />
       </Link>
+
+      <button
+        className={`product-card__fav${favorito ? ' product-card__fav--activo' : ''}`}
+        onClick={() => toggleFavorito(producto.id)}
+        aria-label={favorito ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          fill={favorito ? 'currentColor' : 'none'} stroke="currentColor">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+      </button>
+
       <div className="product-card__body">
         {producto.categoria && (
           <span className="product-card__category">{producto.categoria.nombre}</span>
@@ -37,14 +53,14 @@ export function ProductCard({ producto }: Props) {
 
         {producto.en_oferta && producto.precio_oferta != null ? (
           <div className="product-card__precios">
-            <span className="precio--oferta">${precioEfectivo(producto).toFixed(2)}</span>
-            <span className="precio--lista">${producto.precio.toFixed(2)}</span>
+            <span className="precio--oferta">${formatPrecio(precioEfectivo(producto))}</span>
+            <span className="precio--lista">${formatPrecio(producto.precio)}</span>
             {producto.porcentaje_oferta != null && (
               <span className="oferta-badge">-{producto.porcentaje_oferta}%</span>
             )}
           </div>
         ) : (
-          <p className="product-card__price">${producto.precio.toFixed(2)}</p>
+          <p className="product-card__price">${formatPrecio(producto.precio)}</p>
         )}
 
         <button
