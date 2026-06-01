@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCarritoContext } from '../context/CartContext';
 import { useCheckout } from '../context/CheckoutContext';
 import { crearPedido } from '../api/pedidos.api';
-import { procesarPago, iniciarCheckoutHosted } from '../api/pagos.api';
+import { iniciarCheckoutHosted } from '../api/pagos.api';
 import { precioEfectivo, formatPrecio } from '../types';
 import type { MetodoPago } from '../types';
 
@@ -12,23 +12,6 @@ const CBU_FARMACIA   = '0720015500000000012345';
 const ALIAS_FARMACIA = 'FARMACIA.APOTHEKA';
 const BANCO_FARMACIA = 'Banco Galicia';
 const TITULAR        = 'Farmacia Apotheka SRL';
-
-const ES_PRODUCCION = import.meta.env.VITE_PAYWAY_ENVIRONMENT === 'production';
-
-const PAYWAY_URL = ES_PRODUCCION
-  ? 'https://live.decidir.com/api/v2'
-  : 'https://developers.decidir.com/api/v2';
-
-const CARD_TYPES = [
-  { id: 1,  label: 'Visa' },
-  { id: 15, label: 'Mastercard' },
-  { id: 31, label: 'American Express' },
-  { id: 8,  label: 'Diners' },
-  { id: 20, label: 'Mastercard Débito' },
-  { id: 42, label: 'Visa Débito' },
-];
-
-const CUOTAS = [1, 3, 6, 12];
 
 export function PagarPage() {
   const { user, loading: authLoading } = useAuth();
@@ -40,13 +23,8 @@ export function PagarPage() {
   const [confirmando, setConfirmando] = useState(false);
   const [error,       setError]       = useState<string | null>(null);
 
-  const formRef      = useRef<HTMLFormElement>(null);
-  const [cardNumber, setCardNumber]   = useState('');
-  const [cuotas,     setCuotas]       = useState(1);
-  const [tipoTarjeta, setTipoTarjeta] = useState(1);
-
-  const hayAhorro   = subtotalLista > totalPrecio;
-  const totalFinal  = totalPrecio + costoEnvio;
+  const hayAhorro  = subtotalLista > totalPrecio;
+  const totalFinal = totalPrecio + costoEnvio;
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/login?next=pagar');
@@ -56,32 +34,6 @@ export function PagarPage() {
     if (!authLoading && !user) return;
     if (!authLoading && items.length === 0) navigate('/');
   }, [authLoading, user, items, navigate]);
-
-  async function tokenizarTarjeta(): Promise<string> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Decidir = (window as any).Decidir;
-    if (!Decidir) throw new Error('SDK de pagos no disponible. Recargá la página.');
-    const decidir = new Decidir(PAYWAY_URL);
-    decidir.setPublishableKey(import.meta.env.VITE_PAYWAY_PUBLIC_KEY ?? '');
-    decidir.setTimeout(10000);
-    return new Promise((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      decidir.createToken(formRef.current!, (status: number, response: any) => {
-        console.log('[Payway] status:', status, 'response:', response);
-        if (status === 200 || status === 201) {
-          const token = response?.token ?? response?.id ?? '';
-          if (!token) { reject(new Error('No se recibió token de pago.')); return; }
-          resolve(token);
-        } else {
-          const msgs = Array.isArray(response?.error)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ? response.error.map((e: any) => e.error?.message ?? e.param).join(', ')
-            : typeof response === 'string' ? response : 'Datos de tarjeta inválidos';
-          reject(new Error(msgs));
-        }
-      });
-    });
-  }
 
   function buildPedidoDTO(mp: MetodoPago) {
     return {
@@ -98,7 +50,7 @@ export function PagarPage() {
       codigo_postal_envio: metodo === 'domicilio'
         ? (direccion?.codigo_postal ?? undefined)
         : codigoPostal.trim() || undefined,
-      metodo_pago:         mp,
+      metodo_pago: mp,
     };
   }
 
@@ -107,27 +59,11 @@ export function PagarPage() {
     setError(null);
     try {
       const pedido = await crearPedido(buildPedidoDTO('tarjeta'));
-
-      if (ES_PRODUCCION) {
-        // Producción: Hosted Checkout → redirige al formulario de Payway
-        const { checkoutUrl } = await iniciarCheckoutHosted(pedido.id);
-        resetCheckout();
-        window.location.href = checkoutUrl;
-      } else {
-        // Sandbox: tokenización embebida (pago directo vía SDK)
-        const token  = await tokenizarTarjeta();
-        const cardEl = formRef.current?.querySelector('[data-decidir="card_number"]') as HTMLInputElement | null;
-        const bin    = (cardEl?.value ?? '').replace(/\D/g, '').substring(0, 6);
-        if (!bin || bin.length < 6) throw new Error('Ingresá el número de tarjeta completo.');
-
-        const result = await procesarPago({ pedidoId: pedido.id, token, bin, cuotas, paymentMethodId: tipoTarjeta });
-        resetCheckout();
-        if (result.success) navigate(`/pago/exitoso?pedido=${pedido.id}`);
-        else navigate(`/pago/fallido?pedido=${pedido.id}`);
-      }
+      const { checkoutUrl } = await iniciarCheckoutHosted(pedido.id);
+      resetCheckout();
+      window.location.href = checkoutUrl;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo procesar el pago. Intentá de nuevo.');
-    } finally {
+      setError(err instanceof Error ? err.message : 'No se pudo iniciar el pago. Intentá de nuevo.');
       setConfirmando(false);
     }
   }
@@ -141,7 +77,6 @@ export function PagarPage() {
       navigate(`/pago/pendiente?pedido=${pedido.id}`);
     } catch {
       setError('No se pudo registrar el pedido. Intentá de nuevo.');
-    } finally {
       setConfirmando(false);
     }
   }
@@ -155,7 +90,6 @@ export function PagarPage() {
       navigate(`/pago/pendiente?pedido=${pedido.id}`);
     } catch {
       setError('No se pudo registrar el pedido. Intentá de nuevo.');
-    } finally {
       setConfirmando(false);
     }
   }
@@ -171,7 +105,6 @@ export function PagarPage() {
         <div className="checkout-izq">
           <section className="checkout-section">
 
-            {/* Tabs de método de pago */}
             <div className="metodo-pago-tabs">
               <button
                 className={`metodo-pago-tab${metodoPago === 'tarjeta' ? ' metodo-pago-tab--activo' : ''}`}
@@ -206,63 +139,21 @@ export function PagarPage() {
 
             {/* ── Panel Tarjeta ── */}
             {metodoPago === 'tarjeta' && (
-              <form ref={formRef} id="payway-form" className="checkout-tarjeta" onSubmit={e => e.preventDefault()}>
-                <div className="checkout-tarjeta__fila checkout-tarjeta__fila--2col">
-                  <div className="checkout-tarjeta__campo">
-                    <label className="checkout-tarjeta__label">Tipo de tarjeta</label>
-                    <select className="input" value={tipoTarjeta} onChange={e => setTipoTarjeta(Number(e.target.value))}>
-                      {CARD_TYPES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="checkout-tarjeta__campo">
-                    <label className="checkout-tarjeta__label">Cuotas</label>
-                    <select className="input" value={cuotas} onChange={e => setCuotas(Number(e.target.value))}>
-                      {CUOTAS.map(c => <option key={c} value={c}>{c === 1 ? 'Sin cuotas' : `${c} cuotas`}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="checkout-tarjeta__campo">
-                  <label className="checkout-tarjeta__label">Número de tarjeta</label>
-                  <input data-decidir="card_number" className="input" placeholder="XXXX XXXX XXXX XXXX" maxLength={19} value={cardNumber} onChange={e => setCardNumber(e.target.value)} />
-                </div>
-                <div className="checkout-tarjeta__fila checkout-tarjeta__fila--3col">
-                  <div className="checkout-tarjeta__campo">
-                    <label className="checkout-tarjeta__label">Mes venc.</label>
-                    <input data-decidir="card_expiration_month" className="input" placeholder="MM" maxLength={2} />
-                  </div>
-                  <div className="checkout-tarjeta__campo">
-                    <label className="checkout-tarjeta__label">Año venc.</label>
-                    <input data-decidir="card_expiration_year" className="input" placeholder="AA" maxLength={2} />
-                  </div>
-                  <div className="checkout-tarjeta__campo">
-                    <label className="checkout-tarjeta__label">CVV</label>
-                    <input data-decidir="security_code" className="input" placeholder="XXX" maxLength={4} />
-                  </div>
-                </div>
-                <div className="checkout-tarjeta__campo">
-                  <label className="checkout-tarjeta__label">Titular (como figura en la tarjeta)</label>
-                  <input data-decidir="card_holder_name" className="input" placeholder="NOMBRE APELLIDO" />
-                </div>
-                <div className="checkout-tarjeta__fila checkout-tarjeta__fila--2col">
-                  <div className="checkout-tarjeta__campo">
-                    <label className="checkout-tarjeta__label">Tipo de documento</label>
-                    <select data-decidir="card_holder_doc_type" className="input">
-                      <option value="dni">DNI</option>
-                      <option value="cuil">CUIL</option>
-                    </select>
-                  </div>
-                  <div className="checkout-tarjeta__campo">
-                    <label className="checkout-tarjeta__label">Número de documento</label>
-                    <input data-decidir="card_holder_doc_number" className="input" placeholder="12345678" maxLength={11} />
-                  </div>
-                </div>
+              <div className="checkout-tarjeta">
+                <p className="checkout-pago-info">
+                  Serás redirigido a la plataforma segura de Payway para ingresar los datos de tu tarjeta.
+                </p>
 
                 {error && <p className="checkout-error">{error}</p>}
 
-                <button className="btn btn--primary btn--full checkout-confirmar-btn" onClick={handlePagarTarjeta} disabled={confirmando} type="button">
-                  {confirmando ? 'Procesando pago...' : 'Confirmar y Pagar →'}
+                <button
+                  className="btn btn--primary btn--full checkout-confirmar-btn"
+                  onClick={handlePagarTarjeta}
+                  disabled={confirmando}
+                >
+                  {confirmando ? 'Redirigiendo a Payway...' : 'Confirmar y Pagar →'}
                 </button>
-              </form>
+              </div>
             )}
 
             {/* ── Panel Transferencia ── */}
