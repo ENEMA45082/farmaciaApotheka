@@ -1,13 +1,23 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as productosService from '../services/productos.service';
+import { supabase } from '../config/supabase';
 import type { CrearProductoDTO, ActualizarProductoDTO, FiltrosProducto } from '../types';
+
+async function esAdmin(req: Request): Promise<boolean> {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return false;
+  const { data: { user } } = await supabase.auth.getUser(token);
+  return user?.app_metadata?.role === 'admin';
+}
 
 // Controladores para manejar las rutas de productos
 // Cada función maneja una operación CRUD
 
 export async function listar(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    const adminMode = await esAdmin(req);
     const filtros: FiltrosProducto = {
+      adminMode,
       categoria:         req.query.categoria          as string | undefined,
       busqueda:          req.query.busqueda           as string | undefined,
       codigo_barras:     req.query.codigo_barras      as string | undefined,

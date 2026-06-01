@@ -6,30 +6,35 @@ import type {
   FiltrosProducto,
 } from '../types';
 
-// Mapea las columnas de la DB (inglés) al tipo Producto (español)
+function recopilarDescendientes(idPadre: string, todas: { id: string; id_padre: string | null }[]): string[] {
+  const hijos = todas.filter(c => c.id_padre === idPadre);
+  return [idPadre, ...hijos.flatMap(h => recopilarDescendientes(h.id, todas))];
+}
+
 function mapearProducto(row: Record<string, unknown>): Producto {
   return {
     id:                row.id as string,
-    nombre:            row.name as string,
-    descripcion:       row.description as string | null,
-    precio:            Number(row.price),
+    nombre:            row.nombre as string,
+    descripcion:       row.descripcion as string | null,
+    precio:            Number(row.precio),
     en_oferta:         Boolean(row.en_oferta),
     precio_oferta:     row.precio_oferta != null ? Number(row.precio_oferta) : null,
     porcentaje_oferta: row.porcentaje_oferta != null ? Number(row.porcentaje_oferta) : null,
-    imagen_url:        row.image_url as string | null,
-    categoria_id:      row.category_id as string | null,
+    imagen_url:        row.imagen_url as string | null,
+    categoria_id:      row.categoria_id as string | null,
     stock:             Number(row.stock),
-    codigo_barras:     row.barcode as string | null,
-    fecha_vencimiento: row.expiration_date as string | null,
-    imagenes:          (row.images as string[]) ?? [],
-    creado_en:         row.created_at as string,
-    categoria: row.category
+    codigo_barras:     row.codigo_barras as string | null,
+    fecha_vencimiento: row.fecha_vencimiento as string | null,
+    imagenes:          (row.imagenes as string[]) ?? [],
+    creado_en:         row.creado_en as string,
+    es_venta_libre:    row.es_venta_libre !== false,
+    peso_gramos:       Number(row.peso_gramos ?? 500),
+    categoria: row.categoria
       ? {
-          id:        (row.category as Record<string, unknown>).id as string,
-          nombre:    (row.category as Record<string, unknown>).name as string,
-          slug:      (row.category as Record<string, unknown>).slug as string,
-          icono:     (row.category as Record<string, unknown>).icon_name as string | null,
-          creado_en: (row.category as Record<string, unknown>).created_at as string,
+          id:       (row.categoria as Record<string, unknown>).id as string,
+          nombre:   (row.categoria as Record<string, unknown>).nombre as string,
+          id_padre: (row.categoria as Record<string, unknown>).id_padre as string | null,
+          creado_en:(row.categoria as Record<string, unknown>).creado_en as string,
         }
       : undefined,
   };
@@ -43,49 +48,63 @@ export async function encontrarTodos(filtros: FiltrosProducto): Promise<{ datos:
 
   let query = supabase
     .from('products')
-    .select('*, category:categories(*)', { count: 'exact' });
+    .select('*, categoria:categories(*)', { count: 'exact' });
+
+  if (!filtros.adminMode) {
+    query = query.eq('es_venta_libre', true);
+  }
 
   if (filtros.categoria) {
-    const { data: cat } = await supabase
+    const { data: todasCats } = await supabase
       .from('categories')
-      .select('id')
-      .eq('slug', filtros.categoria)
-      .single();
+      .select('id, id_padre');
 
-    if (!cat) return { datos: [], total: 0 };
-    query = query.eq('category_id', cat.id);
+    const todas = todasCats ?? [];
+    const ids = recopilarDescendientes(filtros.categoria, todas);
+    query = query.in('categoria_id', ids);
   }
 
   if (filtros.busqueda) {
-    query = query.ilike('name', `%${filtros.busqueda}%`);
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('id')
+      .ilike('nombre', `%${filtros.busqueda}%`);
+
+    const catIds = (cats ?? []).map((c: { id: string }) => c.id);
+
+    if (catIds.length > 0) {
+      query = query.or(`nombre.ilike.%${filtros.busqueda}%,categoria_id.in.(${catIds.join(',')})`);
+    } else {
+      query = query.ilike('nombre', `%${filtros.busqueda}%`);
+    }
   }
 
   if (filtros.codigo_barras) {
-    query = query.ilike('barcode', `%${filtros.codigo_barras}%`);
+    query = query.ilike('codigo_barras', `%${filtros.codigo_barras}%`);
   }
 
   if (filtros.en_oferta !== undefined) {
     query = query.eq('en_oferta', filtros.en_oferta);
   }
 
-  if (filtros.precio_min !== undefined) query = query.gte('price', filtros.precio_min);
-  if (filtros.precio_max !== undefined) query = query.lte('price', filtros.precio_max);
+  if (filtros.precio_min !== undefined) query = query.gte('precio', filtros.precio_min);
+  if (filtros.precio_max !== undefined) query = query.lte('precio', filtros.precio_max);
   if (filtros.stock_min  !== undefined) query = query.gte('stock', filtros.stock_min);
   if (filtros.stock_max  !== undefined) query = query.lte('stock', filtros.stock_max);
 
-  if (filtros.vencimiento_desde) query = query.gte('expiration_date', filtros.vencimiento_desde);
-  if (filtros.vencimiento_hasta) query = query.lte('expiration_date', filtros.vencimiento_hasta);
+  if (filtros.vencimiento_desde) query = query.gte('fecha_vencimiento', filtros.vencimiento_desde);
+  if (filtros.vencimiento_hasta) query = query.lte('fecha_vencimiento', filtros.vencimiento_hasta);
 
   const ordenMap: Record<string, { column: string; ascending: boolean }> = {
-    nombre_asc:  { column: 'name',  ascending: true  },
-    nombre_desc: { column: 'name',  ascending: false },
-    precio_asc:  { column: 'price', ascending: true  },
-    precio_desc: { column: 'price', ascending: false },
+    nombre_asc:  { column: 'nombre', ascending: true  },
+    nombre_desc: { column: 'nombre', ascending: false },
+    precio_asc:  { column: 'precio', ascending: true  },
+    precio_desc: { column: 'precio', ascending: false },
   };
   const ord = filtros.ordenar ? ordenMap[filtros.ordenar] : null;
   query = ord
     ? query.order(ord.column, { ascending: ord.ascending })
-    : query.order('created_at', { ascending: false });
+    : query.order('creado_en', { ascending: false });
 
   const { data, error, count } = await query.range(desde, hasta);
 
@@ -100,7 +119,7 @@ export async function encontrarTodos(filtros: FiltrosProducto): Promise<{ datos:
 export async function encontrarPorId(id: string): Promise<Producto | null> {
   const { data, error } = await supabase
     .from('products')
-    .select('*, category:categories(*)')
+    .select('*, categoria:categories(*)')
     .eq('id', id)
     .single();
 
@@ -112,20 +131,22 @@ export async function crear(dto: CrearProductoDTO): Promise<Producto> {
   const { data, error } = await supabase
     .from('products')
     .insert({
-      name:              dto.nombre,
-      description:       dto.descripcion ?? null,
-      price:             dto.precio,
-      en_oferta:         dto.en_oferta        ?? false,
-      precio_oferta:     dto.precio_oferta    ?? null,
-      porcentaje_oferta: dto.porcentaje_oferta ?? null,
-      image_url:         dto.imagen_url ?? null,
-      category_id:       dto.categoria_id ?? null,
-      stock:             dto.stock ?? 0,
-      barcode:           dto.codigo_barras ?? null,
-      expiration_date:   dto.fecha_vencimiento ?? null,
-      images:            dto.imagenes ?? [],
+      nombre:            dto.nombre,
+      descripcion:       dto.descripcion ?? null,
+      precio:            dto.precio,
+      en_oferta:         dto.en_oferta         ?? false,
+      precio_oferta:     dto.precio_oferta      ?? null,
+      porcentaje_oferta: dto.porcentaje_oferta  ?? null,
+      imagen_url:        dto.imagen_url         ?? null,
+      categoria_id:      dto.categoria_id       ?? null,
+      stock:             dto.stock              ?? 0,
+      codigo_barras:     dto.codigo_barras      ?? null,
+      fecha_vencimiento: dto.fecha_vencimiento  ?? null,
+      imagenes:          dto.imagenes           ?? [],
+      es_venta_libre:    dto.es_venta_libre     ?? true,
+      peso_gramos:       dto.peso_gramos        ?? 500,
     })
-    .select('*, category:categories(*)')
+    .select('*, categoria:categories(*)')
     .single();
 
   if (error || !data) throw error ?? new Error('Error al crear el producto');
@@ -134,24 +155,26 @@ export async function crear(dto: CrearProductoDTO): Promise<Producto> {
 
 export async function actualizar(id: string, dto: ActualizarProductoDTO): Promise<Producto | null> {
   const cambios: Record<string, unknown> = {};
-  if (dto.nombre             !== undefined) cambios.name              = dto.nombre;
-  if (dto.descripcion        !== undefined) cambios.description       = dto.descripcion;
-  if (dto.precio             !== undefined) cambios.price             = dto.precio;
-  if (dto.en_oferta          !== undefined) cambios.en_oferta         = dto.en_oferta;
-  if (dto.precio_oferta      !== undefined) cambios.precio_oferta     = dto.precio_oferta;
-  if (dto.porcentaje_oferta  !== undefined) cambios.porcentaje_oferta = dto.porcentaje_oferta;
-  if (dto.imagen_url         !== undefined) cambios.image_url         = dto.imagen_url;
-  if (dto.categoria_id     !== undefined) cambios.category_id     = dto.categoria_id;
-  if (dto.stock            !== undefined) cambios.stock           = dto.stock;
-  if (dto.codigo_barras    !== undefined) cambios.barcode         = dto.codigo_barras;
-  if (dto.fecha_vencimiento !== undefined) cambios.expiration_date = dto.fecha_vencimiento;
-  if (dto.imagenes          !== undefined) cambios.images          = dto.imagenes;
+  if (dto.nombre            !== undefined) cambios.nombre            = dto.nombre;
+  if (dto.descripcion       !== undefined) cambios.descripcion       = dto.descripcion;
+  if (dto.precio            !== undefined) cambios.precio            = dto.precio;
+  if (dto.en_oferta         !== undefined) cambios.en_oferta         = dto.en_oferta;
+  if (dto.precio_oferta     !== undefined) cambios.precio_oferta     = dto.precio_oferta;
+  if (dto.porcentaje_oferta !== undefined) cambios.porcentaje_oferta = dto.porcentaje_oferta;
+  if (dto.imagen_url        !== undefined) cambios.imagen_url        = dto.imagen_url;
+  if (dto.categoria_id      !== undefined) cambios.categoria_id      = dto.categoria_id;
+  if (dto.stock             !== undefined) cambios.stock             = dto.stock;
+  if (dto.codigo_barras     !== undefined) cambios.codigo_barras     = dto.codigo_barras;
+  if (dto.fecha_vencimiento !== undefined) cambios.fecha_vencimiento = dto.fecha_vencimiento;
+  if (dto.imagenes          !== undefined) cambios.imagenes          = dto.imagenes;
+  if (dto.es_venta_libre   !== undefined) cambios.es_venta_libre   = dto.es_venta_libre;
+  if (dto.peso_gramos      !== undefined) cambios.peso_gramos      = dto.peso_gramos;
 
   const { data, error } = await supabase
     .from('products')
     .update(cambios)
     .eq('id', id)
-    .select('*, category:categories(*)')
+    .select('*, categoria:categories(*)')
     .single();
 
   if (error || !data) return null;
@@ -165,4 +188,20 @@ export async function eliminar(id: string): Promise<boolean> {
     .eq('id', id);
 
   return !error;
+}
+
+export async function descontarStock(productoId: string, cantidad: number): Promise<void> {
+  const { error } = await supabase.rpc('descontar_stock', {
+    p_producto_id: productoId,
+    p_cantidad: cantidad,
+  });
+  if (error) throw error;
+}
+
+export async function restaurarStock(productoId: string, cantidad: number): Promise<void> {
+  const { error } = await supabase.rpc('restaurar_stock', {
+    p_producto_id: productoId,
+    p_cantidad: cantidad,
+  });
+  if (error) throw error;
 }

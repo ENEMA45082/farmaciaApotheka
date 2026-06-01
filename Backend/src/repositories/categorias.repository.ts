@@ -3,11 +3,10 @@ import type { Categoria } from '../types';
 
 function mapearCategoria(row: Record<string, unknown>): Categoria {
   return {
-    id:        row.id as string,
-    nombre:    row.name as string,
-    slug:      row.slug as string,
-    icono:     row.icon_name as string | null,
-    creado_en: row.created_at as string,
+    id:       row.id as string,
+    nombre:   row.nombre as string,
+    id_padre: row.id_padre as string | null,
+    creado_en: row.creado_en as string,
   };
 }
 
@@ -15,7 +14,7 @@ export async function encontrarTodas(): Promise<Categoria[]> {
   const { data, error } = await supabase
     .from('categories')
     .select('*')
-    .order('name', { ascending: true });
+    .order('nombre', { ascending: true });
 
   if (error) throw error;
   return (data ?? []).map(mapearCategoria);
@@ -32,10 +31,10 @@ export async function encontrarPorId(id: string): Promise<Categoria | null> {
   return mapearCategoria(data);
 }
 
-export async function crear(nombre: string, slug: string, icono: string | null): Promise<Categoria> {
+export async function crear(nombre: string, id_padre?: string): Promise<Categoria> {
   const { data, error } = await supabase
     .from('categories')
-    .insert({ name: nombre, slug, icon_name: icono })
+    .insert({ nombre, id_padre: id_padre ?? null })
     .select('*')
     .single();
 

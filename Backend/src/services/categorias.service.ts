@@ -2,17 +2,26 @@ import * as categoriasRepo from '../repositories/categorias.repository';
 import { ErrorServicio } from './productos.service';
 import type { Categoria, CrearCategoriaDTO, ActualizarCategoriaDTO } from '../types';
 
-function generarSlug(nombre: string): string {
-  return nombre
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+function buildTree(flat: Categoria[]): Categoria[] {
+  const map = new Map(flat.map(c => [c.id, { ...c, hijos: [] as Categoria[] }]));
+  const roots: Categoria[] = [];
+  for (const cat of map.values()) {
+    if (cat.id_padre && map.has(cat.id_padre)) {
+      map.get(cat.id_padre)!.hijos!.push(cat);
+    } else {
+      roots.push(cat);
+    }
+  }
+  return roots;
 }
 
 export async function listar(): Promise<Categoria[]> {
   return categoriasRepo.encontrarTodas();
+}
+
+export async function obtenerArbol(): Promise<Categoria[]> {
+  const flat = await categoriasRepo.encontrarTodas();
+  return buildTree(flat);
 }
 
 export async function obtenerPorId(id: string): Promise<Categoria> {
@@ -27,22 +36,20 @@ export async function crear(dto: CrearCategoriaDTO): Promise<Categoria> {
   if (!dto.nombre?.trim()) {
     throw new ErrorServicio('El nombre de la categoría es obligatorio', 400);
   }
-  const slug = generarSlug(dto.nombre.trim());
-  return categoriasRepo.crear(dto.nombre.trim(), slug, dto.icono ?? null);
+  return categoriasRepo.crear(dto.nombre.trim(), dto.id_padre);
 }
 
 export async function actualizar(id: string, dto: ActualizarCategoriaDTO): Promise<Categoria> {
-  if (!dto.nombre && dto.icono === undefined) {
-    throw new ErrorServicio('Se debe enviar al menos un campo para actualizar', 400);
-  }
-
   const cambios: Record<string, unknown> = {};
   if (dto.nombre !== undefined) {
-    cambios.name = dto.nombre.trim();
-    cambios.slug = generarSlug(dto.nombre.trim());
+    cambios.nombre = dto.nombre.trim();
   }
-  if (dto.icono !== undefined) {
-    cambios.icon_name = dto.icono;
+  if ('id_padre' in dto) {
+    cambios.id_padre = dto.id_padre ?? null;
+  }
+
+  if (Object.keys(cambios).length === 0) {
+    throw new ErrorServicio('Se debe enviar al menos un campo para actualizar', 400);
   }
 
   const categoria = await categoriasRepo.actualizar(id, cambios);

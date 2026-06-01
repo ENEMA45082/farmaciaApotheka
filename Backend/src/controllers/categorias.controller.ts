@@ -11,6 +11,15 @@ export async function listar(_req: Request, res: Response, next: NextFunction): 
   }
 }
 
+export async function obtenerArbol(_req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const arbol = await categoriasService.obtenerArbol();
+    res.json(arbol);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function obtenerPorId(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const categoria = await categoriasService.obtenerPorId(req.params.id);
