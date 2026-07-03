@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
+import { addErrorInterceptor } from './apiClient';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '/api' });
 
@@ -10,6 +11,8 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+addErrorInterceptor(api);
 
 export interface EstadisticasData {
   resumen: {

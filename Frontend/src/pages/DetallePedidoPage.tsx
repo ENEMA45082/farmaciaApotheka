@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchPedidoPorId, cancelarPedido } from '../api/pedidos.api';
 import { PerfilLayout } from '../components/layout/PerfilLayout';
+import { TrackingSection } from '../components/pedidos/TrackingSection';
 import type { Pedido, MetodoEnvio } from '../types';
 import { formatPrecio } from '../types';
 
@@ -131,6 +132,27 @@ export function DetallePedidoPage() {
 
         <ProgresoStepper pedido={pedido} />
 
+        <div className="pedido-detalle__envio-info">
+          <div className="pedido-detalle__envio-row">
+            <span className="pedido-detalle__envio-label">Método de entrega</span>
+            <span className="pedido-detalle__envio-valor">
+              {pedido.metodo_envio === 'retiro_farmacia' && 'Retiro en farmacia'}
+              {pedido.metodo_envio === 'domicilio' && `Envío a domicilio${pedido.codigo_postal_envio ? ` — CP ${pedido.codigo_postal_envio}` : ''}`}
+              {pedido.metodo_envio === 'retiro_sucursal' && `Retiro en sucursal de Correo Argentino${pedido.sucursal_correo_argentino ? ` — ${pedido.sucursal_correo_argentino}` : ''}`}
+            </span>
+          </div>
+          {pedido.metodo_pago && (
+            <div className="pedido-detalle__envio-row">
+              <span className="pedido-detalle__envio-label">Método de pago</span>
+              <span className="pedido-detalle__envio-valor">
+                {pedido.metodo_pago === 'tarjeta'        && 'Tarjeta (Payway)'}
+                {pedido.metodo_pago === 'transferencia'  && 'Transferencia bancaria'}
+                {pedido.metodo_pago === 'efectivo'       && 'Efectivo en farmacia'}
+              </span>
+            </div>
+          )}
+        </div>
+
         <table className="pedido-tabla">
           <thead>
             <tr>
@@ -167,7 +189,7 @@ export function DetallePedidoPage() {
           {pedido.costo_envio > 0 && (
             <p>Envío ({
               pedido.metodo_envio === 'domicilio' ? 'a domicilio' :
-              pedido.metodo_envio === 'retiro_sucursal' ? `retiro en ${pedido.sucursal_andreani ?? 'sucursal Andreani'}` :
+              pedido.metodo_envio === 'retiro_sucursal' ? `retiro en ${pedido.sucursal_correo_argentino ?? 'sucursal de Correo Argentino'}` :
               'retiro en farmacia'
             }): ${formatPrecio(pedido.costo_envio)}</p>
           )}
@@ -186,6 +208,10 @@ export function DetallePedidoPage() {
               {cancelando ? 'Cancelando...' : 'Cancelar pedido'}
             </button>
           </div>
+        )}
+
+        {(pedido.estado === 'enviado' || pedido.estado === 'entregado') && pedido.shipping_tracking_number && (
+          <TrackingSection pedidoId={pedido.id} />
         )}
       </div>
     </PerfilLayout>

@@ -3,16 +3,20 @@ import type { Direccion, GuardarDireccionDTO } from '../types';
 
 function mapear(row: Record<string, unknown>): Direccion {
   return {
-    id:            row.id as string,
-    user_id:       row.user_id as string,
-    calle_numero:  row.calle_numero as string,
-    ciudad:        row.ciudad as string,
-    provincia:     row.provincia as string,
-    pais:          row.pais as string,
-    codigo_postal: row.codigo_postal as string | null,
-    lat:           row.lat != null ? Number(row.lat) : null,
-    lng:           row.lng != null ? Number(row.lng) : null,
-    creado_en:     row.creado_en as string,
+    id:               row.id as string,
+    user_id:          row.user_id as string,
+    calle:            row.calle as string,
+    altura:           row.altura as string,
+    piso:             row.piso as string | null,
+    depto:            row.depto as string | null,
+    ciudad:           row.ciudad as string,
+    provincia:        row.provincia as string,
+    provincia_codigo: row.provincia_codigo as Direccion['provincia_codigo'],
+    pais:             row.pais as string,
+    codigo_postal:    row.codigo_postal as string | null,
+    lat:              row.lat != null ? Number(row.lat) : null,
+    lng:              row.lng != null ? Number(row.lng) : null,
+    creado_en:        row.creado_en as string,
   };
 }
 
@@ -31,13 +35,17 @@ export async function guardar(userId: string, dto: GuardarDireccionDTO): Promise
   const existente = await obtener(userId);
 
   const campos = {
-    calle_numero:  dto.calle_numero,
-    ciudad:        dto.ciudad,
-    provincia:     dto.provincia,
-    pais:          dto.pais ?? 'Argentina',
-    codigo_postal: dto.codigo_postal ?? null,
-    lat:           dto.lat ?? null,
-    lng:           dto.lng ?? null,
+    calle:            dto.calle,
+    altura:           dto.altura,
+    piso:             dto.piso ?? null,
+    depto:            dto.depto ?? null,
+    ciudad:           dto.ciudad,
+    provincia:        dto.provincia,
+    provincia_codigo: dto.provincia_codigo,
+    pais:             dto.pais ?? 'Argentina',
+    codigo_postal:    dto.codigo_postal ?? null,
+    lat:              dto.lat ?? null,
+    lng:              dto.lng ?? null,
   };
 
   let data: Record<string, unknown> | null = null;

@@ -1,5 +1,6 @@
 import * as categoriasRepo from '../repositories/categorias.repository';
-import { ErrorServicio } from './productos.service';
+import { AppError } from '../errors/AppError';
+import { validarUUID } from '../utils/validarUUID';
 import type { Categoria, CrearCategoriaDTO, ActualizarCategoriaDTO } from '../types';
 
 function buildTree(flat: Categoria[]): Categoria[] {
@@ -25,21 +26,23 @@ export async function obtenerArbol(): Promise<Categoria[]> {
 }
 
 export async function obtenerPorId(id: string): Promise<Categoria> {
+  validarUUID(id, 'categoría');
   const categoria = await categoriasRepo.encontrarPorId(id);
   if (!categoria) {
-    throw new ErrorServicio('Categoría no encontrada', 404);
+    throw new AppError('Categoría no encontrada', 404);
   }
   return categoria;
 }
 
 export async function crear(dto: CrearCategoriaDTO): Promise<Categoria> {
   if (!dto.nombre?.trim()) {
-    throw new ErrorServicio('El nombre de la categoría es obligatorio', 400);
+    throw new AppError('El nombre de la categoría es obligatorio', 400);
   }
   return categoriasRepo.crear(dto.nombre.trim(), dto.id_padre);
 }
 
 export async function actualizar(id: string, dto: ActualizarCategoriaDTO): Promise<Categoria> {
+  validarUUID(id, 'categoría');
   const cambios: Record<string, unknown> = {};
   if (dto.nombre !== undefined) {
     cambios.nombre = dto.nombre.trim();
@@ -49,17 +52,18 @@ export async function actualizar(id: string, dto: ActualizarCategoriaDTO): Promi
   }
 
   if (Object.keys(cambios).length === 0) {
-    throw new ErrorServicio('Se debe enviar al menos un campo para actualizar', 400);
+    throw new AppError('Se debe enviar al menos un campo para actualizar', 400);
   }
 
   const categoria = await categoriasRepo.actualizar(id, cambios);
   if (!categoria) {
-    throw new ErrorServicio('Categoría no encontrada', 404);
+    throw new AppError('Categoría no encontrada', 404);
   }
   return categoria;
 }
 
 export async function eliminar(id: string): Promise<void> {
+  validarUUID(id, 'categoría');
   await obtenerPorId(id);
   await categoriasRepo.eliminar(id);
 }

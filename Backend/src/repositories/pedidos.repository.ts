@@ -25,13 +25,22 @@ function mapearPedido(row: Record<string, unknown>): Pedido {
     notas:            row.notas as string | null,
     metodo_envio:     (row.metodo_envio as Pedido['metodo_envio']) ?? 'retiro_farmacia',
     costo_envio:      Number(row.costo_envio ?? 0),
-    sucursal_andreani: row.sucursal_andreani as string | null ?? null,
+    sucursal_correo_argentino: row.sucursal_correo_argentino as string | null ?? null,
     codigo_postal_envio: row.codigo_postal_envio as string | null ?? null,
     metodo_pago:   row.metodo_pago as import('../types').MetodoPago | null ?? null,
-    pw_payment_id: row.pw_payment_id as string | null ?? null,
-    fecha_pedido:     row.fecha_pedido as string,
-    fecha_cancelacion: row.fecha_cancelacion as string | null,
-    creado_en:        row.creado_en as string,
+    pw_payment_id:      row.pw_payment_id as string | null ?? null,
+    fecha_pedido:       row.fecha_pedido as string,
+    fecha_cancelacion:  row.fecha_cancelacion as string | null,
+    motivo_cancelacion: row.motivo_cancelacion as string | null ?? null,
+    creado_en:          row.creado_en as string,
+    shipping_tracking_number:  row.shipping_tracking_number as string | null ?? null,
+    shipping_fecha_envio:      row.shipping_fecha_envio as string | null ?? null,
+    shipping_creado_en_correo: row.shipping_creado_en_correo as string | null ?? null,
+    shipping_error:            row.shipping_error as string | null ?? null,
+    destinatario_nombre:       row.destinatario_nombre as string | null ?? null,
+    destinatario_dni:          row.destinatario_dni as string | null ?? null,
+    destinatario_cod_area:     row.destinatario_cod_area as string | null ?? null,
+    destinatario_telefono:     row.destinatario_telefono as string | null ?? null,
     detalles: Array.isArray(row.detalles_pedido)
       ? (row.detalles_pedido as Record<string, unknown>[]).map(mapearDetalle)
       : undefined,
@@ -44,26 +53,7 @@ export async function crear(
   total: number,
   subtotalLista: number,
 ): Promise<Pedido> {
-  const { data: pedido, error: errPedido } = await supabase
-    .from('pedidos')
-    .insert({
-      user_id:             userId,
-      total:               total + (dto.costo_envio ?? 0),
-      subtotal_lista:      subtotalLista,
-      notas:               dto.notas ?? null,
-      metodo_envio:        dto.metodo_envio ?? 'retiro_farmacia',
-      costo_envio:         dto.costo_envio ?? 0,
-      sucursal_andreani:   dto.sucursal_andreani ?? null,
-      codigo_postal_envio: dto.codigo_postal_envio ?? null,
-      metodo_pago:         dto.metodo_pago ?? null,
-    })
-    .select('*')
-    .single();
-
-  if (errPedido || !pedido) throw errPedido ?? new Error('Error al crear pedido');
-
-  const detalles = dto.items.map(i => ({
-    pedido_id:       pedido.id,
+  const items = dto.items.map(i => ({
     producto_id:     i.producto_id,
     nombre_producto: i.nombre_producto,
     cantidad:        i.cantidad,
@@ -72,14 +62,30 @@ export async function crear(
     subtotal:        i.precio_unitario * i.cantidad,
   }));
 
-  const { data: detData, error: errDet } = await supabase
-    .from('detalles_pedido')
-    .insert(detalles)
-    .select('*');
+  // RPC atómica: si falla la inserción de detalles, el pedido se revierte
+  const { data: pedidoData, error } = await supabase.rpc('crear_pedido_completo', {
+    p_user_id:                  userId,
+    p_total:                    total + (dto.costo_envio ?? 0),
+    p_subtotal_lista:           subtotalLista,
+    p_notas:                    dto.notas ?? null,
+    p_metodo_envio:             dto.metodo_envio ?? 'retiro_farmacia',
+    p_costo_envio:              dto.costo_envio ?? 0,
+    p_sucursal_correo_argentino: dto.sucursal_correo_argentino ?? null,
+    p_codigo_postal_envio:      dto.codigo_postal_envio ?? null,
+    p_metodo_pago:              dto.metodo_pago ?? null,
+    p_items:                    items,
+    p_destinatario_nombre:      dto.destinatario_nombre ?? null,
+    p_destinatario_dni:         dto.destinatario_dni ?? null,
+    p_destinatario_cod_area:    dto.destinatario_cod_area ?? null,
+    p_destinatario_telefono:    dto.destinatario_telefono ?? null,
+  });
 
-  if (errDet) throw errDet;
+  if (error || !pedidoData) throw error ?? new Error('Error al crear pedido');
 
-  return mapearPedido({ ...pedido, detalles_pedido: detData ?? [] });
+  // Obtener el pedido completo con detalles
+  const pedido = await encontrarPorId((pedidoData as Record<string, unknown>).id as string);
+  if (!pedido) throw new Error('Pedido creado pero no encontrado');
+  return pedido;
 }
 
 export async function encontrarPorUsuario(userId: string): Promise<Pedido[]> {
@@ -107,27 +113,71 @@ export async function encontrarPorId(id: string): Promise<Pedido | null> {
 export async function actualizarEstado(
   id: string,
   estado: Pedido['estado'],
-  extras?: { pw_payment_id?: string },
+  extras?: {
+    pw_payment_id?: string;
+    motivo_cancelacion?: string;
+    shipping_tracking_number?: string;
+    shipping_fecha_envio?: string;
+    shipping_creado_en_correo?: string;
+    shipping_error?: string;
+  },
 ): Promise<void> {
   const cambios: Record<string, unknown> = { estado };
-  if (extras?.pw_payment_id) cambios.pw_payment_id = extras.pw_payment_id;
+  if (extras?.pw_payment_id)              cambios.pw_payment_id              = extras.pw_payment_id;
+  if (extras?.motivo_cancelacion)         cambios.motivo_cancelacion         = extras.motivo_cancelacion;
+  if (extras?.shipping_tracking_number)   cambios.shipping_tracking_number   = extras.shipping_tracking_number;
+  if (extras?.shipping_fecha_envio)       cambios.shipping_fecha_envio       = extras.shipping_fecha_envio;
+  if (extras?.shipping_creado_en_correo)  cambios.shipping_creado_en_correo  = extras.shipping_creado_en_correo;
+  if (extras?.shipping_error)             cambios.shipping_error             = extras.shipping_error;
+  if (estado === 'cancelado' || estado === 'anulado') {
+    cambios.fecha_cancelacion = new Date().toISOString();
+  }
   await supabase.from('pedidos').update(cambios).eq('id', id);
 }
 
-export async function encontrarTodos(): Promise<Pedido[]> {
+export async function encontrarTodos(
+  pagina = 1,
+  limite = 20,
+): Promise<{ datos: Pedido[]; total: number }> {
+  const desde = (pagina - 1) * limite;
+
+  const { data, error, count } = await supabase
+    .from('pedidos')
+    .select('*, detalles_pedido(*)', { count: 'exact' })
+    .order('fecha_pedido', { ascending: false })
+    .range(desde, desde + limite - 1);
+
+  if (error) throw error;
+  return { datos: (data ?? []).map(mapearPedido), total: count ?? 0 };
+}
+
+export async function encontrarPorPwPaymentId(pwPaymentId: string): Promise<Pedido | null> {
   const { data, error } = await supabase
     .from('pedidos')
     .select('*, detalles_pedido(*)')
-    .order('fecha_pedido', { ascending: false });
+    .eq('pw_payment_id', pwPaymentId)
+    .single();
 
-  if (error) throw error;
-  return (data ?? []).map(mapearPedido);
+  if (error || !data) return null;
+  return mapearPedido(data);
 }
 
-export async function cancelar(id: string, userId: string): Promise<Pedido | null> {
+export async function guardarPwPaymentId(id: string, pwPaymentId: string): Promise<void> {
+  await supabase.from('pedidos').update({ pw_payment_id: pwPaymentId }).eq('id', id);
+}
+
+export async function cancelar(
+  id: string,
+  userId: string,
+  motivo?: string,
+): Promise<Pedido | null> {
   const { data, error } = await supabase
     .from('pedidos')
-    .update({ estado: 'cancelado', fecha_cancelacion: new Date().toISOString() })
+    .update({
+      estado: 'cancelado',
+      fecha_cancelacion: new Date().toISOString(),
+      motivo_cancelacion: motivo ?? null,
+    })
     .eq('id', id)
     .eq('user_id', userId)
     .eq('estado', 'pendiente')

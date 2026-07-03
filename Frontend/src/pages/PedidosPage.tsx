@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { fetchMisPedidos } from '../api/pedidos.api';
 import { PerfilLayout } from '../components/layout/PerfilLayout';
 import type { Pedido } from '../types';
 import { formatPrecio } from '../types';
+import { staggerContainer, staggerItem } from '../components/ui/motion';
 
 const ESTADO_CONFIG: Record<Pedido['estado'], { label: string; clase: string }> = {
   pendiente:       { label: 'Pendiente',       clase: 'badge--pendiente' },
@@ -15,6 +17,8 @@ const ESTADO_CONFIG: Record<Pedido['estado'], { label: string; clase: string }> 
   cancelado:       { label: 'Cancelado',        clase: 'badge--cancelado' },
   anulado:         { label: 'Anulado',          clase: 'badge--cancelado' },
 };
+
+const MotionLink = motion(Link);
 
 function formatFecha(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -46,18 +50,33 @@ export function PedidosPage() {
       <h2 className="perfil-titulo">Mis Pedidos</h2>
 
       {pedidos.length === 0 ? (
-        <div className="pedidos-vacio">
+        <motion.div
+          className="pedidos-vacio"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0, transition: { duration: 0.3 } }}
+        >
           <p>Todavía no realizaste ningún pedido.</p>
           <Link to="/" className="btn btn--primary" style={{ marginTop: '1rem', display: 'inline-block' }}>
             Ver productos
           </Link>
-        </div>
+        </motion.div>
       ) : (
-        <div className="pedidos-lista">
+        <motion.div
+          className="pedidos-lista"
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
           {pedidos.map(p => {
             const cfg = ESTADO_CONFIG[p.estado];
             return (
-              <Link key={p.id} to={`/pedidos/${p.id}`} className="pedido-card">
+              <MotionLink
+                key={p.id}
+                to={`/pedidos/${p.id}`}
+                className="pedido-card"
+                variants={staggerItem}
+                whileHover={{ y: -3 }}
+              >
                 <div className="pedido-card__left">
                   <span className="pedido-card__nro">Pedido #APO-{String(p.nro_pedido).padStart(5, '0')}</span>
                   <span className="pedido-card__fecha">{formatFecha(p.fecha_pedido)}</span>
@@ -66,10 +85,10 @@ export function PedidosPage() {
                   <span className={`estado-badge ${cfg.clase}`}>{cfg.label}</span>
                   <span className="pedido-card__total">${formatPrecio(p.total)}</span>
                 </div>
-              </Link>
+              </MotionLink>
             );
           })}
-        </div>
+        </motion.div>
       )}
     </PerfilLayout>
   );

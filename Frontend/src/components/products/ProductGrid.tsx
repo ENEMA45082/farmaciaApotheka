@@ -1,7 +1,9 @@
+import { motion } from 'framer-motion';
 import type { Producto } from '../../types';
 import { ProductCard } from './ProductCard';
 import { Spinner } from '../ui/Spinner';
 import { ErrorMessage } from '../ui/ErrorMessage';
+import { staggerContainer } from '../ui/motion';
 
 interface Props {
   productos: Producto[];
@@ -17,10 +19,15 @@ export function ProductGrid({ productos, cargando, error }: Props) {
   }
 
   return (
-    <div className="product-grid">
+    <motion.div
+      className="product-grid"
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+    >
       {productos.map(p => (
         <ProductCard key={p.id} producto={p} />
       ))}
-    </div>
+    </motion.div>
   );
 }

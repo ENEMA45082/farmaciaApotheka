@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import type { GuardarDireccionDTO, Direccion } from '../../types';
+import type { GuardarDireccionDTO, Direccion, ProvinciaCodigo } from '../../types';
+import { PROVINCIAS } from '../../types';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 
@@ -18,21 +19,39 @@ interface Props {
   onCancelar: () => void;
 }
 
+function normalizar(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// Resolución best-effort del nombre de provincia devuelto por Mapbox al código
+// de una letra que exige Correo Argentino. El usuario siempre puede corregirlo
+// manualmente en el selector si el mapeo no coincide.
+function resolverCodigoProvincia(nombreMapbox: string): ProvinciaCodigo | '' {
+  const n = normalizar(nombreMapbox);
+  if (n.includes('ciudad autonoma') || n.includes('caba') || n.includes('capital federal')) return 'C';
+  const match = PROVINCIAS.find(p => n.includes(normalizar(p.nombre)));
+  return match?.codigo ?? '';
+}
+
 function formDesde(d: Direccion | null): GuardarDireccionDTO {
   return {
-    calle_numero:  d?.calle_numero  ?? '',
-    ciudad:        d?.ciudad        ?? '',
-    provincia:     d?.provincia     ?? '',
-    pais:          d?.pais          ?? 'Argentina',
-    codigo_postal: d?.codigo_postal ?? '',
-    lat:           d?.lat           ?? null,
-    lng:           d?.lng           ?? null,
+    calle:            d?.calle            ?? '',
+    altura:           d?.altura           ?? '',
+    piso:             d?.piso             ?? '',
+    depto:            d?.depto            ?? '',
+    ciudad:           d?.ciudad           ?? '',
+    provincia:        d?.provincia        ?? '',
+    provincia_codigo: d?.provincia_codigo ?? ('' as ProvinciaCodigo),
+    pais:             d?.pais             ?? 'Argentina',
+    codigo_postal:    d?.codigo_postal    ?? '',
+    lat:              d?.lat              ?? null,
+    lng:              d?.lng              ?? null,
   };
 }
 
 export function DireccionForm({ inicial, onGuardar, guardando, onCancelar }: Props) {
   const [form, setForm] = useState<GuardarDireccionDTO>(formDesde(inicial));
-  const [busqueda, setBusqueda] = useState(inicial?.calle_numero ?? '');
+  const [busqueda, setBusqueda] = useState(inicial?.calle ?? '');
   const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
   const [mostrarSug, setMostrarSug] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,39 +71,44 @@ export function DireccionForm({ inicial, onGuardar, guardando, onCancelar }: Pro
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value;
     setBusqueda(val);
-    setForm(f => ({ ...f, calle_numero: val, lat: null, lng: null }));
+    setForm(f => ({ ...f, calle: val, lat: null, lng: null }));
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => buscarMapbox(val), 350);
   }
 
   function seleccionarSugerencia(sug: Sugerencia) {
     const ctx = sug.context ?? [];
-    const ciudad        = ctx.find(c => c.id.startsWith('place'))?.text    ?? '';
-    const provincia     = ctx.find(c => c.id.startsWith('region'))?.text   ?? '';
-    const codigo_postal = ctx.find(c => c.id.startsWith('postcode'))?.text ?? '';
-    const calleNumero   = sug.address ? `${sug.text} ${sug.address}` : sug.text;
+    const ciudad          = ctx.find(c => c.id.startsWith('place'))?.text    ?? '';
+    const provinciaNombre = ctx.find(c => c.id.startsWith('region'))?.text   ?? '';
+    const codigo_postal   = ctx.find(c => c.id.startsWith('postcode'))?.text ?? '';
 
-    setBusqueda(calleNumero);
+    setBusqueda(sug.text);
     setSugerencias([]);
     setMostrarSug(false);
-    setForm({
-      calle_numero:  calleNumero,
-      ciudad,
-      provincia,
-      pais:          'Argentina',
-      codigo_postal: codigo_postal || null,
-      lat:           sug.center[1],
-      lng:           sug.center[0],
-    });
+    setForm(f => ({
+      ...f,
+      calle:            sug.text,
+      altura:           sug.address ?? f.altura,
+      ciudad:           ciudad,
+      provincia:        provinciaNombre,
+      provincia_codigo: resolverCodigoProvincia(provinciaNombre) || f.provincia_codigo,
+      codigo_postal:    codigo_postal || null,
+      lat:              sug.center[1],
+      lng:              sug.center[0],
+    }));
   }
 
-  const puedeGuardar = !!form.calle_numero?.trim() && !!form.ciudad?.trim() && !!form.provincia?.trim();
+  const puedeGuardar =
+    !!form.calle?.trim() &&
+    !!form.altura?.trim() &&
+    !!form.ciudad?.trim() &&
+    !!form.provincia_codigo;
 
   return (
     <div className="dir-form">
-      {/* Autocomplete */}
+      {/* Autocomplete de calle */}
       <div className="dir-campo dir-campo--full">
-        <label>Dirección</label>
+        <label>Calle</label>
         <div className="dir-autocomplete">
           <input
             type="text"
@@ -111,6 +135,37 @@ export function DireccionForm({ inicial, onGuardar, guardando, onCancelar }: Pro
         </div>
       </div>
 
+      {/* Altura / piso / depto */}
+      <div className="dir-grid">
+        <div className="dir-campo">
+          <label>Altura</label>
+          <input
+            type="text"
+            value={form.altura}
+            onChange={e => setForm(f => ({ ...f, altura: e.target.value }))}
+            placeholder=""
+          />
+        </div>
+        <div className="dir-campo">
+          <label>Piso (opcional)</label>
+          <input
+            type="text"
+            value={form.piso ?? ''}
+            onChange={e => setForm(f => ({ ...f, piso: e.target.value || null }))}
+            placeholder=""
+          />
+        </div>
+        <div className="dir-campo">
+          <label>Depto (opcional)</label>
+          <input
+            type="text"
+            value={form.depto ?? ''}
+            onChange={e => setForm(f => ({ ...f, depto: e.target.value || null }))}
+            placeholder=""
+          />
+        </div>
+      </div>
+
       {/* Campos detalles */}
       <div className="dir-grid">
         <div className="dir-campo">
@@ -124,12 +179,19 @@ export function DireccionForm({ inicial, onGuardar, guardando, onCancelar }: Pro
         </div>
         <div className="dir-campo">
           <label>Provincia</label>
-          <input
-            type="text"
-            value={form.provincia}
-            onChange={e => setForm(f => ({ ...f, provincia: e.target.value }))}
-            placeholder=""
-          />
+          <select
+            value={form.provincia_codigo}
+            onChange={e => {
+              const codigo = e.target.value as ProvinciaCodigo;
+              const nombre = PROVINCIAS.find(p => p.codigo === codigo)?.nombre ?? '';
+              setForm(f => ({ ...f, provincia_codigo: codigo, provincia: nombre }));
+            }}
+          >
+            <option value="">Elegí tu provincia</option>
+            {PROVINCIAS.map(p => (
+              <option key={p.codigo} value={p.codigo}>{p.nombre}</option>
+            ))}
+          </select>
         </div>
         <div className="dir-campo">
           <label>País</label>

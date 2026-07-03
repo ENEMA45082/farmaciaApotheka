@@ -1,19 +1,27 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { MetodoEnvio, SucursalAndreani, Direccion } from '../types';
+import type { MetodoEnvio, SucursalCorreoArgentino, Direccion } from '../types';
 
 interface CheckoutContextType {
   metodo:               MetodoEnvio;
   costoEnvio:           number;
   diasEstimados:        string;
-  sucursalSeleccionada: SucursalAndreani | null;
-  codigoPostal:         string;
+  sucursalSeleccionada: SucursalCorreoArgentino | null;
+  provinciaCodigo:      string;
   direccion:            Direccion | null;
+  destinatarioNombre:   string;
+  destinatarioDni:      string;
+  destinatarioCodArea:  string;
+  destinatarioTelefono: string;
   setMetodo:               (m: MetodoEnvio) => void;
   setCostoEnvio:           (c: number) => void;
   setDiasEstimados:        (d: string) => void;
-  setSucursalSeleccionada: (s: SucursalAndreani | null) => void;
-  setCodigoPostal:         (cp: string) => void;
+  setSucursalSeleccionada: (s: SucursalCorreoArgentino | null) => void;
+  setProvinciaCodigo:      (p: string) => void;
   setDireccion:            (d: Direccion | null) => void;
+  setDestinatarioNombre:   (v: string) => void;
+  setDestinatarioDni:      (v: string) => void;
+  setDestinatarioCodArea:  (v: string) => void;
+  setDestinatarioTelefono: (v: string) => void;
   resetCheckout:           () => void;
 }
 
@@ -23,23 +31,33 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
   const [metodo,               setMetodo]               = useState<MetodoEnvio>('retiro_farmacia');
   const [costoEnvio,           setCostoEnvio]           = useState(0);
   const [diasEstimados,        setDiasEstimados]        = useState('');
-  const [sucursalSeleccionada, setSucursalSeleccionada] = useState<SucursalAndreani | null>(null);
-  const [codigoPostal,         setCodigoPostal]         = useState('');
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState<SucursalCorreoArgentino | null>(null);
+  const [provinciaCodigo,      setProvinciaCodigo]      = useState('');
   const [direccion,            setDireccion]            = useState<Direccion | null>(null);
+  const [destinatarioNombre,   setDestinatarioNombre]   = useState('');
+  const [destinatarioDni,      setDestinatarioDni]      = useState('');
+  const [destinatarioCodArea,  setDestinatarioCodArea]  = useState('');
+  const [destinatarioTelefono, setDestinatarioTelefono] = useState('');
 
   function resetCheckout() {
     setMetodo('retiro_farmacia');
     setCostoEnvio(0);
     setDiasEstimados('');
     setSucursalSeleccionada(null);
-    setCodigoPostal('');
+    setProvinciaCodigo('');
+    setDestinatarioNombre('');
+    setDestinatarioDni('');
+    setDestinatarioCodArea('');
+    setDestinatarioTelefono('');
   }
 
   return (
     <CheckoutContext.Provider value={{
-      metodo, costoEnvio, diasEstimados, sucursalSeleccionada, codigoPostal, direccion,
-      setMetodo, setCostoEnvio, setDiasEstimados, setSucursalSeleccionada, setCodigoPostal,
-      setDireccion, resetCheckout,
+      metodo, costoEnvio, diasEstimados, sucursalSeleccionada, provinciaCodigo, direccion,
+      destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono,
+      setMetodo, setCostoEnvio, setDiasEstimados, setSucursalSeleccionada, setProvinciaCodigo,
+      setDireccion, setDestinatarioNombre, setDestinatarioDni, setDestinatarioCodArea,
+      setDestinatarioTelefono, resetCheckout,
     }}>
       {children}
     </CheckoutContext.Provider>

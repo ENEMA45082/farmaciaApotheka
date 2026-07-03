@@ -205,3 +205,47 @@ export async function restaurarStock(productoId: string, cantidad: number): Prom
   });
   if (error) throw error;
 }
+
+const BATCH_SIZE = 100;
+
+export async function encontrarPorCodigosBarras(
+  codigos: string[]
+): Promise<Map<string, { id: string; nombre: string; precio: number }>> {
+  if (codigos.length === 0) return new Map();
+
+  const mapa = new Map<string, { id: string; nombre: string; precio: number }>();
+
+  for (let i = 0; i < codigos.length; i += BATCH_SIZE) {
+    const lote = codigos.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, nombre, precio, codigo_barras')
+      .in('codigo_barras', lote);
+
+    if (error) throw error;
+
+    for (const row of data ?? []) {
+      if (row.codigo_barras) {
+        mapa.set(row.codigo_barras, {
+          id:     row.id,
+          nombre: row.nombre,
+          precio: Number(row.precio),
+        });
+      }
+    }
+  }
+
+  return mapa;
+}
+
+export async function actualizarPrecioPorId(
+  id: string,
+  precio: number
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('products')
+    .update({ precio })
+    .eq('id', id);
+
+  return !error;
+}

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
-import type { CotizacionEnvio, SucursalAndreani, ItemCarrito } from '../types';
+import type { CotizacionEnvio, SucursalCorreoArgentino, ItemCarrito } from '../types';
+import { addErrorInterceptor } from './apiClient';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '/api' });
 
@@ -11,6 +12,8 @@ api.interceptors.request.use(async config => {
   }
   return config;
 });
+
+addErrorInterceptor(api);
 
 export async function cotizarEnvio(
   items: ItemCarrito[],
@@ -29,9 +32,9 @@ export async function cotizarEnvio(
   return data;
 }
 
-export async function fetchSucursales(codigoPostal: string): Promise<SucursalAndreani[]> {
-  const { data } = await api.get<SucursalAndreani[]>('/envio/sucursales', {
-    params: { cp: codigoPostal },
+export async function fetchSucursales(provinciaCodigo: string): Promise<SucursalCorreoArgentino[]> {
+  const { data } = await api.get<SucursalCorreoArgentino[]>('/envio/sucursales', {
+    params: { provinciaCodigo },
   });
   return data;
 }

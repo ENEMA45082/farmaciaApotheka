@@ -15,13 +15,17 @@ const TITULAR        = 'Farmacia Apotheka SRL';
 
 export function PagarPage() {
   const { user, loading: authLoading } = useAuth();
-  const { items, totalPrecio, subtotalLista } = useCarritoContext();
+  const { items, totalPrecio, subtotalLista, vaciarCarrito } = useCarritoContext();
   const navigate = useNavigate();
-  const { metodo, costoEnvio, sucursalSeleccionada, codigoPostal, direccion, resetCheckout } = useCheckout();
+  const {
+    metodo, costoEnvio, sucursalSeleccionada, direccion, resetCheckout,
+    destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono,
+  } = useCheckout();
 
-  const [metodoPago,  setMetodoPago]  = useState<MetodoPago>('tarjeta');
-  const [confirmando, setConfirmando] = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
+  const [metodoPago,         setMetodoPago]         = useState<MetodoPago>('tarjeta');
+  const [confirmando,        setConfirmando]         = useState(false);
+  const [error,              setError]               = useState<string | null>(null);
+  const [modalTransferencia, setModalTransferencia]  = useState(false);
 
   const hayAhorro  = subtotalLista > totalPrecio;
   const totalFinal = totalPrecio + costoEnvio;
@@ -35,6 +39,14 @@ export function PagarPage() {
     if (!authLoading && items.length === 0) navigate('/');
   }, [authLoading, user, items, navigate]);
 
+  // Si cambian al retiro en farmacia y tenían tarjeta seleccionada, no hay problema.
+  // Si cambian a otro método de envío y tenían efectivo seleccionado, resetear.
+  useEffect(() => {
+    if (metodo !== 'retiro_farmacia' && metodoPago === 'efectivo') {
+      setMetodoPago('tarjeta');
+    }
+  }, [metodo]);
+
   function buildPedidoDTO(mp: MetodoPago) {
     return {
       items: items.map(i => ({
@@ -46,50 +58,36 @@ export function PagarPage() {
       })),
       metodo_envio:        metodo,
       costo_envio:         costoEnvio,
-      sucursal_andreani:   sucursalSeleccionada?.nombre,
+      sucursal_correo_argentino: sucursalSeleccionada?.code,
       codigo_postal_envio: metodo === 'domicilio'
         ? (direccion?.codigo_postal ?? undefined)
-        : codigoPostal.trim() || undefined,
+        : (sucursalSeleccionada?.postalCode ?? undefined),
       metodo_pago: mp,
+      destinatario_nombre:   metodo === 'domicilio' ? destinatarioNombre.trim() || undefined : undefined,
+      destinatario_dni:      metodo === 'domicilio' ? destinatarioDni.trim() || undefined : undefined,
+      destinatario_cod_area: metodo === 'domicilio' ? destinatarioCodArea.trim() || undefined : undefined,
+      destinatario_telefono: metodo === 'domicilio' ? destinatarioTelefono.trim() || undefined : undefined,
     };
   }
 
-  async function handlePagarTarjeta() {
+  async function handleConfirmar() {
     setConfirmando(true);
     setError(null);
     try {
-      const pedido = await crearPedido(buildPedidoDTO('tarjeta'));
-      const { checkoutUrl } = await iniciarCheckoutHosted(pedido.id);
-      resetCheckout();
-      window.location.href = checkoutUrl;
+      if (metodoPago === 'tarjeta') {
+        const pedido = await crearPedido(buildPedidoDTO('tarjeta'));
+        const { checkoutUrl } = await iniciarCheckoutHosted(pedido.id);
+        vaciarCarrito();
+        resetCheckout();
+        window.location.href = checkoutUrl;
+      } else {
+        const pedido = await crearPedido(buildPedidoDTO(metodoPago));
+        vaciarCarrito();
+        resetCheckout();
+        navigate(`/pago/pendiente?pedido=${pedido.id}`);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo iniciar el pago. Intentá de nuevo.');
-      setConfirmando(false);
-    }
-  }
-
-  async function handlePagarTransferencia() {
-    setConfirmando(true);
-    setError(null);
-    try {
-      const pedido = await crearPedido(buildPedidoDTO('transferencia'));
-      resetCheckout();
-      navigate(`/pago/pendiente?pedido=${pedido.id}`);
-    } catch {
-      setError('No se pudo registrar el pedido. Intentá de nuevo.');
-      setConfirmando(false);
-    }
-  }
-
-  async function handlePagarEfectivo() {
-    setConfirmando(true);
-    setError(null);
-    try {
-      const pedido = await crearPedido(buildPedidoDTO('efectivo'));
-      resetCheckout();
-      navigate(`/pago/pendiente?pedido=${pedido.id}`);
-    } catch {
-      setError('No se pudo registrar el pedido. Intentá de nuevo.');
+      setError(err instanceof Error ? err.message : 'No se pudo procesar el pedido. Intentá de nuevo.');
       setConfirmando(false);
     }
   }
@@ -101,105 +99,108 @@ export function PagarPage() {
       <h1 className="checkout-titulo">Forma de pago</h1>
 
       <div className="checkout-grid">
-        {/* ── Columna izquierda: métodos de pago ── */}
+        {/* ── Columna izquierda: lista de métodos de pago ── */}
         <div className="checkout-izq">
           <section className="checkout-section">
+            <h2 className="checkout-section__titulo">Elegí cómo querés pagar</h2>
 
-            <div className="metodo-pago-tabs">
-              <button
-                className={`metodo-pago-tab${metodoPago === 'tarjeta' ? ' metodo-pago-tab--activo' : ''}`}
-                onClick={() => setMetodoPago('tarjeta')}
-              >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
-                </svg>
-                Tarjeta
-              </button>
-              <button
-                className={`metodo-pago-tab${metodoPago === 'transferencia' ? ' metodo-pago-tab--activo' : ''}`}
-                onClick={() => setMetodoPago('transferencia')}
-              >
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-                </svg>
-                Transferencia
-              </button>
+            <div className="pago-metodo-lista">
+
+              {/* ── Tarjeta ── */}
+              <label className={`pago-metodo-item${metodoPago === 'tarjeta' ? ' pago-metodo-item--activo' : ''}`}>
+                <input type="radio" name="metodoPago" value="tarjeta" checked={metodoPago === 'tarjeta'} onChange={() => setMetodoPago('tarjeta')} />
+                <div className="pago-metodo-item__header">
+                  <div className="pago-metodo-item__radio">
+                    {metodoPago === 'tarjeta' && <div className="pago-metodo-item__dot" />}
+                  </div>
+                  <div className="pago-metodo-item__icono">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                    </svg>
+                  </div>
+                  <div className="pago-metodo-item__info">
+                    <span className="pago-metodo-item__nombre">Tarjeta de crédito / débito</span>
+                    <span className="pago-metodo-item__desc">Pago seguro vía Payway</span>
+                  </div>
+                </div>
+                {metodoPago === 'tarjeta' && (
+                  <div className="pago-metodo-item__detalle">
+                    <p>Serás redirigido a la plataforma segura de Payway para ingresar los datos de tu tarjeta.</p>
+                  </div>
+                )}
+              </label>
+
+              {/* ── Transferencia ── */}
+              <label className={`pago-metodo-item${metodoPago === 'transferencia' ? ' pago-metodo-item--activo' : ''}`}>
+                <input type="radio" name="metodoPago" value="transferencia" checked={metodoPago === 'transferencia'} onChange={() => setMetodoPago('transferencia')} />
+                <div className="pago-metodo-item__header">
+                  <div className="pago-metodo-item__radio">
+                    {metodoPago === 'transferencia' && <div className="pago-metodo-item__dot" />}
+                  </div>
+                  <div className="pago-metodo-item__icono">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                      <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                    </svg>
+                  </div>
+                  <div className="pago-metodo-item__info">
+                    <span className="pago-metodo-item__nombre">Transferencia bancaria</span>
+                  </div>
+                </div>
+                {metodoPago === 'transferencia' && (
+                  <div className="pago-metodo-item__detalle">
+                    <div className="pago-info__datos">
+                      <div className="pago-info__fila"><span>Banco</span><strong>{BANCO_FARMACIA}</strong></div>
+                      <div className="pago-info__fila"><span>Titular</span><strong>{TITULAR}</strong></div>
+                      <div className="pago-info__fila"><span>CBU</span><strong>{CBU_FARMACIA}</strong></div>
+                      <div className="pago-info__fila"><span>Alias</span><strong>{ALIAS_FARMACIA}</strong></div>
+                    </div>
+                    <button
+                      type="button"
+                      className="pago-info__btn-importante"
+                      onClick={e => { e.preventDefault(); setModalTransferencia(true); }}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                      </svg>
+                      Info importante
+                    </button>
+                  </div>
+                )}
+              </label>
+
+              {/* ── Efectivo (solo retiro en farmacia) ── */}
               {metodo === 'retiro_farmacia' && (
-                <button
-                  className={`metodo-pago-tab${metodoPago === 'efectivo' ? ' metodo-pago-tab--activo' : ''}`}
-                  onClick={() => setMetodoPago('efectivo')}
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>
-                  </svg>
-                  Efectivo
-                </button>
+                <label className={`pago-metodo-item${metodoPago === 'efectivo' ? ' pago-metodo-item--activo' : ''}`}>
+                  <input type="radio" name="metodoPago" value="efectivo" checked={metodoPago === 'efectivo'} onChange={() => setMetodoPago('efectivo')} />
+                  <div className="pago-metodo-item__header">
+                    <div className="pago-metodo-item__radio">
+                      {metodoPago === 'efectivo' && <div className="pago-metodo-item__dot" />}
+                    </div>
+                    <div className="pago-metodo-item__icono">
+                      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>
+                      </svg>
+                    </div>
+                    <div className="pago-metodo-item__info">
+                      <span className="pago-metodo-item__nombre">Efectivo</span>
+                      <span className="pago-metodo-item__desc">Pagás al retirar en la farmacia</span>
+                    </div>
+                  </div>
+                  {metodoPago === 'efectivo' && (
+                    <div className="pago-metodo-item__detalle">
+                      <p>Tené el monto exacto listo al momento de retirar tu pedido en nuestra farmacia.</p>
+                    </div>
+                  )}
+                </label>
               )}
             </div>
 
-            {/* ── Panel Tarjeta ── */}
-            {metodoPago === 'tarjeta' && (
-              <div className="checkout-tarjeta">
-                <p className="checkout-pago-info">
-                  Serás redirigido a la plataforma segura de Payway para ingresar los datos de tu tarjeta.
-                </p>
-
-                {error && <p className="checkout-error">{error}</p>}
-
-                <button
-                  className="btn btn--primary btn--full checkout-confirmar-btn"
-                  onClick={handlePagarTarjeta}
-                  disabled={confirmando}
-                >
-                  {confirmando ? 'Redirigiendo a Payway...' : 'Confirmar y Pagar →'}
-                </button>
-              </div>
-            )}
-
-            {/* ── Panel Transferencia ── */}
-            {metodoPago === 'transferencia' && (
-              <div className="pago-transferencia-info">
-                <p className="pago-info__titulo">Realizá la transferencia y luego confirmá tu pedido</p>
-                <div className="pago-info__datos">
-                  <div className="pago-info__fila"><span>Banco</span><strong>{BANCO_FARMACIA}</strong></div>
-                  <div className="pago-info__fila"><span>Titular</span><strong>{TITULAR}</strong></div>
-                  <div className="pago-info__fila"><span>CBU</span><strong>{CBU_FARMACIA}</strong></div>
-                  <div className="pago-info__fila"><span>Alias</span><strong>{ALIAS_FARMACIA}</strong></div>
-                  <div className="pago-info__fila pago-info__fila--monto"><span>Monto</span><strong>${formatPrecio(totalFinal)}</strong></div>
-                </div>
-                <p className="pago-info__aviso">Una vez recibida la transferencia, confirmaremos tu pedido y procederemos con la preparación.</p>
-
-                {error && <p className="checkout-error">{error}</p>}
-
-                <button className="btn btn--primary btn--full checkout-confirmar-btn" onClick={handlePagarTransferencia} disabled={confirmando}>
-                  {confirmando ? 'Registrando pedido...' : 'Confirmar pedido por transferencia →'}
-                </button>
-              </div>
-            )}
-
-            {/* ── Panel Efectivo ── */}
-            {metodoPago === 'efectivo' && (
-              <div className="pago-efectivo-info">
-                <p className="pago-info__titulo">Pagás en efectivo al retirar tu pedido</p>
-                <div className="pago-info__datos">
-                  <div className="pago-info__fila"><span>Dónde</span><strong>Nuestra sucursal</strong></div>
-                  <div className="pago-info__fila pago-info__fila--monto"><span>Total a pagar</span><strong>${formatPrecio(totalFinal)}</strong></div>
-                </div>
-                <p className="pago-info__aviso">Tu pedido quedará reservado. Tené el efectivo listo al momento de retirarlo.</p>
-
-                {error && <p className="checkout-error">{error}</p>}
-
-                <button className="btn btn--primary btn--full checkout-confirmar-btn" onClick={handlePagarEfectivo} disabled={confirmando}>
-                  {confirmando ? 'Registrando pedido...' : 'Confirmar pedido →'}
-                </button>
-              </div>
-            )}
-
-            <Link to="/envio" className="checkout-seguir-comprando">← Volver al envío</Link>
+            {error && <p className="checkout-error" style={{ marginTop: '0.75rem' }}>{error}</p>}
           </section>
         </div>
 
-        {/* ── Columna derecha: resumen del pedido ── */}
+        {/* ── Columna derecha: resumen + confirmar ── */}
         <div className="checkout-der">
           <section className="checkout-section checkout-resumen">
             <h2 className="checkout-section__titulo">Resumen del pedido</h2>
@@ -243,9 +244,50 @@ export function PagarPage() {
                 <strong>${formatPrecio(totalFinal)}</strong>
               </div>
             </div>
+
+            <button
+              className="btn btn--primary btn--full checkout-confirmar-btn"
+              onClick={handleConfirmar}
+              disabled={confirmando}
+            >
+              {confirmando
+                ? (metodoPago === 'tarjeta' ? 'Redirigiendo a Payway...' : 'Registrando pedido...')
+                : 'Confirmar compra →'}
+            </button>
+            <Link to="/envio" className="checkout-seguir-comprando">← Volver al envío</Link>
           </section>
         </div>
       </div>
+
+      {/* ── Modal: Info importante transferencia ── */}
+      {modalTransferencia && (
+        <div className="modal-overlay" onClick={() => setModalTransferencia(false)}>
+          <div className="modal-transferencia" onClick={e => e.stopPropagation()}>
+            <button className="modal-transferencia__cerrar" onClick={() => setModalTransferencia(false)}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+            <div className="modal-transferencia__header">
+              <div className="modal-transferencia__icono">
+                <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#16a34a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M8 12l2.5 2.5L16 9"/>
+                </svg>
+              </div>
+              <p className="modal-transferencia__titulo">Es importante que tengas en cuenta:</p>
+            </div>
+            <div className="modal-transferencia__body">
+              <p className="modal-transferencia__subtitulo">Transferencia Bancaria</p>
+              <p>Una vez que confirmes tu compra te enviaremos los datos necesarios para realizar la transferencia.</p>
+              <p>Para informar tu pago, respondé el correo de confirmación adjuntando el comprobante. Una vez acreditado, empezará a correr el plazo de entrega según la opción seleccionada.</p>
+            </div>
+            <button className="btn btn--primary modal-transferencia__ok" onClick={() => setModalTransferencia(false)}>
+              Ok, entiendo
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

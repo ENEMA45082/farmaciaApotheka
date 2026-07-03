@@ -11,5 +11,6 @@ router.post('/',              requireAuth,  pedidosController.crear);
 router.get('/',               requireAuth,  pedidosController.listar);
 router.get('/:id',            requireAuth,  pedidosController.obtenerPorId);
 router.patch('/:id/cancelar', requireAuth,  pedidosController.cancelar);
+router.get('/:id/tracking',   requireAuth,  pedidosController.tracking);
 
 export default router;

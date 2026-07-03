@@ -9,6 +9,7 @@ import type {
   ActualizarCategoriaDTO,
 } from '../types';
 import { supabase } from '../lib/supabase';
+import { addErrorInterceptor } from './apiClient';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '/api' });
 
@@ -21,6 +22,8 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+addErrorInterceptor(api);
 
 export interface FiltrosProducto {
   categoria?: string;
@@ -93,4 +96,54 @@ export async function subirImagenes(archivos: File[]): Promise<string[]> {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return data.urls;
+}
+
+export interface FilaPreviewPrecio {
+  codigo_barras: string;
+  nombre: string;
+  precio_actual: number;
+  precio_nuevo: number;
+}
+
+export interface FilaNoEncontrada {
+  codigo_barras: string;
+  precio_csv: number;
+}
+
+export interface PreviewImportarPreciosResponse {
+  actualizaciones: FilaPreviewPrecio[];
+  no_encontrados: FilaNoEncontrada[];
+}
+
+export interface ItemConfirmarPrecio {
+  codigo_barras: string;
+  precio_nuevo: number;
+}
+
+export interface ResultadoConfirmarPrecios {
+  actualizados: number;
+  fallidos: { codigo_barras: string; razon: string }[];
+}
+
+export async function previewImportarPrecios(
+  archivo: File
+): Promise<PreviewImportarPreciosResponse> {
+  const formData = new FormData();
+  formData.append('archivo', archivo);
+  const { data } = await api.post<PreviewImportarPreciosResponse>(
+    '/productos/preview-importar-precios',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return data;
+}
+
+export async function confirmarImportarPrecios(
+  items: ItemConfirmarPrecio[]
+): Promise<ResultadoConfirmarPrecios> {
+  const { data } = await api.post<ResultadoConfirmarPrecios>(
+    '/productos/confirmar-importar-precios',
+    { items }
+  );
+  return data;
 }

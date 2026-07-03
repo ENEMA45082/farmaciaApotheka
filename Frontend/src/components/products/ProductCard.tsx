@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import type { Producto } from '../../types';
 import { precioEfectivo, formatPrecio } from '../../types';
 import { useCarritoContext } from '../../context/CartContext';
 import { useFavoritos } from '../../context/FavoritosContext';
+import { staggerItem, heartVariants } from '../ui/motion';
 
 interface Props {
   producto: Producto;
@@ -20,7 +22,12 @@ export function ProductCard({ producto }: Props) {
   };
 
   return (
-    <div className="product-card">
+    <motion.div
+      className="product-card"
+      variants={staggerItem}
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.2 }}
+    >
       <Link to={`/productos/${producto.id}`} className="product-card__image-wrap">
         {producto.en_oferta && producto.porcentaje_oferta != null && (
           <span className="oferta-badge oferta-badge--imagen">-{producto.porcentaje_oferta}%</span>
@@ -32,16 +39,18 @@ export function ProductCard({ producto }: Props) {
         />
       </Link>
 
-      <button
+      <motion.button
         className={`product-card__fav${favorito ? ' product-card__fav--activo' : ''}`}
         onClick={() => toggleFavorito(producto.id)}
         aria-label={favorito ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+        variants={heartVariants}
+        animate={favorito ? 'active' : 'inactive'}
       >
         <svg viewBox="0 0 24 24" width="18" height="18" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
           fill={favorito ? 'currentColor' : 'none'} stroke="currentColor">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
         </svg>
-      </button>
+      </motion.button>
 
       <div className="product-card__body">
         {producto.categoria && (
@@ -71,6 +80,6 @@ export function ProductCard({ producto }: Props) {
           {producto.stock === 0 ? 'Sin stock' : 'Agregar al carrito'}
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }

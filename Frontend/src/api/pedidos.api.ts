@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
-import type { Pedido, CrearPedidoDTO } from '../types';
+import type { Pedido, CrearPedidoDTO, ResultadoTracking } from '../types';
+import { addErrorInterceptor } from './apiClient';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '/api' });
 
@@ -11,6 +12,8 @@ api.interceptors.request.use(async config => {
   }
   return config;
 });
+
+addErrorInterceptor(api);
 
 export async function crearPedido(dto: CrearPedidoDTO): Promise<Pedido> {
   const { data } = await api.post<Pedido>('/pedidos', dto);
@@ -32,9 +35,14 @@ export async function cancelarPedido(id: string): Promise<Pedido> {
   return data;
 }
 
-export async function fetchPedidosAdmin(): Promise<Pedido[]> {
-  const { data } = await api.get<Pedido[]>('/pedidos/admin');
+export async function fetchTracking(id: string): Promise<ResultadoTracking> {
+  const { data } = await api.get<ResultadoTracking>(`/pedidos/${id}/tracking`);
   return data;
+}
+
+export async function fetchPedidosAdmin(): Promise<Pedido[]> {
+  const { data } = await api.get<{ datos: Pedido[] }>('/pedidos/admin');
+  return data.datos;
 }
 
 export async function cambiarEstadoPedido(id: string, estado: string): Promise<Pedido> {

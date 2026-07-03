@@ -1,9 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { User } from '@supabase/supabase-js';
 import * as pedidosService from '../services/pedidos.service';
-import type { CrearPedidoDTO } from '../types';
-
-type AuthRequest = Request & { user: User };
+import type { AuthRequest, CrearPedidoDTO } from '../types';
 
 export async function crear(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -37,10 +34,20 @@ export async function cancelar(req: Request, res: Response, next: NextFunction):
   } catch (err) { next(err); }
 }
 
-export async function listarAdmin(_req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function tracking(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const pedidos = await pedidosService.listarTodos();
-    res.json(pedidos);
+    const userId = (req as AuthRequest).user.id;
+    const resultado = await pedidosService.obtenerTracking(req.params.id, userId);
+    res.json(resultado);
+  } catch (err) { next(err); }
+}
+
+export async function listarAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const pagina = parseInt(String(req.query.pagina ?? '1'), 10);
+    const limite = parseInt(String(req.query.limite ?? '20'), 10);
+    const resultado = await pedidosService.listarTodos(pagina, limite);
+    res.json(resultado);
   } catch (err) { next(err); }
 }
 

@@ -14,19 +14,7 @@ const sdkPayway = require('sdk-node-payway') as {
 
 import * as pedidosRepo   from '../repositories/pedidos.repository';
 import * as productosRepo from '../repositories/productos.repository';
-import type { Pedido }    from '../types';
-
-export interface FraudData {
-  email:        string;
-  nombre:       string;
-  apellido:     string;
-  telefono:     string;
-  street1:      string;
-  ciudad:       string;
-  provincia:    string;
-  codigoPostal: string;
-  userId:       string;
-}
+import type { Pedido, FraudData } from '../types';
 
 function crearSDK() {
   const env = process.env.PAYWAY_ENVIRONMENT ?? 'developer';
@@ -41,6 +29,8 @@ function crearSDK() {
     process.env.PAYWAY_DEVELOPER   ?? 'apotheka-dev',
   );
 }
+
+const paywaySDK = crearSDK();
 
 function buildFraudDetection(pedido: Pedido, fraudData: FraudData, amountCentavos: number) {
   const dispatchMethod = pedido.metodo_envio === 'domicilio' ? 'homeDelivery' : 'store';
@@ -101,10 +91,9 @@ export async function procesarPago(
   fraudData: FraudData,
 ): Promise<{ status: string; pw_payment_id: string }> {
   const amountCentavos = Math.round(pedido.total * 100);
-  const sdk = crearSDK();
 
   const pagoResult = await new Promise<{ status: string; pw_payment_id: string }>((resolve, reject) => {
-    sdk.payment(
+    paywaySDK.payment(
       {
         site_transaction_id: pedido.id,
         token,
@@ -158,40 +147,51 @@ export async function generarCheckoutHosted(
   const esLocal        = frontUrl.includes('localhost') || frontUrl.includes('127.0.0.1');
   const baseUrl        = esLocal ? publicFrontUrl : frontUrl;
   const successUrl     = `${baseUrl}/pago/exitoso?pedido=${pedido.id}`;
-  const cancelUrl      = `${baseUrl}/pago/fallido?pedido=${pedido.id}`;
+  const cancelUrl      = `${baseUrl}/pago/cancelado?pedido=${pedido.id}`;
   // Payway requiere notifications_url — cuando el backend corre en localhost usar la URL pública desplegada
   const publicBackUrl = process.env.BACKEND_PUBLIC_URL ?? backUrl;
   const notifUrl      = `${publicBackUrl}/api/pagos/notificacion`;
 
-  const args: Record<string, unknown> = {
-    origin_platform: 'SDK-Node',
-    currency:        'ARS',
-    products:        items.map((item, idx) => ({
-      id:          idx + 1,
-      value:       item.precio,
-      description: item.nombre,
-      quantity:    item.cantidad,
-    })),
-    total_price:   pedido.total,
-    site:          siteId,
-    success_url:   successUrl,
-    cancel_url:    cancelUrl,
-    template_id:   templateId,
-    installments:  [1],
-    plan_gobierno: false,
-    public_apikey: process.env.PAYWAY_PUBLIC_KEY ?? '',
-    auth_3ds:      false,
-  };
+  const productosPayway = items.map((item, idx) => ({
+    id:          idx + 1,
+    value:       item.precio,
+    description: item.nombre,
+    quantity:    item.cantidad,
+  }));
 
-  args.notifications_url = notifUrl;
+  // Payway exige que total_price === suma de (value × quantity) de todos los productos.
+  // El costo de envío se agrega como ítem separado para que los números cuadren.
+  if (pedido.costo_envio > 0) {
+    productosPayway.push({
+      id:          productosPayway.length + 1,
+      value:       pedido.costo_envio,
+      description: 'Costo de envío',
+      quantity:    1,
+    });
+  }
+
+  const args: Record<string, unknown> = {
+    origin_platform:     'SDK-Node',
+    currency:            'ARS',
+    site_transaction_id: pedido.id, // permite identificar el pedido en la notificación webhook
+    products:            productosPayway,
+    total_price:      pedido.total,
+    site:             siteId,
+    success_url:      successUrl,
+    cancel_url:       cancelUrl,
+    notifications_url: notifUrl,
+    template_id:      templateId,
+    installments:     [1],
+    plan_gobierno:    false,
+    public_apikey:    process.env.PAYWAY_PUBLIC_KEY ?? '',
+    auth_3ds:         false,
+  };
 
   console.log(`[Payway checkout] templateId=${templateId} siteId=${siteId} env=${env} esLocal=${esLocal}`);
   console.log('[Payway checkout] args:', JSON.stringify(args));
 
-  const sdk = crearSDK();
-
   return new Promise<string>((resolve, reject) => {
-    sdk.checkout(args, (result: any, err: any) => {
+    paywaySDK.checkout(args, (result: any, err: any) => {
       console.log('[Payway checkout] result:', JSON.stringify(result));
       console.log('[Payway checkout] err:',    JSON.stringify(err));
 
@@ -213,7 +213,48 @@ export async function generarCheckoutHosted(
         return;
       }
 
+      // Guardar el payment_id para poder identificar el pedido cuando llegue la notificación
+      if (paymentId) {
+        pedidosRepo.guardarPwPaymentId(pedido.id, String(paymentId)).catch(err =>
+          console.error('[Payway checkout] Error guardando pw_payment_id:', err),
+        );
+      }
+
       resolve(checkoutUrl);
     });
   });
+}
+
+export async function procesarNotificacion(body: Record<string, unknown>): Promise<void> {
+  const paymentId  = String(body.id ?? body.payment_id ?? '');
+  const siteTxId   = String(body.site_transaction_id ?? '');
+  const status     = String(body.status ?? '');
+
+  if (!status || (!paymentId && !siteTxId)) return;
+
+  // Intentar encontrar el pedido por site_transaction_id (= pedido.id) primero,
+  // con fallback a pw_payment_id para pagos directos con token
+  let pedido = null;
+  if (siteTxId) {
+    pedido = await pedidosRepo.encontrarPorId(siteTxId);
+  }
+  if (!pedido && paymentId) {
+    pedido = await pedidosRepo.encontrarPorPwPaymentId(paymentId);
+  }
+
+  if (!pedido || pedido.estado !== 'pendiente') return;
+
+  if (status === 'approved') {
+    await pedidosRepo.actualizarEstado(pedido.id, 'confirmado', { pw_payment_id: paymentId || undefined });
+  } else if (status === 'rejected' || status === 'cancelled') {
+    const motivo = status === 'rejected'
+      ? 'Pago rechazado por Payway'
+      : 'Pago cancelado por el cliente en Payway';
+    await pedidosRepo.actualizarEstado(pedido.id, 'cancelado', { motivo_cancelacion: motivo });
+    for (const detalle of pedido.detalles ?? []) {
+      if (detalle.producto_id) {
+        await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);
+      }
+    }
+  }
 }

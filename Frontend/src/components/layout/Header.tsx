@@ -1,10 +1,12 @@
 import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { Categoria } from '../../types';
 import { formatPrecio } from '../../types';
 import { useCarritoContext } from '../../context/CartContext';
 import { useCategoriasArbol } from '../../hooks/useCategoriasArbol';
 import { useAuth } from '../../context/AuthContext';
+import { menuVariants, megaMenuVariants, staggerContainer, staggerItem } from '../ui/motion';
 
 function flattenArbol(cats: Categoria[]): Categoria[] {
   return cats.flatMap(c => [c, ...flattenArbol(c.hijos ?? [])]);
@@ -72,6 +74,7 @@ export function Header() {
             Mis pedidos
           </Link>
 
+          {/* User menu */}
           <div
             className="header-user"
             onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setUserMenuAbierto(false); }}
@@ -92,37 +95,46 @@ export function Header() {
               <span className="header-user__label">Mi cuenta</span>
             </button>
 
-            {userMenuAbierto && (
-              <div className="header-user__menu">
-                {user ? (
-                  <>
-                    <p className="header-user__saludo">¡Hola!</p>
-                    <hr className="header-user__sep" />
-                    <Link className="header-user__item" to="/pedidos" onClick={() => setUserMenuAbierto(false)}>
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2"/><path d="M3 10h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9z"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/></svg>
-                      Mis Pedidos
-                    </Link>
-                    <Link className="header-user__item" to="/perfil" onClick={() => setUserMenuAbierto(false)}>
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                      Mis Datos
-                    </Link>
-                    <Link className="header-user__item" to="/direcciones" onClick={() => setUserMenuAbierto(false)}>
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                      Mis Direcciones
-                    </Link>
-                    <hr className="header-user__sep" />
-                    <button className="header-user__item header-user__item--logout" onClick={() => { signOut(); setUserMenuAbierto(false); }}>
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                      Cerrar Sesión
+            <AnimatePresence>
+              {userMenuAbierto && (
+                <motion.div
+                  className="header-user__menu"
+                  variants={menuVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  style={{ transformOrigin: 'top right' }}
+                >
+                  {user ? (
+                    <>
+                      <p className="header-user__saludo">¡Hola!</p>
+                      <hr className="header-user__sep" />
+                      <Link className="header-user__item" to="/pedidos" onClick={() => setUserMenuAbierto(false)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2"/><path d="M3 10h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9z"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/></svg>
+                        Mis Pedidos
+                      </Link>
+                      <Link className="header-user__item" to="/perfil" onClick={() => setUserMenuAbierto(false)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        Mis Datos
+                      </Link>
+                      <Link className="header-user__item" to="/direcciones" onClick={() => setUserMenuAbierto(false)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        Mis Direcciones
+                      </Link>
+                      <hr className="header-user__sep" />
+                      <button className="header-user__item header-user__item--logout" onClick={() => { signOut(); setUserMenuAbierto(false); }}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        Cerrar Sesión
+                      </button>
+                    </>
+                  ) : (
+                    <button className="header-user__item" onClick={() => { signInWithGoogle(window.location.origin + '/'); setUserMenuAbierto(false); }}>
+                      Iniciar sesión con Google
                     </button>
-                  </>
-                ) : (
-                  <button className="header-user__item" onClick={() => { signInWithGoogle(window.location.origin + '/'); setUserMenuAbierto(false); }}>
-                    Iniciar sesión con Google
-                  </button>
-                )}
-              </div>
-            )}
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Favoritos */}
@@ -135,7 +147,20 @@ export function Header() {
           {/* Carrito */}
           <button className="cart-btn" onClick={abrirCarrito} aria-label="Abrir carrito">
             <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-            {totalItems > 0 && <span className="cart-btn__badge">{totalItems}</span>}
+            <AnimatePresence mode="wait">
+              {totalItems > 0 && (
+                <motion.span
+                  key={totalItems}
+                  className="cart-btn__badge"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: [1, 1.4, 1], opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {totalItems}
+                </motion.span>
+              )}
+            </AnimatePresence>
           </button>
           <span className="cart-btn__precio">${formatPrecio(totalPrecio)}</span>
         </div>
@@ -194,43 +219,54 @@ export function Header() {
         </div>
 
         {/* ── Mega-menú ── */}
-        {megaMenuAbierto && (
-          <div
-            className="mega-menu"
-            onMouseEnter={() => setMegaMenuAbierto(true)}
-          >
-            <div className="mega-menu__inner">
-              <button
-                className="mega-menu__ver-todo"
-                onClick={() => navegar('/')}
-              >
-                Ver todos los productos →
-              </button>
-              <div className="mega-menu__grid">
-                {arbol.map(cat => (
-                  <div key={cat.id} className="mega-menu__col">
-                    <button
-                      className="mega-menu__col-titulo"
-                      onClick={() => navegar(`/?categoria=${cat.id}`)}
-                    >
-                      {cat.nombre.toUpperCase()}
-                    </button>
-                    {(cat.hijos ?? []).map(sub => (
+        <AnimatePresence>
+          {megaMenuAbierto && (
+            <motion.div
+              className="mega-menu"
+              variants={megaMenuVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              onMouseEnter={() => setMegaMenuAbierto(true)}
+            >
+              <div className="mega-menu__inner">
+                <button
+                  className="mega-menu__ver-todo"
+                  onClick={() => navegar('/')}
+                >
+                  Ver todos los productos →
+                </button>
+                <motion.div
+                  className="mega-menu__grid"
+                  variants={staggerContainer}
+                  initial="initial"
+                  animate="animate"
+                >
+                  {arbol.map(cat => (
+                    <motion.div key={cat.id} className="mega-menu__col" variants={staggerItem}>
                       <button
-                        key={sub.id}
-                        className="mega-menu__col-item"
-                        onClick={() => navegar(`/?categoria=${sub.id}`)}
+                        className="mega-menu__col-titulo"
+                        onClick={() => navegar(`/?categoria=${cat.id}`)}
                       >
-                        <span className="mega-menu__col-arrow">›</span>
-                        {sub.nombre}
+                        {cat.nombre.toUpperCase()}
                       </button>
-                    ))}
-                  </div>
-                ))}
+                      {(cat.hijos ?? []).map(sub => (
+                        <button
+                          key={sub.id}
+                          className="mega-menu__col-item"
+                          onClick={() => navegar(`/?categoria=${sub.id}`)}
+                        >
+                          <span className="mega-menu__col-arrow">›</span>
+                          {sub.nombre}
+                        </button>
+                      ))}
+                    </motion.div>
+                  ))}
+                </motion.div>
               </div>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
     </header>

@@ -1,18 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import type { User } from '@supabase/supabase-js';
-import * as pedidosRepo     from '../repositories/pedidos.repository';
 import * as perfilRepo      from '../repositories/perfil.repository';
 import * as direccionesRepo from '../repositories/direcciones.repository';
 import * as pagosService    from '../services/pagos.service';
-import { ErrorServicio }    from '../services/productos.service';
-
-type AuthReq = Request & { user: User };
+import * as pedidosService  from '../services/pedidos.service';
+import { AppError }         from '../errors/AppError';
+import type { AuthRequest } from '../types';
 
 export async function pagar(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId    = (req as AuthReq).user.id;
-    const userEmail = (req as AuthReq).user.email ?? '';
-
+    const { user } = req as AuthRequest;
     const { pedidoId, token, bin, cuotas, paymentMethodId } = req.body as {
       pedidoId: string;
       token: string;
@@ -22,22 +18,19 @@ export async function pagar(req: Request, res: Response, next: NextFunction) {
     };
 
     if (!pedidoId || !token || !bin) {
-      res.status(400).json({ error: 'pedidoId, token y bin son requeridos' });
-      return;
+      throw new AppError('pedidoId, token y bin son requeridos', 400);
     }
 
-    const pedido = await pedidosRepo.encontrarPorId(pedidoId);
-    if (!pedido) throw new ErrorServicio('Pedido no encontrado', 404);
-    if (pedido.user_id !== userId) throw new ErrorServicio('Acceso denegado', 403);
+    // obtenerPorId ya verifica 404 y ownership (403)
+    const pedido = await pedidosService.obtenerPorId(pedidoId, user.id);
+
     if (pedido.estado !== 'pendiente') {
-      res.status(400).json({ error: 'El pedido no está en estado pendiente' });
-      return;
+      throw new AppError('El pedido no está en estado pendiente', 400);
     }
 
-    // Obtener perfil y dirección del usuario para Cybersource
     const [perfil, direccion] = await Promise.all([
-      perfilRepo.encontrarOCrear(userId),
-      direccionesRepo.obtener(userId),
+      perfilRepo.encontrarOCrear(user.id),
+      direccionesRepo.obtener(user.id),
     ]);
 
     const resultado = await pagosService.procesarPago(
@@ -47,15 +40,15 @@ export async function pagar(req: Request, res: Response, next: NextFunction) {
       cuotas ?? 1,
       paymentMethodId ?? 1,
       {
-        email:        userEmail,
+        email:        user.email ?? '',
         nombre:       perfil.nombre   ?? 'Cliente',
         apellido:     perfil.apellido ?? '',
         telefono:     perfil.telefono ?? '',
-        street1:      direccion?.calle_numero  ?? 'Sin dirección',
+        street1:      direccion ? `${direccion.calle} ${direccion.altura}` : 'Sin dirección',
         ciudad:       direccion?.ciudad        ?? 'Buenos Aires',
         provincia:    direccion?.provincia     ?? 'Buenos Aires',
         codigoPostal: direccion?.codigo_postal ?? '1000',
-        userId,
+        userId:       user.id,
       },
     );
 
@@ -71,20 +64,18 @@ export async function pagar(req: Request, res: Response, next: NextFunction) {
 
 export async function checkout(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId  = (req as AuthReq).user.id;
+    const { user } = req as AuthRequest;
     const { pedidoId } = req.body as { pedidoId: string };
 
     if (!pedidoId) {
-      res.status(400).json({ error: 'pedidoId es requerido' });
-      return;
+      throw new AppError('pedidoId es requerido', 400);
     }
 
-    const pedido = await pedidosRepo.encontrarPorId(pedidoId);
-    if (!pedido) throw new ErrorServicio('Pedido no encontrado', 404);
-    if (pedido.user_id !== userId) throw new ErrorServicio('Acceso denegado', 403);
+    // obtenerPorId ya verifica 404 y ownership (403)
+    const pedido = await pedidosService.obtenerPorId(pedidoId, user.id);
+
     if (pedido.estado !== 'pendiente') {
-      res.status(400).json({ error: 'El pedido no está en estado pendiente' });
-      return;
+      throw new AppError('El pedido no está en estado pendiente', 400);
     }
 
     const items = (pedido.detalles ?? []).map(d => ({
@@ -101,7 +92,11 @@ export async function checkout(req: Request, res: Response, next: NextFunction) 
 }
 
 export async function notificacion(req: Request, res: Response) {
-  console.log('[Payway Notificacion] headers:', JSON.stringify(req.headers));
-  console.log('[Payway Notificacion] body:', JSON.stringify(req.body));
+  try {
+    await pagosService.procesarNotificacion(req.body as Record<string, unknown>);
+  } catch (err) {
+    console.error('[Payway Notificacion] Error procesando:', err);
+  }
+  // Siempre responder 200 a Payway para evitar reintentos en loop
   res.status(200).json({ ok: true });
 }

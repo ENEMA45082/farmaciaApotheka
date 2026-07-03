@@ -125,16 +125,62 @@ export interface DetallePedido {
 export type MetodoEnvio = 'retiro_farmacia' | 'domicilio' | 'retiro_sucursal';
 export type MetodoPago  = 'tarjeta' | 'transferencia' | 'efectivo';
 
-export interface SucursalAndreani {
-  id: string;
+export type ProvinciaCodigo =
+  | 'A'|'B'|'C'|'D'|'E'|'F'|'G'|'H'|'J'|'K'|'L'|'M'|'N'|'P'|'Q'|'R'|'S'|'T'|'U'|'V'|'W'|'X'|'Y'|'Z';
+
+export const PROVINCIAS: { codigo: ProvinciaCodigo; nombre: string }[] = [
+  { codigo: 'A', nombre: 'Salta' },
+  { codigo: 'B', nombre: 'Buenos Aires' },
+  { codigo: 'C', nombre: 'CABA' },
+  { codigo: 'D', nombre: 'San Luis' },
+  { codigo: 'E', nombre: 'Entre Ríos' },
+  { codigo: 'F', nombre: 'La Rioja' },
+  { codigo: 'G', nombre: 'Santiago del Estero' },
+  { codigo: 'H', nombre: 'Chaco' },
+  { codigo: 'J', nombre: 'San Juan' },
+  { codigo: 'K', nombre: 'Catamarca' },
+  { codigo: 'L', nombre: 'La Pampa' },
+  { codigo: 'M', nombre: 'Mendoza' },
+  { codigo: 'N', nombre: 'Misiones' },
+  { codigo: 'P', nombre: 'Formosa' },
+  { codigo: 'Q', nombre: 'Neuquén' },
+  { codigo: 'R', nombre: 'Río Negro' },
+  { codigo: 'S', nombre: 'Santa Fe' },
+  { codigo: 'T', nombre: 'Tucumán' },
+  { codigo: 'U', nombre: 'Chubut' },
+  { codigo: 'V', nombre: 'Tierra del Fuego' },
+  { codigo: 'W', nombre: 'Corrientes' },
+  { codigo: 'X', nombre: 'Córdoba' },
+  { codigo: 'Y', nombre: 'Jujuy' },
+  { codigo: 'Z', nombre: 'Santa Cruz' },
+];
+
+export interface SucursalCorreoArgentino {
+  code: string;
   nombre: string;
   direccion: string;
   ciudad: string;
+  provinciaCodigo: ProvinciaCodigo;
+  postalCode: string | null;
 }
 
 export interface CotizacionEnvio {
   precio: number;
   diasEstimados: string;
+}
+
+export interface EventoTracking {
+  event: string;
+  date: string;
+  branch: string;
+  status: string;
+  sign: string | null;
+}
+
+export interface ResultadoTracking {
+  encontrado: boolean;
+  trackingNumber: string | null;
+  events: EventoTracking[];
 }
 
 export interface Pedido {
@@ -147,13 +193,22 @@ export interface Pedido {
   notas: string | null;
   metodo_envio: MetodoEnvio;
   costo_envio: number;
-  sucursal_andreani: string | null;
+  sucursal_correo_argentino: string | null;
   codigo_postal_envio: string | null;
   metodo_pago: MetodoPago | null;
   pw_payment_id: string | null;
   fecha_pedido: string;
   fecha_cancelacion: string | null;
+  motivo_cancelacion: string | null;
   creado_en: string;
+  shipping_tracking_number: string | null;
+  shipping_fecha_envio: string | null;
+  shipping_creado_en_correo: string | null;
+  shipping_error: string | null;
+  destinatario_nombre: string | null;
+  destinatario_dni: string | null;
+  destinatario_cod_area: string | null;
+  destinatario_telefono: string | null;
   detalles?: DetallePedido[];
 }
 
@@ -168,17 +223,25 @@ export interface CrearPedidoDTO {
   notas?: string;
   metodo_envio: MetodoEnvio;
   costo_envio: number;
-  sucursal_andreani?: string;
+  sucursal_correo_argentino?: string;
   codigo_postal_envio?: string;
   metodo_pago: MetodoPago;
+  destinatario_nombre?: string;
+  destinatario_dni?: string;
+  destinatario_cod_area?: string;
+  destinatario_telefono?: string;
 }
 
 export interface Direccion {
   id: string;
   user_id: string;
-  calle_numero: string;
+  calle: string;
+  altura: string;
+  piso: string | null;
+  depto: string | null;
   ciudad: string;
   provincia: string;
+  provincia_codigo: ProvinciaCodigo | null;
   pais: string;
   codigo_postal: string | null;
   lat: number | null;
@@ -187,9 +250,13 @@ export interface Direccion {
 }
 
 export interface GuardarDireccionDTO {
-  calle_numero: string;
+  calle: string;
+  altura: string;
+  piso?: string | null;
+  depto?: string | null;
   ciudad: string;
   provincia: string;
+  provincia_codigo: ProvinciaCodigo;
   pais?: string;
   codigo_postal?: string | null;
   lat?: number | null;

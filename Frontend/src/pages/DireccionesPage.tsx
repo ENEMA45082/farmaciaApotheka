@@ -72,7 +72,11 @@ export function DireccionesPage() {
         <div className="dir-cards">
           <div className="dir-card">
             <div className="dir-card__info">
-              <p>{direccion.calle_numero}</p>
+              <p>
+                {direccion.calle} {direccion.altura}
+                {direccion.piso ? `, piso ${direccion.piso}` : ''}
+                {direccion.depto ? ` dpto ${direccion.depto}` : ''}
+              </p>
               {direccion.codigo_postal && <p>{direccion.codigo_postal}</p>}
               <p>{direccion.ciudad} - {direccion.provincia.toUpperCase()}</p>
               <p>{direccion.pais}</p>

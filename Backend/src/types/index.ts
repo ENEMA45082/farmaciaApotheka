@@ -1,3 +1,6 @@
+import type { ProvinciaCodigo } from '../config/provincias';
+export type { ProvinciaCodigo };
+
 export interface Categoria {
   id: string;
   nombre: string;
@@ -93,13 +96,22 @@ export interface Pedido {
   notas: string | null;
   metodo_envio: MetodoEnvio;
   costo_envio: number;
-  sucursal_andreani: string | null;
+  sucursal_correo_argentino: string | null;
   codigo_postal_envio: string | null;
   metodo_pago: MetodoPago | null;
   pw_payment_id: string | null;
   fecha_pedido: string;
   fecha_cancelacion: string | null;
+  motivo_cancelacion: string | null;
   creado_en: string;
+  shipping_tracking_number: string | null;
+  shipping_fecha_envio: string | null;
+  shipping_creado_en_correo: string | null;
+  shipping_error: string | null;
+  destinatario_nombre: string | null;
+  destinatario_dni: string | null;
+  destinatario_cod_area: string | null;
+  destinatario_telefono: string | null;
   detalles?: DetallePedido[];
 }
 
@@ -114,9 +126,13 @@ export interface CrearPedidoDTO {
   notas?: string;
   metodo_envio: MetodoEnvio;
   costo_envio: number;
-  sucursal_andreani?: string;
+  sucursal_correo_argentino?: string;
   codigo_postal_envio?: string;
   metodo_pago: MetodoPago;
+  destinatario_nombre?: string;
+  destinatario_dni?: string;
+  destinatario_cod_area?: string;
+  destinatario_telefono?: string;
 }
 
 export interface CrearCategoriaDTO {
@@ -155,9 +171,13 @@ export interface ActualizarPerfilDTO {
 export interface Direccion {
   id: string;
   user_id: string;
-  calle_numero: string;
+  calle: string;
+  altura: string;
+  piso: string | null;
+  depto: string | null;
   ciudad: string;
   provincia: string;
+  provincia_codigo: ProvinciaCodigo | null;
   pais: string;
   codigo_postal: string | null;
   lat: number | null;
@@ -166,13 +186,63 @@ export interface Direccion {
 }
 
 export interface GuardarDireccionDTO {
-  calle_numero: string;
+  calle: string;
+  altura: string;
+  piso?: string | null;
+  depto?: string | null;
   ciudad: string;
   provincia: string;
+  provincia_codigo: ProvinciaCodigo;
   pais?: string;
   codigo_postal?: string | null;
   lat?: number | null;
   lng?: number | null;
+}
+
+export interface FilaPreviewPrecio {
+  codigo_barras: string;
+  nombre: string;
+  precio_actual: number;
+  precio_nuevo: number;
+}
+
+export interface FilaNoEncontrada {
+  codigo_barras: string;
+  precio_csv: number;
+}
+
+export interface PreviewImportarPreciosResponse {
+  actualizaciones: FilaPreviewPrecio[];
+  no_encontrados: FilaNoEncontrada[];
+}
+
+export interface ItemConfirmarPrecio {
+  codigo_barras: string;
+  precio_nuevo: number;
+}
+
+export interface ResultadoConfirmarPrecios {
+  actualizados: number;
+  fallidos: { codigo_barras: string; razon: string }[];
+}
+
+import type { User } from '@supabase/supabase-js';
+import type { Request } from 'express';
+
+export interface AuthRequest extends Request {
+  user: User;
+}
+
+export interface FraudData {
+  email:        string;
+  nombre:       string;
+  apellido:     string;
+  telefono:     string;
+  street1:      string;
+  ciudad:       string;
+  provincia:    string;
+  codigoPostal: string;
+  userId:       string;
 }
 
 export interface FiltrosProducto {

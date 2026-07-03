@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import * as andreani from '../services/andreani.service';
+import * as correoArgentino from '../services/correoArgentino.service';
+import { esCodigoProvinciaValido } from '../config/provincias';
+import { PESO_DEFAULT_GRAMOS } from '../config/envioConfig';
 
 export async function cotizar(req: Request, res: Response, next: NextFunction) {
   try {
@@ -15,14 +17,16 @@ export async function cotizar(req: Request, res: Response, next: NextFunction) {
     }
 
     const pesoTotal = (items ?? []).reduce(
-      (sum, i) => sum + (i.peso_gramos ?? 500) * (i.cantidad ?? 1),
+      (sum, i) => sum + (i.peso_gramos ?? PESO_DEFAULT_GRAMOS) * (i.cantidad ?? 1),
       0,
     );
-    const valorDeclarado = 1000; // mínimo declarado, se puede mejorar pasando el total
 
-    const resultado = metodo === 'domicilio'
-      ? await andreani.cotizarDomicilio({ codigoPostal, pesoGramos: pesoTotal, valorDeclarado })
-      : await andreani.cotizarSucursal({ codigoPostal, pesoGramos: pesoTotal, valorDeclarado });
+    const resultado = await correoArgentino.cotizar({
+      postalCodeOrigin: process.env.CORREO_AR_POSTAL_CODE_ORIGIN ?? '',
+      postalCodeDestination: codigoPostal,
+      deliveredType: metodo === 'domicilio' ? 'D' : 'S',
+      pesoGramos: pesoTotal,
+    });
 
     res.json(resultado);
   } catch (err) {
@@ -32,12 +36,12 @@ export async function cotizar(req: Request, res: Response, next: NextFunction) {
 
 export async function sucursales(req: Request, res: Response, next: NextFunction) {
   try {
-    const cp = req.query['cp'] as string;
-    if (!cp) {
-      res.status(400).json({ error: 'El parámetro cp (código postal) es requerido' });
+    const provinciaCodigo = req.query['provinciaCodigo'] as string;
+    if (!provinciaCodigo || !esCodigoProvinciaValido(provinciaCodigo)) {
+      res.status(400).json({ error: 'El parámetro provinciaCodigo es requerido y debe ser válido' });
       return;
     }
-    const lista = await andreani.listarSucursales(cp);
+    const lista = await correoArgentino.listarSucursalesPorProvincia(provinciaCodigo);
     res.json(lista);
   } catch (err) {
     next(err);

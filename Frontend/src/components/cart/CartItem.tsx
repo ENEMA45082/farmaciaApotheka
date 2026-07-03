@@ -1,6 +1,8 @@
+import { motion } from 'framer-motion';
 import type { ItemCarrito } from '../../types';
 import { precioEfectivo, formatPrecio } from '../../types';
 import { useCarritoContext } from '../../context/CartContext';
+import { staggerItem } from '../ui/motion';
 
 interface Props {
   item: ItemCarrito;
@@ -12,7 +14,12 @@ export function CartItem({ item }: Props) {
   const efectivo = precioEfectivo(producto);
 
   return (
-    <div className="cart-item">
+    <motion.div
+      className="cart-item"
+      variants={staggerItem}
+      layout
+      exit={{ opacity: 0, x: 60, transition: { duration: 0.2 } }}
+    >
       <img
         src={producto.imagen_url ?? '/placeholder.png'}
         alt={producto.nombre}
@@ -28,14 +35,28 @@ export function CartItem({ item }: Props) {
         </p>
         <div className="cart-item__qty">
           <button onClick={() => actualizarCantidad(producto.id, cantidad - 1)}>-</button>
-          <span>{cantidad}</span>
+          <motion.span
+            key={cantidad}
+            initial={{ scale: 0.7 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.15 }}
+          >
+            {cantidad}
+          </motion.span>
           <button onClick={() => actualizarCantidad(producto.id, cantidad + 1)}>+</button>
         </div>
       </div>
       <div className="cart-item__right">
         <p className="cart-item__subtotal">${formatPrecio(efectivo * cantidad)}</p>
-        <button className="cart-item__remove" onClick={() => quitarItem(producto.id)}>✕</button>
+        <motion.button
+          className="cart-item__remove"
+          onClick={() => quitarItem(producto.id)}
+          whileHover={{ scale: 1.15, color: '#e53935' }}
+          transition={{ duration: 0.15 }}
+        >
+          ✕
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 }

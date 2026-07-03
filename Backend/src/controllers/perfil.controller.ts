@@ -1,9 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { User } from '@supabase/supabase-js';
 import * as perfilService from '../services/perfil.service';
-import type { ActualizarPerfilDTO } from '../types';
-
-type AuthRequest = Request & { user: User };
+import type { AuthRequest, ActualizarPerfilDTO } from '../types';
 
 export async function obtener(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {

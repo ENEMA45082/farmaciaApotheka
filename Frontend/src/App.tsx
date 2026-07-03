@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { CarritoProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import { CheckoutProvider } from './context/CheckoutContext';
@@ -20,64 +21,77 @@ import { EnvioPage } from './pages/EnvioPage';
 import { PagarPage } from './pages/PagarPage';
 import { PagoResultadoPage } from './pages/PagoResultadoPage';
 import { FavoritosProvider } from './context/FavoritosContext';
+import { ErrorModalProvider } from './context/ErrorModalContext';
 import { AdminRoute } from './components/auth/AdminRoute';
+import { pageVariants } from './components/ui/motion';
 import './index.css';
 
-function CheckoutLayout() {
+function AnimatedRoutes() {
+  const location = useLocation();
   return (
-    <CheckoutProvider>
-      <Outlet />
-    </CheckoutProvider>
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location.pathname}
+        variants={pageVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
+        <Routes location={location}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/productos/:id" element={<ProductDetailPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/perfil" element={<PerfilPage />} />
+          <Route path="/pedidos" element={<PedidosPage />} />
+          <Route path="/pedidos/:id" element={<DetallePedidoPage />} />
+          <Route path="/direcciones" element={<DireccionesPage />} />
+          <Route path="/ofertas" element={<OfertasPage />} />
+          <Route path="/favoritos" element={<FavoritosPage />} />
+          <Route path="/checkout" element={<Navigate to="/envio" replace />} />
+          <Route path="/envio" element={<EnvioPage />} />
+          <Route path="/pagar" element={<PagarPage />} />
+          <Route path="/pago/:resultado" element={<PagoResultadoPage />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/estadisticas"
+            element={
+              <AdminRoute>
+                <EstadisticasPage />
+              </AdminRoute>
+            }
+          />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
 function App() {
   return (
     <AuthProvider>
-      <CarritoProvider>
-        <BrowserRouter>
-          <FavoritosProvider>
-          <Header />
-          <CartDrawer />
-          <main className="main-content">
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/productos/:id" element={<ProductDetailPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/perfil" element={<PerfilPage />} />
-              <Route path="/pedidos" element={<PedidosPage />} />
-              <Route path="/pedidos/:id" element={<DetallePedidoPage />} />
-              <Route path="/direcciones" element={<DireccionesPage />} />
-              <Route path="/ofertas" element={<OfertasPage />} />
-              <Route path="/favoritos" element={<FavoritosPage />} />
-              <Route path="/checkout" element={<Navigate to="/envio" replace />} />
-              <Route element={<CheckoutLayout />}>
-                <Route path="/envio" element={<EnvioPage />} />
-                <Route path="/pagar" element={<PagarPage />} />
-              </Route>
-              <Route path="/pago/:resultado" element={<PagoResultadoPage />} />
-              <Route
-                path="/admin"
-                element={
-                  <AdminRoute>
-                    <AdminPage />
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path="/estadisticas"
-                element={
-                  <AdminRoute>
-                    <EstadisticasPage />
-                  </AdminRoute>
-                }
-              />
-            </Routes>
-          </main>
-          <Footer />
-          </FavoritosProvider>
-        </BrowserRouter>
-      </CarritoProvider>
+      <ErrorModalProvider>
+        <CarritoProvider>
+          <BrowserRouter>
+            <CheckoutProvider>
+              <FavoritosProvider>
+                <Header />
+                <CartDrawer />
+                <main className="main-content">
+                  <AnimatedRoutes />
+                </main>
+                <Footer />
+              </FavoritosProvider>
+            </CheckoutProvider>
+          </BrowserRouter>
+        </CarritoProvider>
+      </ErrorModalProvider>
     </AuthProvider>
   );
 }

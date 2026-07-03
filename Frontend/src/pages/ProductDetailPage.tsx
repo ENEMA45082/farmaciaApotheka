@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { fetchProductoPorId } from '../api/productos.api';
 import type { Producto } from '../types';
 import { precioEfectivo, formatPrecio } from '../types';
 import { useCarritoContext } from '../context/CartContext';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
+import { staggerContainer, staggerItem } from '../components/ui/motion';
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,12 +44,20 @@ export function ProductDetailPage() {
       <Link to="/" className="back-link">← Volver al catálogo</Link>
       <div className="product-detail__content">
 
+        {/* Galería con crossfade */}
         <div className="product-gallery">
-          <img
-            src={galeria[imagenActiva] ?? '/placeholder.png'}
-            alt={producto.nombre}
-            className="product-gallery__main"
-          />
+          <AnimatePresence mode="wait">
+            <motion.img
+              key={imagenActiva}
+              src={galeria[imagenActiva] ?? '/placeholder.png'}
+              alt={producto.nombre}
+              className="product-gallery__main"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+            />
+          </AnimatePresence>
           {galeria.length > 1 && (
             <div className="product-gallery__thumbs">
               {galeria.map((url, i) => (
@@ -63,36 +73,53 @@ export function ProductDetailPage() {
           )}
         </div>
 
-        <div className="product-detail__info">
+        {/* Info con stagger */}
+        <motion.div
+          className="product-detail__info"
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
           {producto.categoria && (
-            <span className="product-card__category">{producto.categoria.nombre}</span>
+            <motion.span className="product-card__category" variants={staggerItem}>
+              {producto.categoria.nombre}
+            </motion.span>
           )}
-          <h1 className="product-detail__name">{producto.nombre}</h1>
+          <motion.h1 className="product-detail__name" variants={staggerItem}>
+            {producto.nombre}
+          </motion.h1>
           {producto.descripcion && (
-            <p className="product-detail__description">{producto.descripcion}</p>
+            <motion.p className="product-detail__description" variants={staggerItem}>
+              {producto.descripcion}
+            </motion.p>
           )}
-          {producto.en_oferta && producto.precio_oferta != null ? (
-            <div className="product-card__precios product-detail__precios">
-              <span className="precio--oferta">${formatPrecio(precioEfectivo(producto))}</span>
-              <span className="precio--lista">${formatPrecio(producto.precio)}</span>
-              {producto.porcentaje_oferta != null && (
-                <span className="oferta-badge">-{producto.porcentaje_oferta}%</span>
-              )}
-            </div>
-          ) : (
-            <p className="product-detail__price">${formatPrecio(producto.precio)}</p>
-          )}
-          <p className="product-detail__stock">
+          <motion.div variants={staggerItem}>
+            {producto.en_oferta && producto.precio_oferta != null ? (
+              <div className="product-card__precios product-detail__precios">
+                <span className="precio--oferta">${formatPrecio(precioEfectivo(producto))}</span>
+                <span className="precio--lista">${formatPrecio(producto.precio)}</span>
+                {producto.porcentaje_oferta != null && (
+                  <span className="oferta-badge">-{producto.porcentaje_oferta}%</span>
+                )}
+              </div>
+            ) : (
+              <p className="product-detail__price">${formatPrecio(producto.precio)}</p>
+            )}
+          </motion.div>
+          <motion.p className="product-detail__stock" variants={staggerItem}>
             {producto.stock > 0 ? `Stock disponible: ${producto.stock}` : 'Sin stock'}
-          </p>
-          <button
+          </motion.p>
+          <motion.button
             className="btn btn--primary"
             onClick={handleAgregar}
             disabled={producto.stock === 0}
+            variants={staggerItem}
+            whileHover={producto.stock > 0 ? { y: -2 } : {}}
+            whileTap={producto.stock > 0 ? { scale: 0.97 } : {}}
           >
             {producto.stock === 0 ? 'Sin stock' : 'Agregar al carrito'}
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
       </div>
     </div>

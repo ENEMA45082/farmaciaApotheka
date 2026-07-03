@@ -13,18 +13,19 @@ const FavoritosContext = createContext<FavoritosContextValue | null>(null);
 
 export function FavoritosProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const userId = user?.id;
   const navigate = useNavigate();
   const [favoritoIds, setFavoritoIds] = useState<Set<string>>(new Set());
 
   const cargar = useCallback(async () => {
-    if (!user) { setFavoritoIds(new Set()); return; }
+    if (!userId) { setFavoritoIds(new Set()); return; }
     try {
       const ids = await fetchFavoritos();
       setFavoritoIds(new Set(ids));
     } catch {
       setFavoritoIds(new Set());
     }
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => { cargar(); }, [cargar]);
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useProductos } from '../hooks/useProductos';
 import { useCategorias } from '../hooks/useCategorias';
 import {
@@ -9,12 +10,15 @@ import {
   actualizarCategoria,
   eliminarCategoria,
   subirImagenes,
+  previewImportarPrecios,
+  confirmarImportarPrecios,
 } from '../api/productos.api';
+import type { PreviewImportarPreciosResponse, ResultadoConfirmarPrecios } from '../api/productos.api';
 import { fetchPedidosAdmin, cambiarEstadoPedido } from '../api/pedidos.api';
 import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO, Pedido } from '../types';
 import { formatPrecio } from '../types';
 
-type Tab = 'productos' | 'categorias' | 'pedidos';
+type Tab = 'productos' | 'categorias' | 'pedidos' | 'importar_precios';
 
 const ESTADOS_PEDIDO: { value: Pedido['estado']; label: string }[] = [
   { value: 'pendiente',      label: 'Pendiente' },
@@ -99,6 +103,12 @@ const METODO_ENVIO_LABEL: Record<string, string> = {
   retiro_farmacia: 'Retiro farmacia',
   domicilio:       'Domicilio',
   retiro_sucursal: 'Sucursal Andreani',
+};
+
+const METODO_PAGO_LABEL: Record<string, string> = {
+  tarjeta:       'Tarjeta',
+  transferencia: 'Transferencia',
+  efectivo:      'Efectivo',
 };
 
 function formatFechaPedido(iso: string) {
@@ -329,8 +339,26 @@ export function AdminPage() {
   const [pedidosAdmin, setPedidosAdmin] = useState<Pedido[]>([]);
   const [cargandoPedidos, setCargandoPedidos] = useState(false);
   const [errorPedidos, setErrorPedidos] = useState<string | null>(null);
-  const [filtroPedidoEstado, setFiltroPedidoEstado] = useState<string>('');
   const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null);
+
+  const [filtroPedidoAbierto,    setFiltroPedidoAbierto]    = useState(false);
+  const [filtroPedidoBusqueda,   setFiltroPedidoBusqueda]   = useState('');
+  const [filtroPedidoEstado,     setFiltroPedidoEstado]     = useState('');
+  const [filtroPedidoEnvio,      setFiltroPedidoEnvio]      = useState('');
+  const [filtroPedidoPago,       setFiltroPedidoPago]       = useState('');
+  const [filtroPedidoFechaDesde, setFiltroPedidoFechaDesde] = useState('');
+  const [filtroPedidoFechaHasta, setFiltroPedidoFechaHasta] = useState('');
+
+  function limpiarFiltrosPedidos() {
+    setFiltroPedidoBusqueda('');
+    setFiltroPedidoEstado('');
+    setFiltroPedidoEnvio('');
+    setFiltroPedidoPago('');
+    setFiltroPedidoFechaDesde('');
+    setFiltroPedidoFechaHasta('');
+  }
+
+  const hayFiltrosPedidosActivos = !!(filtroPedidoBusqueda || filtroPedidoEstado || filtroPedidoEnvio || filtroPedidoPago || filtroPedidoFechaDesde || filtroPedidoFechaHasta);
 
   useEffect(() => {
     if (tabActiva !== 'pedidos') return;
@@ -354,9 +382,76 @@ export function AdminPage() {
     }
   }
 
-  const pedidosFiltrados = filtroPedidoEstado
-    ? pedidosAdmin.filter(p => p.estado === filtroPedidoEstado)
-    : pedidosAdmin;
+  const pedidosFiltrados = pedidosAdmin.filter(p => {
+    if (filtroPedidoEstado && p.estado !== filtroPedidoEstado) return false;
+    if (filtroPedidoEnvio  && p.metodo_envio !== filtroPedidoEnvio) return false;
+    if (filtroPedidoPago   && p.metodo_pago  !== filtroPedidoPago)  return false;
+    if (filtroPedidoBusqueda) {
+      const nro = String(p.nro_pedido).padStart(5, '0');
+      if (!nro.includes(filtroPedidoBusqueda.trim())) return false;
+    }
+    if (filtroPedidoFechaDesde) {
+      if (new Date(p.fecha_pedido) < new Date(filtroPedidoFechaDesde)) return false;
+    }
+    if (filtroPedidoFechaHasta) {
+      const hasta = new Date(filtroPedidoFechaHasta);
+      hasta.setHours(23, 59, 59, 999);
+      if (new Date(p.fecha_pedido) > hasta) return false;
+    }
+    return true;
+  });
+
+  // — Importar precios CSV —
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  const [csvArchivo, setCsvArchivo] = useState<File | null>(null);
+  type EstadoImport = 'idle' | 'cargando_preview' | 'preview' | 'confirmando' | 'resultado';
+  const [estadoImport, setEstadoImport] = useState<EstadoImport>('idle');
+  const [errorImport, setErrorImport] = useState<string | null>(null);
+  const [previewImport, setPreviewImport] = useState<PreviewImportarPreciosResponse | null>(null);
+  const [resultadoImport, setResultadoImport] = useState<ResultadoConfirmarPrecios | null>(null);
+
+  function resetImport() {
+    setCsvArchivo(null);
+    setEstadoImport('idle');
+    setErrorImport(null);
+    setPreviewImport(null);
+    setResultadoImport(null);
+    if (csvInputRef.current) csvInputRef.current.value = '';
+  }
+
+  async function handleCargarPreview() {
+    if (!csvArchivo) return;
+    setEstadoImport('cargando_preview');
+    setErrorImport(null);
+    try {
+      const preview = await previewImportarPrecios(csvArchivo);
+      setPreviewImport(preview);
+      setEstadoImport('preview');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error ?? 'Error al procesar el archivo.';
+      setErrorImport(msg);
+      setEstadoImport('idle');
+    }
+  }
+
+  async function handleConfirmar() {
+    if (!previewImport) return;
+    setEstadoImport('confirmando');
+    setErrorImport(null);
+    try {
+      const items = previewImport.actualizaciones.map(a => ({
+        codigo_barras: a.codigo_barras,
+        precio_nuevo:  a.precio_nuevo,
+      }));
+      const resultado = await confirmarImportarPrecios(items);
+      setResultadoImport(resultado);
+      setEstadoImport('resultado');
+    } catch {
+      setErrorImport('Error al confirmar los cambios. Intentá de nuevo.');
+      setEstadoImport('preview');
+    }
+  }
 
   // — Categorías —
   const [formCategoria, setFormCategoria] = useState(FORM_CATEGORIA_VACIO);
@@ -443,11 +538,24 @@ export function AdminPage() {
         >
           Pedidos
         </button>
+        <button
+          className={`admin-tab ${tabActiva === 'importar_precios' ? 'admin-tab--activa' : ''}`}
+          onClick={() => setTabActiva('importar_precios')}
+        >
+          Importar precios
+        </button>
       </div>
 
-      {/* ======= TAB PRODUCTOS ======= */}
+      {/* ======= TABS CONTENT ======= */}
+      <AnimatePresence mode="wait">
       {tabActiva === 'productos' && (
-        <div className="admin-section">
+        <motion.div
+          className="admin-section"
+          key="productos"
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0, transition: { duration: 0.22 } }}
+          exit={{ opacity: 0, x: -10, transition: { duration: 0.15 } }}
+        >
           <div className="admin-form-card">
             <h2>{productoEditando ? `Editando: ${productoEditando.nombre}` : 'Agregar producto'}</h2>
 
@@ -898,12 +1006,17 @@ export function AdminPage() {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* ======= TAB CATEGORÍAS ======= */}
       {tabActiva === 'categorias' && (
-        <div className="admin-section">
+        <motion.div
+          className="admin-section"
+          key="categorias"
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0, transition: { duration: 0.22 } }}
+          exit={{ opacity: 0, x: -10, transition: { duration: 0.15 } }}
+        >
           <div className={`admin-form-card${categoriaEditando ? ' admin-form-card--editando' : ''}`}>
             <h2>{categoriaEditando ? `Editando: ${categoriaEditando.nombre}` : 'Agregar categoría'}</h2>
 
@@ -994,31 +1107,101 @@ export function AdminPage() {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
-      {/* ======= TAB PEDIDOS ======= */}
       {tabActiva === 'pedidos' && (
-        <div className="admin-section">
+        <motion.div
+          className="admin-section"
+          key="pedidos"
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0, transition: { duration: 0.22 } }}
+          exit={{ opacity: 0, x: -10, transition: { duration: 0.15 } }}
+        >
           <div className="admin-table-card">
             <div className="admin-filtros-header">
               <h2>Pedidos ({pedidosFiltrados.length})</h2>
-              <select
-                className="admin-pedidos-filtro-estado"
-                value={filtroPedidoEstado}
-                onChange={e => setFiltroPedidoEstado(e.target.value)}
+              <button
+                type="button"
+                className={`admin-filtros-toggle${hayFiltrosPedidosActivos ? ' admin-filtros-toggle--activo' : ''}`}
+                onClick={() => setFiltroPedidoAbierto(v => !v)}
               >
-                <option value="">Todos los estados</option>
-                {ESTADOS_PEDIDO.map(e => (
-                  <option key={e.value} value={e.value}>{e.label}</option>
-                ))}
-              </select>
+                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                </svg>
+                Filtros{hayFiltrosPedidosActivos ? ' ●' : ''}
+                <span className={`admin-filtros-arrow${filtroPedidoAbierto ? ' admin-filtros-arrow--open' : ''}`}>▾</span>
+              </button>
             </div>
+
+            {filtroPedidoAbierto && (
+              <div className="admin-filtros-panel">
+                <div className="admin-filtros-grid">
+                  <div className="form-group">
+                    <label>Nro. de pedido</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: 00042"
+                      value={filtroPedidoBusqueda}
+                      onChange={e => setFiltroPedidoBusqueda(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Estado</label>
+                    <select value={filtroPedidoEstado} onChange={e => setFiltroPedidoEstado(e.target.value)}>
+                      <option value="">Todos</option>
+                      {ESTADOS_PEDIDO.map(e => (
+                        <option key={e.value} value={e.value}>{e.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Tipo de envío</label>
+                    <select value={filtroPedidoEnvio} onChange={e => setFiltroPedidoEnvio(e.target.value)}>
+                      <option value="">Todos</option>
+                      <option value="retiro_farmacia">Retiro farmacia</option>
+                      <option value="domicilio">Domicilio</option>
+                      <option value="retiro_sucursal">Sucursal Andreani</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Tipo de pago</label>
+                    <select value={filtroPedidoPago} onChange={e => setFiltroPedidoPago(e.target.value)}>
+                      <option value="">Todos</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="efectivo">Efectivo</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Fecha desde</label>
+                    <input type="date" value={filtroPedidoFechaDesde} onChange={e => setFiltroPedidoFechaDesde(e.target.value)} />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Fecha hasta</label>
+                    <input type="date" value={filtroPedidoFechaHasta} onChange={e => setFiltroPedidoFechaHasta(e.target.value)} />
+                  </div>
+                </div>
+
+                {hayFiltrosPedidosActivos && (
+                  <div className="admin-filtros-actions">
+                    <button type="button" className="btn btn-secondary" onClick={limpiarFiltrosPedidos}>
+                      Limpiar filtros
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {cargandoPedidos && <p className="admin-loading">Cargando pedidos...</p>}
             {errorPedidos && <div className="admin-error">{errorPedidos}</div>}
 
             {!cargandoPedidos && pedidosFiltrados.length === 0 && (
-              <p className="admin-empty">No hay pedidos{filtroPedidoEstado ? ' con ese estado' : ''}.</p>
+              <p className="admin-empty">No hay pedidos{hayFiltrosPedidosActivos ? ' que coincidan con los filtros' : ''}.</p>
             )}
 
             {pedidosFiltrados.length > 0 && (
@@ -1029,6 +1212,7 @@ export function AdminPage() {
                       <th># Pedido</th>
                       <th>Fecha</th>
                       <th>Envío</th>
+                      <th>Pago</th>
                       <th>Total</th>
                       <th>Estado</th>
                     </tr>
@@ -1041,6 +1225,7 @@ export function AdminPage() {
                         </td>
                         <td>{formatFechaPedido(p.fecha_pedido)}</td>
                         <td>{METODO_ENVIO_LABEL[p.metodo_envio] ?? p.metodo_envio}</td>
+                        <td>{p.metodo_pago ? (METODO_PAGO_LABEL[p.metodo_pago] ?? p.metodo_pago) : '—'}</td>
                         <td>${formatPrecio(p.total)}</td>
                         <td>
                           <EstadoDropdown
@@ -1056,8 +1241,142 @@ export function AdminPage() {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
+
+      {tabActiva === 'importar_precios' && (
+        <motion.div
+          className="admin-section"
+          key="importar_precios"
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0, transition: { duration: 0.22 } }}
+          exit={{ opacity: 0, x: -10, transition: { duration: 0.15 } }}
+        >
+          <div className="admin-form-card">
+            <h2>Importar precios desde CSV</h2>
+            <p style={{ color: '#666', marginBottom: 16 }}>
+              Cargá un archivo CSV con separador de punto y coma. Se usará la columna
+              {' '}<strong>CodBarraPrinc</strong> para identificar productos y{' '}
+              <strong>Precio</strong> para el nuevo precio de lista.
+            </p>
+
+            {errorImport && <div className="admin-error">{errorImport}</div>}
+
+            {(estadoImport === 'idle' || estadoImport === 'cargando_preview') && (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  ref={csvInputRef}
+                  id="csv-file-input"
+                  type="file"
+                  accept=".csv,.txt"
+                  style={{ display: 'none' }}
+                  onChange={e => setCsvArchivo(e.target.files?.[0] ?? null)}
+                />
+                <label htmlFor="csv-file-input" className="btn btn--ghost" style={{ cursor: 'pointer' }}>
+                  Elegir archivo
+                </label>
+                <span style={{ color: csvArchivo ? '#111' : '#999', fontSize: 14 }}>
+                  {csvArchivo ? csvArchivo.name : 'Ningún archivo seleccionado'}
+                </span>
+                <button
+                  className="btn btn--primary"
+                  onClick={handleCargarPreview}
+                  disabled={!csvArchivo || estadoImport === 'cargando_preview'}
+                >
+                  {estadoImport === 'cargando_preview' ? 'Procesando…' : 'Vista previa'}
+                </button>
+              </div>
+            )}
+
+            {(estadoImport === 'preview' || estadoImport === 'confirmando') && previewImport && (
+              <>
+                {previewImport.no_encontrados.length > 0 && (
+                  <div style={{ background: '#fef9c3', border: '1px solid #ca8a04', borderRadius: 6, padding: '10px 14px', marginBottom: 16 }}>
+                    <strong>{previewImport.no_encontrados.length} código(s) no encontrado(s) en la base de datos</strong>
+                    <ul style={{ margin: '6px 0 0 16px', fontSize: 13 }}>
+                      {previewImport.no_encontrados.map(nf => (
+                        <li key={nf.codigo_barras}>
+                          {nf.codigo_barras} — precio CSV: ${formatPrecio(nf.precio_csv)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="admin-table-wrapper" style={{ marginBottom: 16 }}>
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Código de barras</th>
+                        <th>Producto</th>
+                        <th>Precio actual</th>
+                        <th>Precio nuevo</th>
+                        <th>Diferencia</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewImport.actualizaciones.map(fila => {
+                        const diff = fila.precio_nuevo - fila.precio_actual;
+                        const color = diff > 0 ? '#166534' : diff < 0 ? '#991b1b' : '#6b7280';
+                        return (
+                          <tr key={fila.codigo_barras}>
+                            <td><code>{fila.codigo_barras}</code></td>
+                            <td>{fila.nombre}</td>
+                            <td>${formatPrecio(fila.precio_actual)}</td>
+                            <td><strong>${formatPrecio(fila.precio_nuevo)}</strong></td>
+                            <td style={{ color }}>
+                              {diff === 0 ? '—' : `${diff > 0 ? '+' : ''}${formatPrecio(diff)}`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p style={{ marginBottom: 12 }}>
+                  Se actualizarán <strong>{previewImport.actualizaciones.length}</strong> producto(s).
+                </p>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    className="btn btn--primary"
+                    onClick={handleConfirmar}
+                    disabled={estadoImport === 'confirmando' || previewImport.actualizaciones.length === 0}
+                  >
+                    {estadoImport === 'confirmando' ? 'Aplicando…' : 'Confirmar actualización'}
+                  </button>
+                  <button className="btn btn--ghost" onClick={resetImport}>
+                    Cancelar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {estadoImport === 'resultado' && resultadoImport && (
+              <div>
+                <div style={{ background: '#d1fae5', border: '1px solid #059669', borderRadius: 6, padding: '12px 16px', marginBottom: 12 }}>
+                  <strong>{resultadoImport.actualizados} precio(s) actualizados correctamente.</strong>
+                </div>
+                {resultadoImport.fallidos.length > 0 && (
+                  <div style={{ background: '#fee2e2', border: '1px solid #dc2626', borderRadius: 6, padding: '10px 14px', marginBottom: 12 }}>
+                    <strong>{resultadoImport.fallidos.length} error(es):</strong>
+                    <ul style={{ margin: '6px 0 0 16px', fontSize: 13 }}>
+                      {resultadoImport.fallidos.map(f => (
+                        <li key={f.codigo_barras}>{f.codigo_barras}: {f.razon}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <button className="btn btn--primary" onClick={resetImport}>
+                  Importar otro archivo
+                </button>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+      </AnimatePresence>
 
     </div>
   );
