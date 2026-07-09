@@ -129,7 +129,7 @@ export async function actualizarEstado(
   if (extras?.shipping_fecha_envio)       cambios.shipping_fecha_envio       = extras.shipping_fecha_envio;
   if (extras?.shipping_creado_en_correo)  cambios.shipping_creado_en_correo  = extras.shipping_creado_en_correo;
   if (extras?.shipping_error)             cambios.shipping_error             = extras.shipping_error;
-  if (estado === 'cancelado' || estado === 'anulado') {
+  if (estado === 'Cancelado') {
     cambios.fecha_cancelacion = new Date().toISOString();
   }
   await supabase.from('pedidos').update(cambios).eq('id', id);
@@ -174,13 +174,13 @@ export async function cancelar(
   const { data, error } = await supabase
     .from('pedidos')
     .update({
-      estado: 'cancelado',
+      estado: 'Cancelado',
       fecha_cancelacion: new Date().toISOString(),
       motivo_cancelacion: motivo ?? null,
     })
     .eq('id', id)
     .eq('user_id', userId)
-    .eq('estado', 'pendiente')
+    .eq('estado', 'PendienteDePago')
     .select('id');
 
   if (error || !data || data.length === 0) return null;

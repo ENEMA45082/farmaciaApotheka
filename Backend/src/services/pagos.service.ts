@@ -117,10 +117,11 @@ export async function procesarPago(
   });
 
   if (pagoResult.status === 'approved') {
-    await pedidosRepo.actualizarEstado(pedido.id, 'confirmado', { pw_payment_id: pagoResult.pw_payment_id });
+    await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: pagoResult.pw_payment_id });
   } else if (pagoResult.status === 'rejected' || pagoResult.status === 'cancelled') {
-    if (pedido.estado === 'pendiente') {
-      await pedidosRepo.actualizarEstado(pedido.id, 'cancelado');
+    if (pedido.estado === 'PendienteDePago') {
+      const motivo = pagoResult.status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
+      await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });
       for (const detalle of pedido.detalles ?? []) {
         if (detalle.producto_id) {
           await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);
@@ -242,15 +243,13 @@ export async function procesarNotificacion(body: Record<string, unknown>): Promi
     pedido = await pedidosRepo.encontrarPorPwPaymentId(paymentId);
   }
 
-  if (!pedido || pedido.estado !== 'pendiente') return;
+  if (!pedido || pedido.estado !== 'PendienteDePago') return;
 
   if (status === 'approved') {
-    await pedidosRepo.actualizarEstado(pedido.id, 'confirmado', { pw_payment_id: paymentId || undefined });
+    await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: paymentId || undefined });
   } else if (status === 'rejected' || status === 'cancelled') {
-    const motivo = status === 'rejected'
-      ? 'Pago rechazado por Payway'
-      : 'Pago cancelado por el cliente en Payway';
-    await pedidosRepo.actualizarEstado(pedido.id, 'cancelado', { motivo_cancelacion: motivo });
+    const motivo = status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
+    await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });
     for (const detalle of pedido.detalles ?? []) {
       if (detalle.producto_id) {
         await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);

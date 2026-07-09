@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
-import type { Pedido, CrearPedidoDTO, ResultadoTracking } from '../types';
+import type { Pedido, PedidoDetalleAdmin, CrearPedidoDTO, ResultadoTracking } from '../types';
 import { addErrorInterceptor } from './apiClient';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '/api' });
@@ -45,7 +45,17 @@ export async function fetchPedidosAdmin(): Promise<Pedido[]> {
   return data.datos;
 }
 
+export async function fetchPedidoAdminPorId(id: string): Promise<PedidoDetalleAdmin> {
+  const { data } = await api.get<PedidoDetalleAdmin>(`/pedidos/admin/${id}`);
+  return data;
+}
+
 export async function cambiarEstadoPedido(id: string, estado: string): Promise<Pedido> {
   const { data } = await api.patch<Pedido>(`/pedidos/${id}/estado`, { estado });
+  return data;
+}
+
+export async function cancelarPedidoAdmin(id: string, motivo: string): Promise<Pedido> {
+  const { data } = await api.patch<Pedido>(`/pedidos/${id}/cancelar-admin`, { motivo });
   return data;
 }

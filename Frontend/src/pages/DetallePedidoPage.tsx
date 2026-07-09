@@ -8,40 +8,37 @@ import type { Pedido, MetodoEnvio } from '../types';
 import { formatPrecio } from '../types';
 
 const ESTADO_CONFIG: Record<Pedido['estado'], { label: string; clase: string }> = {
-  pendiente:       { label: 'Pendiente',       clase: 'badge--pendiente' },
-  confirmado:      { label: 'Confirmado',       clase: 'badge--confirmado' },
-  en_preparacion:  { label: 'En preparación',  clase: 'badge--preparacion' },
-  enviado:         { label: 'Enviado',          clase: 'badge--enviado' },
-  entregado:       { label: 'Entregado',        clase: 'badge--entregado' },
-  cancelado:       { label: 'Cancelado',        clase: 'badge--cancelado' },
-  anulado:         { label: 'Anulado',          clase: 'badge--cancelado' },
+  PendienteDePago:  { label: 'Pendiente de pago', clase: 'badge--pendiente' },
+  Confirmado:       { label: 'Confirmado',        clase: 'badge--confirmado' },
+  EnPreparacion:    { label: 'En preparación',    clase: 'badge--preparacion' },
+  Enviado:          { label: 'Enviado',           clase: 'badge--enviado' },
+  ListoParaRetirar: { label: 'Listo para retirar', clase: 'badge--listo-retirar' },
+  Entregado:        { label: 'Entregado',         clase: 'badge--entregado' },
+  Cancelado:        { label: 'Cancelado',         clase: 'badge--cancelado' },
 };
-
-const PASOS_ACTIVOS: Pedido['estado'][] = ['pendiente', 'confirmado', 'en_preparacion', 'enviado', 'entregado'];
 
 function labelPasoEnvio(metodo: MetodoEnvio) {
   return metodo === 'retiro_farmacia' ? 'Listo para retiro' : 'En camino';
 }
 
 function ProgresoStepper({ pedido }: { pedido: Pedido }) {
-  const cancelado = pedido.estado === 'cancelado' || pedido.estado === 'anulado';
-  const pasoActual = PASOS_ACTIVOS.indexOf(pedido.estado);
+  const cancelado = pedido.estado === 'Cancelado';
+  const pasoEnvioKey = pedido.metodo_envio === 'retiro_farmacia' ? 'ListoParaRetirar' : 'Enviado';
 
-  const pasos = [
-    { key: 'pendiente',      label: 'Pedido recibido' },
-    { key: 'confirmado',     label: 'Pago confirmado' },
-    { key: 'en_preparacion', label: 'En preparación' },
-    { key: 'enviado',        label: labelPasoEnvio(pedido.metodo_envio) },
-    { key: 'entregado',      label: 'Entregado' },
+  const pasos: { key: Pedido['estado']; label: string }[] = [
+    { key: 'PendienteDePago', label: 'Pedido recibido' },
+    { key: 'Confirmado',      label: 'Pago confirmado' },
+    { key: 'EnPreparacion',   label: 'En preparación' },
+    { key: pasoEnvioKey,      label: labelPasoEnvio(pedido.metodo_envio) },
+    { key: 'Entregado',       label: 'Entregado' },
   ];
+  const pasoActual = pasos.findIndex(p => p.key === pedido.estado);
 
   if (cancelado) {
     return (
       <div className="pedido-progreso pedido-progreso--cancelado">
         <div className="pedido-progreso__cancelado-icono">✕</div>
-        <p className="pedido-progreso__cancelado-label">
-          {pedido.estado === 'anulado' ? 'Pedido anulado' : 'Pedido cancelado'}
-        </p>
+        <p className="pedido-progreso__cancelado-label">Pedido cancelado</p>
       </div>
     );
   }
@@ -202,7 +199,7 @@ export function DetallePedidoPage() {
           )}
         </div>
 
-        {pedido.estado === 'pendiente' && (
+        {pedido.estado === 'PendienteDePago' && (
           <div className="pedido-detalle__acciones">
             <button className="btn btn--ghost" onClick={handleCancelar} disabled={cancelando}>
               {cancelando ? 'Cancelando...' : 'Cancelar pedido'}
@@ -210,7 +207,7 @@ export function DetallePedidoPage() {
           </div>
         )}
 
-        {(pedido.estado === 'enviado' || pedido.estado === 'entregado') && pedido.shipping_tracking_number && (
+        {(pedido.estado === 'Enviado' || pedido.estado === 'Entregado') && pedido.shipping_tracking_number && (
           <TrackingSection pedidoId={pedido.id} />
         )}
       </div>

@@ -1,4 +1,5 @@
 import type { ProvinciaCodigo } from '../config/provincias';
+import type { EstadoPedido } from '../config/estadosPedido';
 export type { ProvinciaCodigo };
 
 export interface Categoria {
@@ -89,7 +90,7 @@ export type MetodoPago = 'tarjeta' | 'transferencia' | 'efectivo';
 export interface Pedido {
   id: string;
   user_id: string;
-  estado: 'pendiente'|'confirmado'|'en_preparacion'|'enviado'|'entregado'|'cancelado'|'anulado';
+  estado: EstadoPedido;
   total: number;
   subtotal_lista: number;
   nro_pedido: number;
@@ -113,6 +114,17 @@ export interface Pedido {
   destinatario_cod_area: string | null;
   destinatario_telefono: string | null;
   detalles?: DetallePedido[];
+}
+
+export interface PedidoDetalleAdmin extends Pedido {
+  cliente: {
+    email: string | null;
+    nombre: string | null;
+    apellido: string | null;
+    telefono: string | null;
+    dni: string | null;
+  };
+  direccion_envio: Direccion | null;
 }
 
 export interface CrearPedidoDTO {

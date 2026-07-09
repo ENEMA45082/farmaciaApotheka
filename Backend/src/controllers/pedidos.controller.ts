@@ -26,6 +26,13 @@ export async function obtenerPorId(req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 }
 
+export async function obtenerPorIdAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const pedido = await pedidosService.obtenerPorIdAdmin(req.params.id);
+    res.json(pedido);
+  } catch (err) { next(err); }
+}
+
 export async function cancelar(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const userId = (req as AuthRequest).user.id;
@@ -53,8 +60,18 @@ export async function listarAdmin(req: Request, res: Response, next: NextFunctio
 
 export async function cambiarEstadoAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    const adminUserId = (req as AuthRequest).user.id;
     const { estado } = req.body as { estado: string };
-    const pedido = await pedidosService.cambiarEstado(req.params.id, estado as never);
+    const pedido = await pedidosService.cambiarEstado(req.params.id, estado as never, adminUserId);
+    res.json(pedido);
+  } catch (err) { next(err); }
+}
+
+export async function cancelarPedidoAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const adminUserId = (req as AuthRequest).user.id;
+    const { motivo } = req.body as { motivo: string };
+    const pedido = await pedidosService.cancelarPedido(req.params.id, motivo, adminUserId);
     res.json(pedido);
   } catch (err) { next(err); }
 }

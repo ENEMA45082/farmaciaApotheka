@@ -14,30 +14,32 @@ import {
   confirmarImportarPrecios,
 } from '../api/productos.api';
 import type { PreviewImportarPreciosResponse, ResultadoConfirmarPrecios } from '../api/productos.api';
-import { fetchPedidosAdmin, cambiarEstadoPedido } from '../api/pedidos.api';
-import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO, Pedido } from '../types';
+import { fetchPedidosAdmin, fetchPedidoAdminPorId, cambiarEstadoPedido } from '../api/pedidos.api';
+import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO, Pedido, PedidoDetalleAdmin } from '../types';
 import { formatPrecio } from '../types';
+import { ESTADOS_FINALES, puedeTransicionar } from '../utils/estadosPedido';
+import { CancelarPedidoModal } from '../components/admin/CancelarPedidoModal';
 
 type Tab = 'productos' | 'categorias' | 'pedidos' | 'importar_precios';
 
 const ESTADOS_PEDIDO: { value: Pedido['estado']; label: string }[] = [
-  { value: 'pendiente',      label: 'Pendiente' },
-  { value: 'confirmado',     label: 'Confirmado' },
-  { value: 'en_preparacion', label: 'En preparación' },
-  { value: 'enviado',        label: 'Enviado' },
-  { value: 'entregado',      label: 'Entregado' },
-  { value: 'cancelado',      label: 'Cancelado' },
-  { value: 'anulado',        label: 'Anulado' },
+  { value: 'PendienteDePago',  label: 'Pendiente de pago' },
+  { value: 'Confirmado',       label: 'Confirmado' },
+  { value: 'EnPreparacion',    label: 'En preparación' },
+  { value: 'Enviado',          label: 'Enviado' },
+  { value: 'ListoParaRetirar', label: 'Listo para retirar' },
+  { value: 'Entregado',        label: 'Entregado' },
+  { value: 'Cancelado',        label: 'Cancelado' },
 ];
 
 const ESTADO_COLORS: Record<Pedido['estado'], { bg: string; color: string }> = {
-  pendiente:      { bg: '#fef3c7', color: '#92400e' },
-  confirmado:     { bg: '#dbeafe', color: '#1e40af' },
-  en_preparacion: { bg: '#ede9fe', color: '#5b21b6' },
-  enviado:        { bg: '#cffafe', color: '#155e75' },
-  entregado:      { bg: '#d1fae5', color: '#065f46' },
-  cancelado:      { bg: '#fee2e2', color: '#991b1b' },
-  anulado:        { bg: '#fee2e2', color: '#991b1b' },
+  PendienteDePago:  { bg: '#fef3c7', color: '#92400e' },
+  Confirmado:       { bg: '#dbeafe', color: '#1e40af' },
+  EnPreparacion:    { bg: '#ede9fe', color: '#5b21b6' },
+  Enviado:          { bg: '#cffafe', color: '#155e75' },
+  ListoParaRetirar: { bg: '#ccfbf1', color: '#115e59' },
+  Entregado:        { bg: '#d1fae5', color: '#065f46' },
+  Cancelado:        { bg: '#fee2e2', color: '#991b1b' },
 };
 
 function EstadoDropdown({
@@ -62,6 +64,15 @@ function EstadoDropdown({
 
   const cfg    = ESTADO_COLORS[estado];
   const label  = ESTADOS_PEDIDO.find(e => e.value === estado)?.label ?? estado;
+  const opciones = ESTADOS_PEDIDO.filter(e => e.value !== 'Cancelado' && puedeTransicionar(estado, e.value));
+
+  if (opciones.length === 0) {
+    return (
+      <span className="estado-badge" style={{ background: cfg.bg, color: cfg.color }}>
+        {label}
+      </span>
+    );
+  }
 
   return (
     <div className="estado-dropdown" ref={ref}>
@@ -79,12 +90,12 @@ function EstadoDropdown({
       </button>
       {open && (
         <div className="estado-dropdown__menu">
-          {ESTADOS_PEDIDO.map(e => {
+          {opciones.map(e => {
             const ec = ESTADO_COLORS[e.value];
             return (
               <button
                 key={e.value}
-                className={`estado-dropdown__option${e.value === estado ? ' estado-dropdown__option--activo' : ''}`}
+                className="estado-dropdown__option"
                 style={{ background: ec.bg, color: ec.color }}
                 onClick={() => { onChange(e.value); setOpen(false); }}
                 type="button"
@@ -341,6 +352,11 @@ export function AdminPage() {
   const [errorPedidos, setErrorPedidos] = useState<string | null>(null);
   const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null);
 
+  const [pedidoDetalle, setPedidoDetalle] = useState<PedidoDetalleAdmin | null>(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
+  const [pedidoACancelar, setPedidoACancelar] = useState<Pedido | null>(null);
+
   const [filtroPedidoAbierto,    setFiltroPedidoAbierto]    = useState(false);
   const [filtroPedidoBusqueda,   setFiltroPedidoBusqueda]   = useState('');
   const [filtroPedidoEstado,     setFiltroPedidoEstado]     = useState('');
@@ -380,6 +396,25 @@ export function AdminPage() {
     } finally {
       setCambiandoEstado(null);
     }
+  }
+
+  async function handleAbrirDetallePedido(pedidoId: string) {
+    setCargandoDetalle(true);
+    setErrorDetalle(null);
+    setPedidoDetalle(null);
+    try {
+      const pedido = await fetchPedidoAdminPorId(pedidoId);
+      setPedidoDetalle(pedido);
+    } catch {
+      setErrorDetalle('No se pudo cargar el detalle del pedido.');
+    } finally {
+      setCargandoDetalle(false);
+    }
+  }
+
+  function handleCerrarDetallePedido() {
+    setPedidoDetalle(null);
+    setErrorDetalle(null);
   }
 
   const pedidosFiltrados = pedidosAdmin.filter(p => {
@@ -1220,8 +1255,14 @@ export function AdminPage() {
                   <tbody>
                     {pedidosFiltrados.map(p => (
                       <tr key={p.id}>
-                        <td className="admin-pedidos-nro">
-                          APO-{String(p.nro_pedido).padStart(5, '0')}
+                        <td>
+                          <button
+                            type="button"
+                            className="admin-pedidos-nro admin-pedidos-nro--link"
+                            onClick={() => handleAbrirDetallePedido(p.id)}
+                          >
+                            APO-{String(p.nro_pedido).padStart(5, '0')}
+                          </button>
                         </td>
                         <td>{formatFechaPedido(p.fecha_pedido)}</td>
                         <td>{METODO_ENVIO_LABEL[p.metodo_envio] ?? p.metodo_envio}</td>
@@ -1239,6 +1280,189 @@ export function AdminPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {(cargandoDetalle || errorDetalle || pedidoDetalle) && (
+              <div className="modal-overlay" onClick={handleCerrarDetallePedido}>
+                <div className="modal-pedido-admin" onClick={e => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="modal-pedido-admin__cerrar"
+                    onClick={handleCerrarDetallePedido}
+                    aria-label="Cerrar"
+                  >
+                    ✕
+                  </button>
+
+                  {cargandoDetalle && <p className="admin-loading">Cargando pedido...</p>}
+                  {errorDetalle && <div className="admin-error">{errorDetalle}</div>}
+
+                  {pedidoDetalle && (
+                    <div className="pedido-detalle pedido-detalle--admin">
+                      <div className="pedido-detalle__header">
+                        <div>
+                          <h1 className="pedido-detalle__nro">
+                            Pedido #APO-{String(pedidoDetalle.nro_pedido).padStart(5, '0')}
+                          </h1>
+                          <p className="pedido-detalle__fecha">{formatFechaPedido(pedidoDetalle.fecha_pedido)}</p>
+                        </div>
+                        <span
+                          className="estado-badge estado-badge--lg"
+                          style={{ background: ESTADO_COLORS[pedidoDetalle.estado].bg, color: ESTADO_COLORS[pedidoDetalle.estado].color }}
+                        >
+                          {ESTADOS_PEDIDO.find(e => e.value === pedidoDetalle.estado)?.label ?? pedidoDetalle.estado}
+                        </span>
+                      </div>
+
+                      <div className="pedido-detalle__envio-info">
+                        <h3 className="pedido-detalle__seccion-titulo">Cliente</h3>
+                        <div className="pedido-detalle__envio-row">
+                          <span className="pedido-detalle__envio-label">Nombre</span>
+                          <span className="pedido-detalle__envio-valor">
+                            {[pedidoDetalle.cliente.nombre, pedidoDetalle.cliente.apellido].filter(Boolean).join(' ') || 'Sin nombre registrado'}
+                          </span>
+                        </div>
+                        <div className="pedido-detalle__envio-row">
+                          <span className="pedido-detalle__envio-label">Email</span>
+                          <span className="pedido-detalle__envio-valor">{pedidoDetalle.cliente.email ?? '—'}</span>
+                        </div>
+                        {pedidoDetalle.cliente.telefono && (
+                          <div className="pedido-detalle__envio-row">
+                            <span className="pedido-detalle__envio-label">Teléfono</span>
+                            <span className="pedido-detalle__envio-valor">{pedidoDetalle.cliente.telefono}</span>
+                          </div>
+                        )}
+                        {pedidoDetalle.cliente.dni && (
+                          <div className="pedido-detalle__envio-row">
+                            <span className="pedido-detalle__envio-label">DNI</span>
+                            <span className="pedido-detalle__envio-valor">{pedidoDetalle.cliente.dni}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pedido-detalle__envio-info">
+                        <h3 className="pedido-detalle__seccion-titulo">Entrega</h3>
+                        <div className="pedido-detalle__envio-row">
+                          <span className="pedido-detalle__envio-label">Método de entrega</span>
+                          <span className="pedido-detalle__envio-valor">
+                            {pedidoDetalle.metodo_envio === 'retiro_farmacia' && 'Retiro en farmacia'}
+                            {pedidoDetalle.metodo_envio === 'domicilio' && `Envío a domicilio${pedidoDetalle.codigo_postal_envio ? ` — CP ${pedidoDetalle.codigo_postal_envio}` : ''}`}
+                            {pedidoDetalle.metodo_envio === 'retiro_sucursal' && `Retiro en sucursal de Correo Argentino${pedidoDetalle.sucursal_correo_argentino ? ` — ${pedidoDetalle.sucursal_correo_argentino}` : ''}`}
+                          </span>
+                        </div>
+                        {pedidoDetalle.metodo_pago && (
+                          <div className="pedido-detalle__envio-row">
+                            <span className="pedido-detalle__envio-label">Método de pago</span>
+                            <span className="pedido-detalle__envio-valor">
+                              {METODO_PAGO_LABEL[pedidoDetalle.metodo_pago] ?? pedidoDetalle.metodo_pago}
+                            </span>
+                          </div>
+                        )}
+                        {pedidoDetalle.destinatario_nombre && (
+                          <div className="pedido-detalle__envio-row">
+                            <span className="pedido-detalle__envio-label">Destinatario</span>
+                            <span className="pedido-detalle__envio-valor">
+                              {pedidoDetalle.destinatario_nombre}
+                              {pedidoDetalle.destinatario_dni ? ` · DNI ${pedidoDetalle.destinatario_dni}` : ''}
+                              {pedidoDetalle.destinatario_telefono ? ` · Tel. ${pedidoDetalle.destinatario_cod_area ?? ''}${pedidoDetalle.destinatario_telefono}` : ''}
+                            </span>
+                          </div>
+                        )}
+                        {pedidoDetalle.metodo_envio === 'domicilio' && (
+                          pedidoDetalle.direccion_envio ? (
+                            <div className="pedido-detalle__envio-row pedido-detalle__envio-row--destacado">
+                              <span className="pedido-detalle__envio-label">Dirección</span>
+                              <span className="pedido-detalle__envio-valor">
+                                {pedidoDetalle.direccion_envio.calle} {pedidoDetalle.direccion_envio.altura}
+                                {pedidoDetalle.direccion_envio.piso ? `, piso ${pedidoDetalle.direccion_envio.piso}` : ''}
+                                {pedidoDetalle.direccion_envio.depto ? ` dpto ${pedidoDetalle.direccion_envio.depto}` : ''}
+                                {' — '}{pedidoDetalle.direccion_envio.ciudad}, {pedidoDetalle.direccion_envio.provincia}
+                                {pedidoDetalle.direccion_envio.codigo_postal ? ` (CP ${pedidoDetalle.direccion_envio.codigo_postal})` : ''}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="pedido-detalle__direccion-faltante">
+                              ⚠ No hay una dirección guardada para este cliente. Contactalo antes de despachar el pedido.
+                            </div>
+                          )
+                        )}
+                        {pedidoDetalle.shipping_tracking_number && (
+                          <div className="pedido-detalle__envio-row">
+                            <span className="pedido-detalle__envio-label">Tracking</span>
+                            <span className="pedido-detalle__envio-valor">{pedidoDetalle.shipping_tracking_number}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <table className="pedido-tabla">
+                        <thead>
+                          <tr>
+                            <th>Producto</th>
+                            <th>Precio unit.</th>
+                            <th>Cant.</th>
+                            <th>Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(pedidoDetalle.detalles ?? []).map(d => (
+                            <tr key={d.id}>
+                              <td>{d.nombre_producto}</td>
+                              <td>
+                                ${formatPrecio(d.precio_unitario)}
+                                {d.precio_lista > d.precio_unitario && (
+                                  <span className="pedido-tabla__lista"> (lista: ${formatPrecio(d.precio_lista)})</span>
+                                )}
+                              </td>
+                              <td>{d.cantidad}</td>
+                              <td>${formatPrecio(d.subtotal)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      <div className="pedido-detalle__totales">
+                        {pedidoDetalle.subtotal_lista > pedidoDetalle.total && (
+                          <>
+                            <p>Precio de lista: <s>${formatPrecio(pedidoDetalle.subtotal_lista)}</s></p>
+                            <p className="pedido-detalle__ahorro">Ahorro: ${formatPrecio(pedidoDetalle.subtotal_lista - pedidoDetalle.total)}</p>
+                          </>
+                        )}
+                        {pedidoDetalle.costo_envio > 0 && (
+                          <p>Envío: ${formatPrecio(pedidoDetalle.costo_envio)}</p>
+                        )}
+                        <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedidoDetalle.total)}</strong></p>
+                        {pedidoDetalle.pw_payment_id && (
+                          <p className="pedido-detalle__pago">Pago procesado · ID: {pedidoDetalle.pw_payment_id}</p>
+                        )}
+                      </div>
+
+                      {!ESTADOS_FINALES.includes(pedidoDetalle.estado) && (
+                        <div className="pedido-detalle__acciones-admin">
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            onClick={() => setPedidoACancelar(pedidoDetalle)}
+                          >
+                            Cancelar pedido
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {pedidoACancelar && (
+              <CancelarPedidoModal
+                pedido={pedidoACancelar}
+                onClose={() => setPedidoACancelar(null)}
+                onCancelado={actualizado => {
+                  setPedidoACancelar(null);
+                  setPedidosAdmin(prev => prev.map(p => p.id === actualizado.id ? actualizado : p));
+                  setPedidoDetalle(prev => prev && prev.id === actualizado.id ? { ...prev, ...actualizado } : prev);
+                }}
+              />
             )}
           </div>
         </motion.div>

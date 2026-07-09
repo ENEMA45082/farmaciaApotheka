@@ -354,3 +354,91 @@ BEGIN
   RETURN row_to_json(nuevo_pedido)::jsonb;
 END;
 $$;
+
+
+-- --------------------------------------------------------
+-- 6. Estados de pedido: renombrar a PascalCase + ListoParaRetirar
+--    + historial de cambios de estado
+--    - 'anulado' se fusiona en 'Cancelado'
+--    - motivo_cancelacion ya existía (sección 1); acá se estandariza
+--      el motivo del cron de expiración a un código fijo
+-- --------------------------------------------------------
+
+-- 6a. La columna estado tiene un CHECK constraint creado directamente en
+--     Supabase (no capturado en ninguna migración anterior de este archivo)
+--     que solo permite los valores viejos. Hay que soltarlo antes de migrar
+--     los datos, y se vuelve a crear más abajo (6a-bis) con los 7 valores nuevos.
+ALTER TABLE pedidos DROP CONSTRAINT IF EXISTS pedidos_estado_check;
+
+-- Migrar datos existentes al nuevo esquema de nombres
+UPDATE pedidos SET estado = 'PendienteDePago' WHERE estado = 'pendiente';
+UPDATE pedidos SET estado = 'Confirmado'      WHERE estado = 'confirmado';
+UPDATE pedidos SET estado = 'EnPreparacion'   WHERE estado = 'en_preparacion';
+UPDATE pedidos SET estado = 'Enviado'         WHERE estado = 'enviado';
+UPDATE pedidos SET estado = 'Entregado'       WHERE estado = 'entregado';
+UPDATE pedidos SET estado = 'Cancelado'       WHERE estado IN ('cancelado', 'anulado');
+
+-- Motivo por defecto para pedidos cancelados/anulados que no tenían motivo cargado
+UPDATE pedidos SET motivo_cancelacion = 'otro'
+WHERE estado = 'Cancelado' AND motivo_cancelacion IS NULL;
+
+-- 6a-bis. Recrear el constraint con los 7 valores nuevos (mantiene la
+--         validación a nivel de DB que ya existía, solo actualiza la lista)
+ALTER TABLE pedidos ADD CONSTRAINT pedidos_estado_check
+  CHECK (estado IN (
+    'PendienteDePago', 'Confirmado', 'EnPreparacion',
+    'Enviado', 'ListoParaRetirar', 'Entregado', 'Cancelado'
+  ));
+
+-- 6b. Nuevo default de columna: crear_pedido_completo no setea `estado`
+--     explícitamente en el INSERT, depende del DEFAULT de la columna
+ALTER TABLE pedidos ALTER COLUMN estado SET DEFAULT 'PendienteDePago';
+
+-- 6c. Estandarizar el motivo de cancelación automática por falta de pago
+--     para que use el mismo vocabulario fijo que el resto de la app
+CREATE OR REPLACE FUNCTION cancelar_pedidos_expirados()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  pedido_row  RECORD;
+  detalle_row RECORD;
+BEGIN
+  FOR pedido_row IN
+    SELECT id FROM pedidos
+    WHERE estado = 'PendienteDePago'
+      AND fecha_pedido < NOW() - INTERVAL '48 hours'
+  LOOP
+    -- Restaurar stock de cada ítem antes de cancelar
+    FOR detalle_row IN
+      SELECT producto_id, cantidad
+      FROM detalles_pedido
+      WHERE pedido_id = pedido_row.id
+        AND producto_id IS NOT NULL
+    LOOP
+      PERFORM restaurar_stock(detalle_row.producto_id, detalle_row.cantidad);
+    END LOOP;
+
+    -- Cancelar el pedido con motivo fijo (mismo vocabulario que MOTIVOS_CANCELACION)
+    UPDATE pedidos SET
+      estado              = 'Cancelado',
+      fecha_cancelacion   = NOW(),
+      motivo_cancelacion  = 'pago_no_recibido'
+    WHERE id = pedido_row.id;
+  END LOOP;
+END;
+$$;
+
+-- 6d. Tabla de auditoría de cambios de estado hechos por un admin
+CREATE TABLE IF NOT EXISTS pedido_historial_estados (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pedido_id       uuid NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+  estado_anterior text NOT NULL,
+  estado_nuevo    text NOT NULL,
+  motivo          text,
+  changed_by      uuid NOT NULL REFERENCES auth.users(id),
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pedido_historial_estados_pedido_id
+  ON pedido_historial_estados(pedido_id);

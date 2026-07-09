@@ -9,13 +9,13 @@ import { formatPrecio } from '../types';
 import { staggerContainer, staggerItem } from '../components/ui/motion';
 
 const ESTADO_CONFIG: Record<Pedido['estado'], { label: string; clase: string }> = {
-  pendiente:       { label: 'Pendiente',       clase: 'badge--pendiente' },
-  confirmado:      { label: 'Confirmado',       clase: 'badge--confirmado' },
-  en_preparacion:  { label: 'En preparación',  clase: 'badge--preparacion' },
-  enviado:         { label: 'Enviado',          clase: 'badge--enviado' },
-  entregado:       { label: 'Entregado',        clase: 'badge--entregado' },
-  cancelado:       { label: 'Cancelado',        clase: 'badge--cancelado' },
-  anulado:         { label: 'Anulado',          clase: 'badge--cancelado' },
+  PendienteDePago:  { label: 'Pendiente de pago', clase: 'badge--pendiente' },
+  Confirmado:       { label: 'Confirmado',        clase: 'badge--confirmado' },
+  EnPreparacion:    { label: 'En preparación',    clase: 'badge--preparacion' },
+  Enviado:          { label: 'Enviado',           clase: 'badge--enviado' },
+  ListoParaRetirar: { label: 'Listo para retirar', clase: 'badge--listo-retirar' },
+  Entregado:        { label: 'Entregado',         clase: 'badge--entregado' },
+  Cancelado:        { label: 'Cancelado',         clase: 'badge--cancelado' },
 };
 
 const MotionLink = motion(Link);

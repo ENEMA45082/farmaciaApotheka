@@ -8,6 +8,7 @@ import { useCarritoContext } from '../context/CartContext';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorMessage } from '../components/ui/ErrorMessage';
 import { staggerContainer, staggerItem } from '../components/ui/motion';
+import { BotonCompartir } from '../components/products/BotonCompartir';
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -109,16 +110,18 @@ export function ProductDetailPage() {
           <motion.p className="product-detail__stock" variants={staggerItem}>
             {producto.stock > 0 ? `Stock disponible: ${producto.stock}` : 'Sin stock'}
           </motion.p>
-          <motion.button
-            className="btn btn--primary"
-            onClick={handleAgregar}
-            disabled={producto.stock === 0}
-            variants={staggerItem}
-            whileHover={producto.stock > 0 ? { y: -2 } : {}}
-            whileTap={producto.stock > 0 ? { scale: 0.97 } : {}}
-          >
-            {producto.stock === 0 ? 'Sin stock' : 'Agregar al carrito'}
-          </motion.button>
+          <motion.div className="product-detail__actions" variants={staggerItem}>
+            <motion.button
+              className="btn btn--primary"
+              onClick={handleAgregar}
+              disabled={producto.stock === 0}
+              whileHover={producto.stock > 0 ? { y: -2 } : {}}
+              whileTap={producto.stock > 0 ? { scale: 0.97 } : {}}
+            >
+              {producto.stock === 0 ? 'Sin stock' : 'Agregar al carrito'}
+            </motion.button>
+            <BotonCompartir nombre={producto.nombre} />
+          </motion.div>
         </motion.div>
 
       </div>
