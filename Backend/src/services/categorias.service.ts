@@ -1,6 +1,8 @@
 import * as categoriasRepo from '../repositories/categorias.repository';
+import * as productosRepo from '../repositories/productos.repository';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
+import { recopilarDescendientes } from '../utils/categoriaTree';
 import type { Categoria, CrearCategoriaDTO, ActualizarCategoriaDTO } from '../types';
 
 function buildTree(flat: Categoria[]): Categoria[] {
@@ -65,5 +67,17 @@ export async function actualizar(id: string, dto: ActualizarCategoriaDTO): Promi
 export async function eliminar(id: string): Promise<void> {
   validarUUID(id, 'categoría');
   await obtenerPorId(id);
-  await categoriasRepo.eliminar(id);
+
+  const todas = await categoriasRepo.encontrarTodas();
+  const ids = recopilarDescendientes(id, todas.map(c => ({ id: c.id, id_padre: c.id_padre })));
+  const cantidadProductos = await productosRepo.contarPorCategorias(ids);
+  if (cantidadProductos > 0) {
+    throw new AppError(
+      `No se puede eliminar: hay ${cantidadProductos} producto(s) en esta categoría o sus subcategorías. Reasignalos o eliminalos primero.`,
+      409,
+    );
+  }
+
+  const eliminado = await categoriasRepo.eliminar(id);
+  if (!eliminado) throw new AppError('No se pudo eliminar la categoría', 500);
 }

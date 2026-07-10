@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { fetchFavoritos, toggleFavorito as apiToggle } from '../api/favoritos.api';
+import { toastBus } from '../utils/toastBus';
 
 interface FavoritosContextValue {
   favoritoIds: Set<string>;
@@ -46,6 +47,7 @@ export function FavoritosProvider({ children }: { children: React.ReactNode }) {
         if (favorito) next.add(id); else next.delete(id);
         return next;
       });
+      toastBus.emit(favorito ? 'Se agregó a favoritos' : 'Se quitó de favoritos');
     } catch {
       // revertir si falla
       cargar();

@@ -1,15 +1,11 @@
 import { supabase } from '../config/supabase';
+import { recopilarDescendientes } from '../utils/categoriaTree';
 import type {
   Producto,
   CrearProductoDTO,
   ActualizarProductoDTO,
   FiltrosProducto,
 } from '../types';
-
-function recopilarDescendientes(idPadre: string, todas: { id: string; id_padre: string | null }[]): string[] {
-  const hijos = todas.filter(c => c.id_padre === idPadre);
-  return [idPadre, ...hijos.flatMap(h => recopilarDescendientes(h.id, todas))];
-}
 
 function mapearProducto(row: Record<string, unknown>): Producto {
   return {
@@ -195,6 +191,18 @@ export async function eliminar(id: string): Promise<boolean> {
     .eq('id', id);
 
   return !error;
+}
+
+export async function contarPorCategorias(categoriaIds: string[]): Promise<number> {
+  if (categoriaIds.length === 0) return 0;
+
+  const { count, error } = await supabase
+    .from('products')
+    .select('*', { count: 'exact', head: true })
+    .in('categoria_id', categoriaIds);
+
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export async function descontarStock(productoId: string, cantidad: number): Promise<void> {

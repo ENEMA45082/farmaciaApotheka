@@ -22,6 +22,7 @@ import { PagarPage } from './pages/PagarPage';
 import { PagoResultadoPage } from './pages/PagoResultadoPage';
 import { FavoritosProvider } from './context/FavoritosContext';
 import { ErrorModalProvider } from './context/ErrorModalContext';
+import { ToastProvider } from './context/ToastContext';
 import { AdminRoute } from './components/auth/AdminRoute';
 import { pageVariants } from './components/ui/motion';
 import './index.css';
@@ -77,20 +78,22 @@ function App() {
   return (
     <AuthProvider>
       <ErrorModalProvider>
-        <CarritoProvider>
-          <BrowserRouter>
-            <CheckoutProvider>
-              <FavoritosProvider>
-                <Header />
-                <CartDrawer />
-                <main className="main-content">
-                  <AnimatedRoutes />
-                </main>
-                <Footer />
-              </FavoritosProvider>
-            </CheckoutProvider>
-          </BrowserRouter>
-        </CarritoProvider>
+        <ToastProvider>
+          <CarritoProvider>
+            <BrowserRouter>
+              <CheckoutProvider>
+                <FavoritosProvider>
+                  <Header />
+                  <CartDrawer />
+                  <main className="main-content">
+                    <AnimatedRoutes />
+                  </main>
+                  <Footer />
+                </FavoritosProvider>
+              </CheckoutProvider>
+            </BrowserRouter>
+          </CarritoProvider>
+        </ToastProvider>
       </ErrorModalProvider>
     </AuthProvider>
   );

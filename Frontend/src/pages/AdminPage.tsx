@@ -6,10 +6,8 @@ import { useCategorias } from '../hooks/useCategorias';
 import {
   crearProducto,
   actualizarProducto,
-  eliminarProducto,
   crearCategoria,
   actualizarCategoria,
-  eliminarCategoria,
   subirImagenes,
   previewImportarPrecios,
   confirmarImportarPrecios,
@@ -20,6 +18,8 @@ import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO, Pedi
 import { formatPrecio } from '../types';
 import { ESTADOS_FINALES, puedeTransicionar } from '../utils/estadosPedido';
 import { CancelarPedidoModal } from '../components/admin/CancelarPedidoModal';
+import { EliminarProductoModal } from '../components/admin/EliminarProductoModal';
+import { EliminarCategoriaModal } from '../components/admin/EliminarCategoriaModal';
 
 type Tab = 'productos' | 'categorias' | 'pedidos' | 'importar_precios';
 
@@ -339,15 +339,10 @@ export function AdminPage() {
     }
   }
 
-  async function handleEliminarProducto(p: Producto) {
-    if (!confirm(`¿Eliminar "${p.nombre}"? Esta acción no se puede deshacer.`)) return;
-    try {
-      await eliminarProducto(p.id);
-      setPaginaAdmin(1);
-      recargarProductos();
-    } catch {
-      alert('No se pudo eliminar el producto.');
-    }
+  const [productoAEliminar, setProductoAEliminar] = useState<Producto | null>(null);
+
+  function handleEliminarProducto(p: Producto) {
+    setProductoAEliminar(p);
   }
 
   // — Pedidos (admin) —
@@ -587,14 +582,10 @@ export function AdminPage() {
     }
   }
 
-  async function handleEliminarCategoria(c: Categoria) {
-    if (!confirm(`¿Eliminar la categoría "${c.nombre}"? Los productos asociados quedarán sin categoría.`)) return;
-    try {
-      await eliminarCategoria(c.id);
-      recargarCategorias();
-    } catch {
-      alert('No se pudo eliminar la categoría.');
-    }
+  const [categoriaAEliminar, setCategoriaAEliminar] = useState<Categoria | null>(null);
+
+  function handleEliminarCategoria(c: Categoria) {
+    setCategoriaAEliminar(c);
   }
 
   const [busquedaCategoria, setBusquedaCategoria] = useState('');
@@ -1784,6 +1775,29 @@ export function AdminPage() {
         </motion.div>
       )}
       </AnimatePresence>
+
+      {productoAEliminar && (
+        <EliminarProductoModal
+          producto={productoAEliminar}
+          onClose={() => setProductoAEliminar(null)}
+          onEliminado={() => {
+            setProductoAEliminar(null);
+            setPaginaAdmin(1);
+            recargarProductos();
+          }}
+        />
+      )}
+
+      {categoriaAEliminar && (
+        <EliminarCategoriaModal
+          categoria={categoriaAEliminar}
+          onClose={() => setCategoriaAEliminar(null)}
+          onEliminada={() => {
+            setCategoriaAEliminar(null);
+            recargarCategorias();
+          }}
+        />
+      )}
 
     </div>
   );

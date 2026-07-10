@@ -16,21 +16,37 @@ function mapearPerfil(row: Record<string, unknown>): Perfil {
   };
 }
 
-export async function encontrarOCrear(userId: string): Promise<Perfil> {
+export async function encontrarOCrear(
+  userId: string,
+  datosIniciales?: { nombre?: string; apellido?: string },
+): Promise<Perfil> {
+  const { data: existente } = await supabase
+    .from('perfiles')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (existente) return mapearPerfil(existente);
+
   const { data, error } = await supabase
     .from('perfiles')
-    .upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true })
+    .insert({
+      user_id:  userId,
+      nombre:   datosIniciales?.nombre   ?? null,
+      apellido: datosIniciales?.apellido ?? null,
+    })
     .select('*')
     .single();
 
   if (error || !data) {
-    const { data: existing, error: fetchError } = await supabase
+    // Carrera: otra request ya creó la fila entre el SELECT y el INSERT
+    const { data: existenteAhora, error: fetchError } = await supabase
       .from('perfiles')
       .select('*')
       .eq('user_id', userId)
       .single();
-    if (fetchError || !existing) throw fetchError ?? new Error('Error al obtener el perfil');
-    return mapearPerfil(existing);
+    if (fetchError || !existenteAhora) throw fetchError ?? new Error('Error al obtener el perfil');
+    return mapearPerfil(existenteAhora);
   }
   return mapearPerfil(data);
 }
