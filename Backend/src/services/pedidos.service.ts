@@ -3,7 +3,9 @@ import * as productosRepo from '../repositories/productos.repository';
 import * as direccionesRepo from '../repositories/direcciones.repository';
 import * as perfilRepo from '../repositories/perfil.repository';
 import * as pedidoHistorialRepo from '../repositories/pedidoHistorial.repository';
+import * as facturasRepo from '../repositories/facturas.repository';
 import * as correoArgentino from './correoArgentino.service';
+import * as facturacionService from './facturacion.service';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import { supabase } from '../config/supabase';
@@ -72,10 +74,11 @@ export async function obtenerPorIdAdmin(id: string): Promise<PedidoDetalleAdmin>
   const pedido = await pedidosRepo.encontrarPorId(id);
   if (!pedido) throw new AppError('Pedido no encontrado', 404);
 
-  const [perfil, direccion, userResult] = await Promise.all([
+  const [perfil, direccion, userResult, factura] = await Promise.all([
     perfilRepo.encontrarOCrear(pedido.user_id).catch(() => null),
     pedido.metodo_envio === 'domicilio' ? direccionesRepo.obtener(pedido.user_id) : Promise.resolve(null),
     supabase.auth.admin.getUserById(pedido.user_id).catch(() => null),
+    facturasRepo.encontrarPorPedidoId(pedido.id).catch(() => null),
   ]);
 
   return {
@@ -88,7 +91,16 @@ export async function obtenerPorIdAdmin(id: string): Promise<PedidoDetalleAdmin>
       dni:      perfil?.dni ?? null,
     },
     direccion_envio: direccion,
+    factura,
   };
+}
+
+export async function reintentarFactura(id: string): Promise<Pedido> {
+  validarUUID(id, 'pedido');
+  const pedido = await pedidosRepo.encontrarPorId(id);
+  if (!pedido) throw new AppError('Pedido no encontrado', 404);
+  await facturacionService.emitirFactura(pedido);
+  return pedido;
 }
 
 export async function listarTodos(
@@ -160,6 +172,11 @@ export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserI
 
   const pedido = await pedidosRepo.encontrarPorId(id);
   if (!pedido) throw new AppError('Pedido no encontrado', 404);
+
+  if (estado === 'Confirmado') {
+    await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
+  }
+
   return pedido;
 }
 

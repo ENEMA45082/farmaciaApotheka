@@ -27,6 +27,7 @@ addErrorInterceptor(api);
 
 export interface FiltrosProducto {
   categoria?: string;
+  categorias?: string;
   busqueda?: string;
   codigo_barras?: string;
   en_oferta?: boolean;

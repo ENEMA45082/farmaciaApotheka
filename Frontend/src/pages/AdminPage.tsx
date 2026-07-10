@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Pencil, Trash2 } from 'lucide-react';
 import { useProductos } from '../hooks/useProductos';
 import { useCategorias } from '../hooks/useCategorias';
 import {
@@ -14,7 +15,7 @@ import {
   confirmarImportarPrecios,
 } from '../api/productos.api';
 import type { PreviewImportarPreciosResponse, ResultadoConfirmarPrecios } from '../api/productos.api';
-import { fetchPedidosAdmin, fetchPedidoAdminPorId, cambiarEstadoPedido } from '../api/pedidos.api';
+import { fetchPedidosAdmin, fetchPedidoAdminPorId, cambiarEstadoPedido, reintentarFactura } from '../api/pedidos.api';
 import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO, Pedido, PedidoDetalleAdmin } from '../types';
 import { formatPrecio } from '../types';
 import { ESTADOS_FINALES, puedeTransicionar } from '../utils/estadosPedido';
@@ -141,6 +142,7 @@ const FORM_PRODUCTO_VACIO = {
   porcentaje_oferta: '',
   es_venta_libre: true,
   peso_gramos: '500',
+  alicuota_iva: '21',
 };
 
 const FORM_CATEGORIA_VACIO = { nombre: '', id_padre: '' };
@@ -263,6 +265,7 @@ export function AdminPage() {
       porcentaje_oferta: p.porcentaje_oferta != null ? String(p.porcentaje_oferta) : '',
       es_venta_libre: p.es_venta_libre,
       peso_gramos: String(p.peso_gramos ?? 500),
+      alicuota_iva: String(p.alicuota_iva ?? 21),
     });
     setImagenesExistentes(
       p.imagenes?.length ? p.imagenes : p.imagen_url ? [p.imagen_url] : []
@@ -317,6 +320,7 @@ export function AdminPage() {
         fecha_vencimiento: formProducto.fecha_vencimiento || undefined,
         es_venta_libre: formProducto.es_venta_libre,
         peso_gramos: formProducto.peso_gramos !== '' ? parseInt(formProducto.peso_gramos) : 500,
+        alicuota_iva: formProducto.alicuota_iva !== '' ? parseFloat(formProducto.alicuota_iva) : 21,
       };
 
       if (productoEditando) {
@@ -365,6 +369,25 @@ export function AdminPage() {
   const [filtroPedidoFechaDesde, setFiltroPedidoFechaDesde] = useState('');
   const [filtroPedidoFechaHasta, setFiltroPedidoFechaHasta] = useState('');
 
+  const FILTROS_PEDIDO_VACIOS = {
+    busqueda: '', estado: '', envio: '', pago: '', fechaDesde: '', fechaHasta: '',
+  };
+  const [filtrosPedidoAplicados, setFiltrosPedidoAplicados] = useState(FILTROS_PEDIDO_VACIOS);
+  const [paginaPedidos, setPaginaPedidos] = useState(1);
+  const TAMANO_PAGINA_PEDIDOS = 20;
+
+  function aplicarFiltrosPedidos() {
+    setFiltrosPedidoAplicados({
+      busqueda: filtroPedidoBusqueda,
+      estado: filtroPedidoEstado,
+      envio: filtroPedidoEnvio,
+      pago: filtroPedidoPago,
+      fechaDesde: filtroPedidoFechaDesde,
+      fechaHasta: filtroPedidoFechaHasta,
+    });
+    setPaginaPedidos(1);
+  }
+
   function limpiarFiltrosPedidos() {
     setFiltroPedidoBusqueda('');
     setFiltroPedidoEstado('');
@@ -372,9 +395,14 @@ export function AdminPage() {
     setFiltroPedidoPago('');
     setFiltroPedidoFechaDesde('');
     setFiltroPedidoFechaHasta('');
+    setFiltrosPedidoAplicados(FILTROS_PEDIDO_VACIOS);
+    setPaginaPedidos(1);
   }
 
-  const hayFiltrosPedidosActivos = !!(filtroPedidoBusqueda || filtroPedidoEstado || filtroPedidoEnvio || filtroPedidoPago || filtroPedidoFechaDesde || filtroPedidoFechaHasta);
+  const hayFiltrosPedidosActivos = !!(
+    filtrosPedidoAplicados.busqueda || filtrosPedidoAplicados.estado || filtrosPedidoAplicados.envio ||
+    filtrosPedidoAplicados.pago || filtrosPedidoAplicados.fechaDesde || filtrosPedidoAplicados.fechaHasta
+  );
 
   useEffect(() => {
     if (tabActiva !== 'pedidos') return;
@@ -412,29 +440,51 @@ export function AdminPage() {
     }
   }
 
+  const [reintentandoFactura, setReintentandoFactura] = useState(false);
+
+  async function handleReintentarFactura(pedidoId: string) {
+    setReintentandoFactura(true);
+    try {
+      await reintentarFactura(pedidoId);
+      const actualizado = await fetchPedidoAdminPorId(pedidoId);
+      setPedidoDetalle(actualizado);
+    } catch {
+      alert('No se pudo reintentar la emisión de la factura.');
+    } finally {
+      setReintentandoFactura(false);
+    }
+  }
+
   function handleCerrarDetallePedido() {
     setPedidoDetalle(null);
     setErrorDetalle(null);
   }
 
   const pedidosFiltrados = pedidosAdmin.filter(p => {
-    if (filtroPedidoEstado && p.estado !== filtroPedidoEstado) return false;
-    if (filtroPedidoEnvio  && p.metodo_envio !== filtroPedidoEnvio) return false;
-    if (filtroPedidoPago   && p.metodo_pago  !== filtroPedidoPago)  return false;
-    if (filtroPedidoBusqueda) {
+    const f = filtrosPedidoAplicados;
+    if (f.estado && p.estado !== f.estado) return false;
+    if (f.envio  && p.metodo_envio !== f.envio) return false;
+    if (f.pago   && p.metodo_pago  !== f.pago)  return false;
+    if (f.busqueda) {
       const nro = String(p.nro_pedido).padStart(5, '0');
-      if (!nro.includes(filtroPedidoBusqueda.trim())) return false;
+      if (!nro.includes(f.busqueda.trim())) return false;
     }
-    if (filtroPedidoFechaDesde) {
-      if (new Date(p.fecha_pedido) < new Date(filtroPedidoFechaDesde)) return false;
+    if (f.fechaDesde) {
+      if (new Date(p.fecha_pedido) < new Date(f.fechaDesde)) return false;
     }
-    if (filtroPedidoFechaHasta) {
-      const hasta = new Date(filtroPedidoFechaHasta);
+    if (f.fechaHasta) {
+      const hasta = new Date(f.fechaHasta);
       hasta.setHours(23, 59, 59, 999);
       if (new Date(p.fecha_pedido) > hasta) return false;
     }
     return true;
   });
+
+  const totalPaginasPedidos = Math.max(1, Math.ceil(pedidosFiltrados.length / TAMANO_PAGINA_PEDIDOS));
+  const pedidosPagina = pedidosFiltrados.slice(
+    (paginaPedidos - 1) * TAMANO_PAGINA_PEDIDOS,
+    paginaPedidos * TAMANO_PAGINA_PEDIDOS
+  );
 
   // — Importar precios CSV —
   const csvInputRef = useRef<HTMLInputElement>(null);
@@ -546,6 +596,32 @@ export function AdminPage() {
       alert('No se pudo eliminar la categoría.');
     }
   }
+
+  const [busquedaCategoria, setBusquedaCategoria] = useState('');
+  const [busquedaCategoriaDebounced, setBusquedaCategoriaDebounced] = useState('');
+  const debounceCategoriaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleBuscarCategoria(valor: string) {
+    setBusquedaCategoria(valor);
+    if (debounceCategoriaRef.current) clearTimeout(debounceCategoriaRef.current);
+    debounceCategoriaRef.current = setTimeout(() => setBusquedaCategoriaDebounced(valor), 300);
+  }
+
+  const categoriasFiltradas = categorias.filter(c =>
+    c.nombre.toLowerCase().includes(busquedaCategoriaDebounced.toLowerCase())
+  );
+
+  const [paginaCategoria, setPaginaCategoria] = useState(1);
+  const TAMANO_PAGINA_CATEGORIAS = 20;
+  const totalPaginasCategoria = Math.max(1, Math.ceil(categoriasFiltradas.length / TAMANO_PAGINA_CATEGORIAS));
+  const categoriasPagina = categoriasFiltradas.slice(
+    (paginaCategoria - 1) * TAMANO_PAGINA_CATEGORIAS,
+    paginaCategoria * TAMANO_PAGINA_CATEGORIAS
+  );
+
+  useEffect(() => {
+    setPaginaCategoria(1);
+  }, [busquedaCategoriaDebounced]);
 
   return (
     <div className="admin-page">
@@ -692,6 +768,20 @@ export function AdminPage() {
                     onChange={e => setFormProducto(f => ({ ...f, peso_gramos: e.target.value }))}
                     placeholder="500"
                   />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="p-iva">Alícuota de IVA</label>
+                  <select
+                    id="p-iva"
+                    value={formProducto.alicuota_iva}
+                    onChange={e => setFormProducto(f => ({ ...f, alicuota_iva: e.target.value }))}
+                  >
+                    <option value="21">21% (general)</option>
+                    <option value="10.5">10,5% (medicamentos)</option>
+                    <option value="27">27%</option>
+                    <option value="0">0% (exento)</option>
+                  </select>
                 </div>
 
               </div>
@@ -1007,11 +1097,11 @@ export function AdminPage() {
                         <td>{p.codigo_barras ?? '—'}</td>
                         <td>{p.fecha_vencimiento ?? '—'}</td>
                         <td className="acciones">
-                          <button className="btn-tabla btn-editar" onClick={() => iniciarEdicionProducto(p)}>
-                            Editar
+                          <button className="btn-tabla btn-editar" onClick={() => iniciarEdicionProducto(p)} aria-label="Editar producto" title="Editar">
+                            <Pencil size={16} />
                           </button>
-                          <button className="btn-tabla btn-eliminar" onClick={() => handleEliminarProducto(p)}>
-                            Eliminar
+                          <button className="btn-tabla btn-eliminar" onClick={() => handleEliminarProducto(p)} aria-label="Eliminar producto" title="Eliminar">
+                            <Trash2 size={16} />
                           </button>
                         </td>
                       </tr>
@@ -1103,7 +1193,17 @@ export function AdminPage() {
           </div>
 
           <div className="admin-table-card">
-            <h2>Categorías ({categorias.length})</h2>
+            <h2>Categorías ({categoriasFiltradas.length})</h2>
+
+            <div className="form-group">
+              <label>Buscar por nombre</label>
+              <input
+                type="text"
+                placeholder="Buscar categoría…"
+                value={busquedaCategoria}
+                onChange={e => handleBuscarCategoria(e.target.value)}
+              />
+            </div>
 
             {cargandoCategorias && <p className="admin-loading">Cargando categorías...</p>}
             {errorCategorias && <div className="admin-error">{errorCategorias}</div>}
@@ -1112,7 +1212,11 @@ export function AdminPage() {
               <p className="admin-empty">No hay categorías creadas aún.</p>
             )}
 
-            {categorias.length > 0 && (
+            {!cargandoCategorias && categorias.length > 0 && categoriasFiltradas.length === 0 && (
+              <p className="admin-empty">No hay categorías que coincidan con la búsqueda.</p>
+            )}
+
+            {categoriasFiltradas.length > 0 && (
               <div className="admin-table-wrapper">
                 <table className="admin-table">
                   <thead>
@@ -1123,22 +1227,42 @@ export function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {categorias.map(c => (
+                    {categoriasPagina.map(c => (
                       <tr key={c.id} className={categoriaEditando?.id === c.id ? 'row-editando' : ''}>
                         <td>{c.nombre}</td>
                         <td>{c.id_padre ? (categorias.find(p => p.id === c.id_padre)?.nombre ?? '—') : <span style={{color:'#aaa'}}>Raíz</span>}</td>
                         <td className="acciones">
-                          <button className="btn-tabla btn-editar" onClick={() => iniciarEdicionCategoria(c)}>
-                            Editar
+                          <button className="btn-tabla btn-editar" onClick={() => iniciarEdicionCategoria(c)} aria-label="Editar categoría" title="Editar">
+                            <Pencil size={16} />
                           </button>
-                          <button className="btn-tabla btn-eliminar" onClick={() => handleEliminarCategoria(c)}>
-                            Eliminar
+                          <button className="btn-tabla btn-eliminar" onClick={() => handleEliminarCategoria(c)} aria-label="Eliminar categoría" title="Eliminar">
+                            <Trash2 size={16} />
                           </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {categoriasFiltradas.length > 0 && (
+              <div className="pagination">
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => setPaginaCategoria(p => p - 1)}
+                  disabled={paginaCategoria === 1}
+                >
+                  ← Anterior
+                </button>
+                <span className="pagination__info">Página {paginaCategoria} de {totalPaginasCategoria}</span>
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => setPaginaCategoria(p => p + 1)}
+                  disabled={paginaCategoria >= totalPaginasCategoria}
+                >
+                  Siguiente →
+                </button>
               </div>
             )}
           </div>
@@ -1222,13 +1346,16 @@ export function AdminPage() {
                   </div>
                 </div>
 
-                {hayFiltrosPedidosActivos && (
-                  <div className="admin-filtros-actions">
+                <div className="admin-filtros-actions">
+                  <button type="button" className="btn btn-primary" onClick={aplicarFiltrosPedidos}>
+                    Filtrar
+                  </button>
+                  {hayFiltrosPedidosActivos && (
                     <button type="button" className="btn btn-secondary" onClick={limpiarFiltrosPedidos}>
                       Limpiar filtros
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
 
@@ -1253,7 +1380,7 @@ export function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pedidosFiltrados.map(p => (
+                    {pedidosPagina.map(p => (
                       <tr key={p.id}>
                         <td>
                           <button
@@ -1279,6 +1406,26 @@ export function AdminPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {pedidosFiltrados.length > 0 && (
+              <div className="pagination">
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => setPaginaPedidos(p => p - 1)}
+                  disabled={paginaPedidos === 1}
+                >
+                  ← Anterior
+                </button>
+                <span className="pagination__info">Página {paginaPedidos} de {totalPaginasPedidos}</span>
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => setPaginaPedidos(p => p + 1)}
+                  disabled={paginaPedidos >= totalPaginasPedidos}
+                >
+                  Siguiente →
+                </button>
               </div>
             )}
 
@@ -1433,6 +1580,42 @@ export function AdminPage() {
                         <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedidoDetalle.total)}</strong></p>
                         {pedidoDetalle.pw_payment_id && (
                           <p className="pedido-detalle__pago">Pago procesado · ID: {pedidoDetalle.pw_payment_id}</p>
+                        )}
+                      </div>
+
+                      <div className="pedido-detalle__factura">
+                        <h3 className="pedido-detalle__seccion-titulo">Factura ARCA</h3>
+                        {!pedidoDetalle.factura && (
+                          <p className="pedido-detalle__pago">Sin factura (pedido aún no confirmado, o ARCA no está configurado).</p>
+                        )}
+                        {pedidoDetalle.factura?.estado === 'pendiente' && (
+                          <p className="pedido-detalle__pago">Factura pendiente de emisión.</p>
+                        )}
+                        {pedidoDetalle.factura?.estado === 'emitida' && (
+                          <p className="pedido-detalle__pago">
+                            CAE: <strong>{pedidoDetalle.factura.cae}</strong>
+                            {' '}(vence {pedidoDetalle.factura.cae_vencimiento}) — Comprobante {pedidoDetalle.factura.punto_venta}-{pedidoDetalle.factura.nro_comprobante}
+                            {pedidoDetalle.factura.pdf_url ? (
+                              <> — <a href={pedidoDetalle.factura.pdf_url} target="_blank" rel="noopener noreferrer">Ver / descargar PDF</a></>
+                            ) : (
+                              <> — <em>generando PDF…</em></>
+                            )}
+                          </p>
+                        )}
+                        {pedidoDetalle.factura?.estado === 'error' && (
+                          <>
+                            <p className="pedido-detalle__pago" style={{ color: '#c0392b' }}>
+                              Error al emitir: {pedidoDetalle.factura.respuesta_error ?? 'error desconocido'}
+                            </p>
+                            <button
+                              type="button"
+                              className="btn btn--ghost"
+                              disabled={reintentandoFactura}
+                              onClick={() => handleReintentarFactura(pedidoDetalle.id)}
+                            >
+                              {reintentandoFactura ? 'Reintentando…' : 'Reintentar factura'}
+                            </button>
+                          </>
                         )}
                       </div>
 

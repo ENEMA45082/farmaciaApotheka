@@ -8,6 +8,7 @@ router.get('/admin',              requireAdmin, pedidosController.listarAdmin);
 router.get('/admin/:id',          requireAdmin, pedidosController.obtenerPorIdAdmin);
 router.patch('/:id/estado',       requireAdmin, pedidosController.cambiarEstadoAdmin);
 router.patch('/:id/cancelar-admin', requireAdmin, pedidosController.cancelarPedidoAdmin);
+router.post('/:id/reintentar-factura', requireAdmin, pedidosController.reintentarFactura);
 
 router.post('/',              requireAuth,  pedidosController.crear);
 router.get('/',               requireAuth,  pedidosController.listar);

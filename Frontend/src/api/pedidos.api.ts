@@ -40,8 +40,8 @@ export async function fetchTracking(id: string): Promise<ResultadoTracking> {
   return data;
 }
 
-export async function fetchPedidosAdmin(): Promise<Pedido[]> {
-  const { data } = await api.get<{ datos: Pedido[] }>('/pedidos/admin');
+export async function fetchPedidosAdmin(limite = 100): Promise<Pedido[]> {
+  const { data } = await api.get<{ datos: Pedido[] }>('/pedidos/admin', { params: { limite } });
   return data.datos;
 }
 
@@ -57,5 +57,10 @@ export async function cambiarEstadoPedido(id: string, estado: string): Promise<P
 
 export async function cancelarPedidoAdmin(id: string, motivo: string): Promise<Pedido> {
   const { data } = await api.patch<Pedido>(`/pedidos/${id}/cancelar-admin`, { motivo });
+  return data;
+}
+
+export async function reintentarFactura(id: string): Promise<Pedido> {
+  const { data } = await api.post<Pedido>(`/pedidos/${id}/reintentar-factura`);
   return data;
 }

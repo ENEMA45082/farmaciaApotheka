@@ -23,6 +23,7 @@ export interface Producto {
   creado_en: string;
   es_venta_libre: boolean;
   peso_gramos: number;
+  alicuota_iva: number;
   categoria?: Categoria;
 }
 
@@ -69,6 +70,7 @@ export interface CrearProductoDTO {
   imagenes?: string[];
   es_venta_libre?: boolean;
   peso_gramos?: number;
+  alicuota_iva?: number;
 }
 
 export interface ActualizarProductoDTO {
@@ -86,6 +88,7 @@ export interface ActualizarProductoDTO {
   imagenes?: string[];
   es_venta_libre?: boolean;
   peso_gramos?: number;
+  alicuota_iva?: number;
 }
 
 export interface Perfil {
@@ -221,6 +224,24 @@ export interface PedidoDetalleAdmin extends Pedido {
     dni: string | null;
   };
   direccion_envio: Direccion | null;
+  factura: Factura | null;
+}
+
+export interface Factura {
+  id: string;
+  pedido_id: string;
+  estado: 'pendiente' | 'emitida' | 'error';
+  tipo_comprobante: number | null;
+  punto_venta: number | null;
+  nro_comprobante: number | null;
+  cae: string | null;
+  cae_vencimiento: string | null;
+  importe_total: number | null;
+  respuesta_error: string | null;
+  intentos: number;
+  pdf_url: string | null;
+  creado_en: string;
+  actualizado_en: string;
 }
 
 export interface CrearPedidoDTO {

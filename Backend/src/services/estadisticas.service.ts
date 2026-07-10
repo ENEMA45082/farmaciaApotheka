@@ -4,7 +4,10 @@ import { AppError } from '../errors/AppError';
 export async function obtenerEstadisticas() {
   const { data, error } = await supabase.rpc('obtener_estadisticas_inventario');
 
-  if (error) throw new AppError('Error al obtener estadísticas', 500);
+  if (error) {
+    console.error('[estadisticas] Error en RPC obtener_estadisticas_inventario:', error);
+    throw new AppError('Error al obtener estadísticas', 500);
+  }
 
   const raw = data as {
     resumen:           Record<string, number>;

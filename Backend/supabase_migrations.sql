@@ -442,3 +442,165 @@ CREATE TABLE IF NOT EXISTS pedido_historial_estados (
 
 CREATE INDEX IF NOT EXISTS idx_pedido_historial_estados_pedido_id
   ON pedido_historial_estados(pedido_id);
+
+
+-- --------------------------------------------------------
+-- 7. Fix: obtener_estadisticas_inventario() consultaba tablas
+--    'productos'/'categorias' (español), pero las tablas reales
+--    son 'products'/'categories' (inglés, ver database/schema.sql
+--    y productos.repository.ts) — la función nunca funcionó, tiraba
+--    "relation does not exist" (500 en GET /api/estadisticas).
+--    Los nombres de columna sí son correctos (español), solo se
+--    corrigen los nombres de tabla.
+-- --------------------------------------------------------
+CREATE OR REPLACE FUNCTION obtener_estadisticas_inventario()
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  resultado jsonb;
+BEGIN
+  WITH RECURSIVE cat_raiz AS (
+    -- Categorías raíz (sin padre)
+    SELECT id, nombre, id AS raiz_id, nombre AS raiz_nombre
+    FROM categories
+    WHERE id_padre IS NULL
+
+    UNION ALL
+
+    -- Hijos apuntan a su raíz
+    SELECT c.id, c.nombre, cr.raiz_id, cr.raiz_nombre
+    FROM categories c
+    JOIN cat_raiz cr ON c.id_padre = cr.id
+  )
+  SELECT jsonb_build_object(
+    'resumen', (
+      SELECT jsonb_build_object(
+        'totalProductos',    COUNT(*),
+        'totalStock',        COALESCE(SUM(stock), 0),
+        'valorInventario',   COALESCE(SUM(precio * stock), 0),
+        'productosEnOferta', COUNT(*) FILTER (WHERE en_oferta = true),
+        'productosSinStock', COUNT(*) FILTER (WHERE stock = 0),
+        'proximosAVencer',   COUNT(*) FILTER (
+                               WHERE fecha_vencimiento IS NOT NULL
+                                 AND fecha_vencimiento::date BETWEEN CURRENT_DATE
+                                 AND CURRENT_DATE + INTERVAL '30 days'
+                             ),
+        'ahorroOferta', COALESCE(
+          SUM((precio - COALESCE(precio_oferta, precio)) * stock)
+            FILTER (WHERE en_oferta = true AND precio_oferta IS NOT NULL),
+          0
+        ),
+        'totalCategorias', (SELECT COUNT(*) FROM categories)
+      )
+      FROM products
+    ),
+    'porCategoria', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'nombre',          agg.nombre,
+          'totalProductos',  agg.total_productos,
+          'totalStock',      agg.total_stock,
+          'valorInventario', agg.valor_inventario
+        ) ORDER BY agg.total_productos DESC
+      ), '[]'::jsonb)
+      FROM (
+        SELECT
+          COALESCE(cr.raiz_nombre, 'Sin categoría') AS nombre,
+          COUNT(p.id)                               AS total_productos,
+          COALESCE(SUM(p.stock), 0)                 AS total_stock,
+          COALESCE(SUM(p.precio * p.stock), 0)       AS valor_inventario
+        FROM products p
+        LEFT JOIN cat_raiz cr ON p.categoria_id = cr.id
+        GROUP BY cr.raiz_nombre
+      ) agg
+    ),
+    'distribucionPrecios', (
+      SELECT jsonb_agg(fila ORDER BY orden)
+      FROM (
+        SELECT 1 AS orden, '< $500'           AS rango, COUNT(*) AS cantidad FROM products WHERE precio < 500
+        UNION ALL
+        SELECT 2, '$500 - $1.000',    COUNT(*) FROM products WHERE precio BETWEEN 500   AND 999.99
+        UNION ALL
+        SELECT 3, '$1.000 - $2.500',  COUNT(*) FROM products WHERE precio BETWEEN 1000  AND 2499.99
+        UNION ALL
+        SELECT 4, '$2.500 - $5.000',  COUNT(*) FROM products WHERE precio BETWEEN 2500  AND 4999.99
+        UNION ALL
+        SELECT 5, '$5.000 - $10.000', COUNT(*) FROM products WHERE precio BETWEEN 5000  AND 9999.99
+        UNION ALL
+        SELECT 6, '> $10.000',        COUNT(*) FROM products WHERE precio >= 10000
+      ) sub
+      CROSS JOIN LATERAL jsonb_build_object('rango', rango, 'cantidad', cantidad) AS fila
+    ),
+    'ofertaVsNormal', (
+      SELECT jsonb_build_object(
+        'enOferta', COUNT(*) FILTER (WHERE en_oferta = true),
+        'normal',   COUNT(*) FILTER (WHERE en_oferta = false)
+      )
+      FROM products
+    ),
+    'descuentoPromedio', (
+      SELECT COALESCE(ROUND(AVG(porcentaje_oferta)::numeric, 1), 0)
+      FROM products
+      WHERE en_oferta = true AND porcentaje_oferta IS NOT NULL
+    ),
+    -- mes en formato YYYY-MM para que el servicio lo formatee a es-AR
+    'vencimientosPorMes', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object('mes', mes_iso, 'cantidad', cantidad)
+        ORDER BY mes_iso
+      ), '[]'::jsonb)
+      FROM (
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', fecha_vencimiento::date), 'YYYY-MM') AS mes_iso,
+          COUNT(*) AS cantidad
+        FROM products
+        WHERE fecha_vencimiento IS NOT NULL
+          AND fecha_vencimiento::date BETWEEN CURRENT_DATE
+          AND CURRENT_DATE + INTERVAL '6 months'
+        GROUP BY DATE_TRUNC('month', fecha_vencimiento::date)
+      ) sub
+    )
+  ) INTO resultado;
+
+  RETURN resultado;
+END;
+$$;
+
+
+-- --------------------------------------------------------
+-- 8. Facturación electrónica ARCA (AfipSDK)
+--    - alicuota_iva en products: metadata puertas adentro para
+--      discriminar neto/IVA al armar el pedido de CAE (no cambia
+--      el precio de venta, que ya lo incluye).
+--    - Tabla facturas: 1:N con pedidos (mismo criterio que
+--      pedido_historial_estados), permite reintentos sin perder
+--      el historial de intentos fallidos.
+-- --------------------------------------------------------
+ALTER TABLE products ADD COLUMN IF NOT EXISTS alicuota_iva numeric NOT NULL DEFAULT 21;
+
+CREATE TABLE IF NOT EXISTS facturas (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pedido_id        uuid NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+  estado           text NOT NULL DEFAULT 'pendiente', -- pendiente | emitida | error
+  tipo_comprobante integer,
+  punto_venta      integer,
+  nro_comprobante  integer,
+  cae              text,
+  cae_vencimiento  date,
+  importe_total    numeric,
+  respuesta_error  text,
+  intentos         integer NOT NULL DEFAULT 0,
+  creado_en        timestamptz NOT NULL DEFAULT now(),
+  actualizado_en   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_facturas_pedido_id
+  ON facturas(pedido_id);
+
+
+-- --------------------------------------------------------
+-- 9. PDF de la factura: URL permanente en nuestro propio
+--    storage (los links que devuelve AfipSDK expiran a las 24hs).
+-- --------------------------------------------------------
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS pdf_url text;

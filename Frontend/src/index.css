@@ -336,6 +336,54 @@ img { max-width: 100%; display: block; }
 .sort-select { padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.875rem; background: var(--white); color: var(--text); cursor: pointer; outline: none; }
 .sort-select:focus { border-color: var(--navy); }
 
+/* ===== Catálogo con sidebar de filtros ===== */
+.catalog-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .catalog-layout { grid-template-columns: 1fr; }
+}
+.catalog-main { min-width: 0; }
+
+.filtros-sidebar {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.filtros-sidebar__header { display: flex; flex-direction: column; gap: 0.35rem; }
+.filtros-sidebar__titulo { font-size: 1.05rem; font-weight: 800; color: var(--navy); }
+.filtros-sidebar__total { font-size: 0.82rem; color: var(--text-light); }
+.filtros-sidebar__seccion { border-top: 1px solid var(--border); padding-top: 1rem; }
+.filtros-sidebar__seccion-titulo { font-size: 0.85rem; font-weight: 700; color: var(--text); margin-bottom: 0.75rem; }
+.filtros-sidebar__slider-wrap { padding: 0 0.4rem; margin-bottom: 0.75rem; }
+.filtros-sidebar__precio-valores { font-size: 0.85rem; color: var(--text); font-weight: 600; }
+.filtros-sidebar__checkboxes { display: flex; flex-direction: column; gap: 0.6rem; }
+.filtros-sidebar__checkbox-label {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.88rem; color: var(--text);
+  cursor: pointer; user-select: none;
+}
+.filtros-sidebar__checkbox-label input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--navy); cursor: pointer; }
+
+/* Override de colores default de rc-slider */
+.filtros-sidebar__slider-wrap .rc-slider-track { background: var(--navy); }
+.filtros-sidebar__slider-wrap .rc-slider-rail { background: var(--border); }
+.filtros-sidebar__slider-wrap .rc-slider-handle { border-color: var(--navy); opacity: 1; }
+.filtros-sidebar__slider-wrap .rc-slider-handle:hover,
+.filtros-sidebar__slider-wrap .rc-slider-handle:focus,
+.filtros-sidebar__slider-wrap .rc-slider-handle-dragging.rc-slider-handle-dragging.rc-slider-handle-dragging {
+  border-color: var(--navy-dark);
+  box-shadow: 0 0 0 5px rgba(0,45,98,0.15);
+}
+
+
 .filter-btn {
   padding: 0.4rem 1rem;
   border-radius: 20px;
@@ -592,8 +640,8 @@ img { max-width: 100%; display: block; }
 .admin-table tr.row-editando td { background: #fffbea; }
 .admin-table code { background: var(--bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; color: var(--navy); }
 
-.acciones { display: flex; gap: 0.4rem; white-space: nowrap; }
-.btn-tabla { padding: 0.3rem 0.7rem; border-radius: var(--radius); font-size: 0.8rem; font-weight: 600; }
+.acciones { display: flex; gap: 0.4rem; white-space: nowrap; align-items: center; }
+.btn-tabla { display: inline-flex; align-items: center; justify-content: center; padding: 0.4rem; border-radius: var(--radius); }
 .btn-editar { background: var(--azul-claro); color: var(--navy); }
 .btn-editar:hover { background: var(--azul-medio); }
 .btn-eliminar { background: #fde8e8; color: #c0392b; }
@@ -1982,6 +2030,10 @@ img { max-width: 100%; display: block; }
 .pedido-detalle__acciones-admin {
   display: flex; justify-content: flex-end; margin-top: 1.25rem;
   padding-top: 1rem; border-top: 1px solid var(--border);
+}
+.pedido-detalle__factura {
+  padding-top: 1rem; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start;
 }
 
 /* Modal cancelar pedido (admin) */

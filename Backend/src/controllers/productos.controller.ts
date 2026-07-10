@@ -11,6 +11,7 @@ export async function listar(req: Request, res: Response, next: NextFunction): P
     const filtros: FiltrosProducto = {
       adminMode:         modoAdmin,
       categoria:         req.query.categoria         as string | undefined,
+      categorias:        req.query.categorias        as string | undefined,
       busqueda:          req.query.busqueda          as string | undefined,
       codigo_barras:     req.query.codigo_barras     as string | undefined,
       en_oferta:         req.query.en_oferta === 'true' ? true : req.query.en_oferta === 'false' ? false : undefined,

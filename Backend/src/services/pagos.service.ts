@@ -14,6 +14,7 @@ const sdkPayway = require('sdk-node-payway') as {
 
 import * as pedidosRepo   from '../repositories/pedidos.repository';
 import * as productosRepo from '../repositories/productos.repository';
+import * as facturacionService from './facturacion.service';
 import type { Pedido, FraudData } from '../types';
 
 function crearSDK() {
@@ -118,6 +119,7 @@ export async function procesarPago(
 
   if (pagoResult.status === 'approved') {
     await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: pagoResult.pw_payment_id });
+    await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
   } else if (pagoResult.status === 'rejected' || pagoResult.status === 'cancelled') {
     if (pedido.estado === 'PendienteDePago') {
       const motivo = pagoResult.status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
@@ -247,6 +249,7 @@ export async function procesarNotificacion(body: Record<string, unknown>): Promi
 
   if (status === 'approved') {
     await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: paymentId || undefined });
+    await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
   } else if (status === 'rejected' || status === 'cancelled') {
     const motivo = status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
     await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });

@@ -158,6 +158,10 @@ router.post(
  *         schema: { type: string, format: uuid }
  *         description: Filtrar por ID de categoría
  *       - in: query
+ *         name: categorias
+ *         schema: { type: string }
+ *         description: Lista de IDs de categoría separados por coma (OR entre ellas, se combina con `categoria` si ambos vienen)
+ *       - in: query
  *         name: codigo_barras
  *         schema: { type: string }
  *       - in: query

@@ -75,3 +75,10 @@ export async function cancelarPedidoAdmin(req: Request, res: Response, next: Nex
     res.json(pedido);
   } catch (err) { next(err); }
 }
+
+export async function reintentarFactura(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const pedido = await pedidosService.reintentarFactura(req.params.id);
+    res.json(pedido);
+  } catch (err) { next(err); }
+}

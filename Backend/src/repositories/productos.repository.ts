@@ -29,6 +29,7 @@ function mapearProducto(row: Record<string, unknown>): Producto {
     creado_en:         row.creado_en as string,
     es_venta_libre:    row.es_venta_libre !== false,
     peso_gramos:       Number(row.peso_gramos ?? 500),
+    alicuota_iva:      Number(row.alicuota_iva ?? 21),
     categoria: row.categoria
       ? {
           id:       (row.categoria as Record<string, unknown>).id as string,
@@ -54,13 +55,17 @@ export async function encontrarTodos(filtros: FiltrosProducto): Promise<{ datos:
     query = query.eq('es_venta_libre', true);
   }
 
-  if (filtros.categoria) {
+  const categoriaIds = [
+    ...(filtros.categoria ? [filtros.categoria] : []),
+    ...(filtros.categorias ? filtros.categorias.split(',').filter(Boolean) : []),
+  ];
+  if (categoriaIds.length > 0) {
     const { data: todasCats } = await supabase
       .from('categories')
       .select('id, id_padre');
 
     const todas = todasCats ?? [];
-    const ids = recopilarDescendientes(filtros.categoria, todas);
+    const ids = [...new Set(categoriaIds.flatMap(id => recopilarDescendientes(id, todas)))];
     query = query.in('categoria_id', ids);
   }
 
@@ -145,6 +150,7 @@ export async function crear(dto: CrearProductoDTO): Promise<Producto> {
       imagenes:          dto.imagenes           ?? [],
       es_venta_libre:    dto.es_venta_libre     ?? true,
       peso_gramos:       dto.peso_gramos        ?? 500,
+      alicuota_iva:      dto.alicuota_iva       ?? 21,
     })
     .select('*, categoria:categories(*)')
     .single();
@@ -169,6 +175,7 @@ export async function actualizar(id: string, dto: ActualizarProductoDTO): Promis
   if (dto.imagenes          !== undefined) cambios.imagenes          = dto.imagenes;
   if (dto.es_venta_libre   !== undefined) cambios.es_venta_libre   = dto.es_venta_libre;
   if (dto.peso_gramos      !== undefined) cambios.peso_gramos      = dto.peso_gramos;
+  if (dto.alicuota_iva     !== undefined) cambios.alicuota_iva     = dto.alicuota_iva;
 
   const { data, error } = await supabase
     .from('products')
