@@ -209,7 +209,7 @@ export async function generarCheckoutHosted(
         return;
       }
 
-      const paymentId = result?.payment_id ?? result?.id;
+      let paymentId = result?.payment_id ?? result?.id;
       const baseUrl   = env === 'production'
         ? 'https://live.decidir.com/web/checkout/'
         : 'https://developers.decidir.com/web/checkout/';
@@ -220,6 +220,13 @@ export async function generarCheckoutHosted(
       if (!checkoutUrl) {
         reject(new Error(`No se recibió URL de checkout. Respuesta: ${JSON.stringify(result)}`));
         return;
+      }
+
+      // La respuesta del link de checkout a veces no trae payment_id/id explícito
+      // (solo payment_link) — el último segmento del link ES el identificador del pago.
+      if (!paymentId) {
+        const match = String(checkoutUrl).match(/\/checkout\/([^/?#]+)/);
+        if (match) paymentId = match[1];
       }
 
       // Guardar el payment_id para poder identificar el pedido cuando llegue la notificación
