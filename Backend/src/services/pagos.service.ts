@@ -92,7 +92,7 @@ function buildFraudDetection(pedido: Pedido, fraudData: FraudData, amountCentavo
   };
 }
 
-async function aplicarResultadoPago(pedido: Pedido, status: string, paymentId: string): Promise<void> {
+export async function aplicarResultadoPago(pedido: Pedido, status: string, paymentId: string): Promise<void> {
   if (status === 'approved') {
     await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: paymentId || undefined });
     await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
@@ -166,7 +166,8 @@ export async function generarCheckoutHosted(
   const cancelUrl      = `${baseUrl}/pago/cancelado?pedido=${pedido.id}`;
   // Payway requiere notifications_url — cuando el backend corre en localhost usar la URL pública desplegada
   const publicBackUrl = process.env.BACKEND_PUBLIC_URL ?? backUrl;
-  const notifUrl      = `${publicBackUrl}/api/pagos/notificacion`;
+  const webhookSecret  = process.env.PAYWAY_WEBHOOK_SECRET ?? '';
+  const notifUrl       = `${publicBackUrl}/api/pagos/notificacion?secret=${encodeURIComponent(webhookSecret)}`;
 
   const productosPayway = items.map((item, idx) => ({
     id:          idx + 1,

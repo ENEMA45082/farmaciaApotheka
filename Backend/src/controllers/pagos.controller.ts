@@ -106,6 +106,13 @@ export async function verificarEstado(req: Request, res: Response, next: NextFun
 }
 
 export async function notificacion(req: Request, res: Response) {
+  const secretEsperado = process.env.PAYWAY_WEBHOOK_SECRET;
+  if (secretEsperado && req.query.secret !== secretEsperado) {
+    console.error('[Payway Notificacion] secreto inválido o ausente — posible intento de forjado. IP:', req.ip);
+    res.status(401).json({ error: 'No autorizado' });
+    return;
+  }
+
   console.log('[Payway Notificacion] body recibido:', JSON.stringify(req.body));
   try {
     await pagosService.procesarNotificacion(req.body as Record<string, unknown>);

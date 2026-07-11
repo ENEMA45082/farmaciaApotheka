@@ -17,6 +17,7 @@ import direccionesRoutes   from './routes/direcciones.routes';
 import favoritosRoutes     from './routes/favoritos.routes';
 import envioRoutes         from './routes/envio.routes';
 import pagosRoutes         from './routes/pagos.routes';
+import facturasRoutes      from './routes/facturas.routes';
 import { errorHandler }    from './middlewares/errorHandler';
 
 dotenv.config();
@@ -50,7 +51,7 @@ app.use(express.json());
 
 app.get('/health', async (_req, res) => {
   try {
-    const { error } = await supabase.from('productos').select('id').limit(1);
+    const { error } = await supabase.from('products').select('id').limit(1);
     if (error) throw error;
     res.json({ estado: 'ok', db: 'conectada' });
   } catch {
@@ -70,6 +71,7 @@ app.use('/api/direcciones', direccionesRoutes);
 app.use('/api/favoritos',   favoritosRoutes);
 app.use('/api/envio',       envioRoutes);
 app.use('/api/pagos',       pagosLimiter, pagosRoutes);
+app.use('/api/facturas',    facturasRoutes);
 
 app.use(errorHandler);
 

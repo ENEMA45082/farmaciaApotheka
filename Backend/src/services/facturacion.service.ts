@@ -46,7 +46,7 @@ function isoADDMMYYYY(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
-async function calcularDesgloseIva(pedido: Pedido) {
+export async function calcularDesgloseIva(pedido: Pedido) {
   const porAlicuota = new Map<number, { alicuota: number; neto: number; iva: number }>();
 
   for (const detalle of pedido.detalles ?? []) {

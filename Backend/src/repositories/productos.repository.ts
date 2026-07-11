@@ -24,7 +24,7 @@ function mapearProducto(row: Record<string, unknown>): Producto {
     imagenes:          (row.imagenes as string[]) ?? [],
     creado_en:         row.creado_en as string,
     es_venta_libre:    row.es_venta_libre !== false,
-    peso_gramos:       Number(row.peso_gramos ?? 500),
+    peso_gramos:       Number(row.peso_gramos ?? 0),
     alicuota_iva:      Number(row.alicuota_iva ?? 21),
     categoria: row.categoria
       ? {
@@ -145,7 +145,7 @@ export async function crear(dto: CrearProductoDTO): Promise<Producto> {
       fecha_vencimiento: dto.fecha_vencimiento  ?? null,
       imagenes:          dto.imagenes           ?? [],
       es_venta_libre:    dto.es_venta_libre     ?? true,
-      peso_gramos:       dto.peso_gramos        ?? 500,
+      peso_gramos:       dto.peso_gramos        ?? 0,
       alicuota_iva:      dto.alicuota_iva       ?? 21,
     })
     .select('*, categoria:categories(*)')

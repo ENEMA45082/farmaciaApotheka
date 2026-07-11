@@ -14,14 +14,15 @@ import {
 } from '../api/productos.api';
 import type { PreviewImportarPreciosResponse, ResultadoConfirmarPrecios } from '../api/productos.api';
 import { fetchPedidosAdmin, fetchPedidoAdminPorId, cambiarEstadoPedido, reintentarFactura } from '../api/pedidos.api';
-import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO, Pedido, PedidoDetalleAdmin } from '../types';
+import { fetchFacturasConProblemas } from '../api/facturas.api';
+import type { Producto, Categoria, CrearProductoDTO, ActualizarProductoDTO, Pedido, PedidoDetalleAdmin, FacturaConProblema } from '../types';
 import { formatPrecio } from '../types';
 import { ESTADOS_FINALES, puedeTransicionar } from '../utils/estadosPedido';
 import { CancelarPedidoModal } from '../components/admin/CancelarPedidoModal';
 import { EliminarProductoModal } from '../components/admin/EliminarProductoModal';
 import { EliminarCategoriaModal } from '../components/admin/EliminarCategoriaModal';
 
-type Tab = 'productos' | 'categorias' | 'pedidos' | 'importar_precios';
+type Tab = 'productos' | 'categorias' | 'pedidos' | 'importar_precios' | 'facturas';
 
 const ESTADOS_PEDIDO: { value: Pedido['estado']; label: string }[] = [
   { value: 'PendienteDePago',  label: 'Pendiente de pago' },
@@ -141,7 +142,7 @@ const FORM_PRODUCTO_VACIO = {
   precio_oferta: '',
   porcentaje_oferta: '',
   es_venta_libre: true,
-  peso_gramos: '500',
+  peso_gramos: '',
   alicuota_iva: '21',
 };
 
@@ -264,7 +265,7 @@ export function AdminPage() {
       precio_oferta: p.precio_oferta != null ? String(p.precio_oferta) : '',
       porcentaje_oferta: p.porcentaje_oferta != null ? String(p.porcentaje_oferta) : '',
       es_venta_libre: p.es_venta_libre,
-      peso_gramos: String(p.peso_gramos ?? 500),
+      peso_gramos: p.peso_gramos ? String(p.peso_gramos) : '',
       alicuota_iva: String(p.alicuota_iva ?? 21),
     });
     setImagenesExistentes(
@@ -319,7 +320,7 @@ export function AdminPage() {
         codigo_barras: formProducto.codigo_barras.trim() || undefined,
         fecha_vencimiento: formProducto.fecha_vencimiento || undefined,
         es_venta_libre: formProducto.es_venta_libre,
-        peso_gramos: formProducto.peso_gramos !== '' ? parseInt(formProducto.peso_gramos) : 500,
+        peso_gramos: formProducto.peso_gramos !== '' ? parseInt(formProducto.peso_gramos) : 0,
         alicuota_iva: formProducto.alicuota_iva !== '' ? parseFloat(formProducto.alicuota_iva) : 21,
       };
 
@@ -407,6 +408,21 @@ export function AdminPage() {
       .then(setPedidosAdmin)
       .catch(() => setErrorPedidos('No se pudieron cargar los pedidos.'))
       .finally(() => setCargandoPedidos(false));
+  }, [tabActiva]);
+
+  // — Facturas con problemas (admin) —
+  const [facturasConProblemas, setFacturasConProblemas] = useState<FacturaConProblema[]>([]);
+  const [cargandoFacturas, setCargandoFacturas] = useState(false);
+  const [errorFacturas, setErrorFacturas] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tabActiva !== 'facturas') return;
+    setCargandoFacturas(true);
+    setErrorFacturas(null);
+    fetchFacturasConProblemas()
+      .then(setFacturasConProblemas)
+      .catch(() => setErrorFacturas('No se pudieron cargar las facturas.'))
+      .finally(() => setCargandoFacturas(false));
   }, [tabActiva]);
 
   async function handleCambiarEstado(pedidoId: string, nuevoEstado: string) {
@@ -645,6 +661,12 @@ export function AdminPage() {
           onClick={() => setTabActiva('importar_precios')}
         >
           Importar precios
+        </button>
+        <button
+          className={`admin-tab ${tabActiva === 'facturas' ? 'admin-tab--activa' : ''}`}
+          onClick={() => setTabActiva('facturas')}
+        >
+          Facturas con problemas{facturasConProblemas.length > 0 ? ` (${facturasConProblemas.length})` : ''}
         </button>
       </div>
 
@@ -1769,6 +1791,65 @@ export function AdminPage() {
                 <button className="btn btn--primary" onClick={resetImport}>
                   Importar otro archivo
                 </button>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {tabActiva === 'facturas' && (
+        <motion.div
+          className="admin-section"
+          key="facturas"
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0, transition: { duration: 0.22 } }}
+          exit={{ opacity: 0, x: -10, transition: { duration: 0.15 } }}
+        >
+          <div className="admin-table-card">
+            <h2>Facturas con problemas ({facturasConProblemas.length})</h2>
+            <p style={{ color: '#666', fontSize: 13, marginTop: -8, marginBottom: 12 }}>
+              Facturas que fallaron al emitirse ante ARCA, o que se emitieron bien pero el PDF no se generó.
+            </p>
+
+            {cargandoFacturas && <p className="admin-loading">Cargando facturas...</p>}
+            {errorFacturas && <div className="admin-error">{errorFacturas}</div>}
+
+            {!cargandoFacturas && facturasConProblemas.length === 0 && !errorFacturas && (
+              <p className="admin-empty">No hay facturas con problemas pendientes. 🎉</p>
+            )}
+
+            {facturasConProblemas.length > 0 && (
+              <div className="admin-table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Pedido</th>
+                      <th>Problema</th>
+                      <th>Detalle</th>
+                      <th>Intentos</th>
+                      <th>Actualizado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {facturasConProblemas.map(f => (
+                      <tr key={f.id}>
+                        <td>{f.pedido_id}</td>
+                        <td>
+                          {f.problema === 'error' ? (
+                            <span style={{ color: '#dc2626', fontWeight: 600 }}>Error al emitir</span>
+                          ) : (
+                            <span style={{ color: '#b45309', fontWeight: 600 }}>Sin PDF</span>
+                          )}
+                        </td>
+                        <td style={{ maxWidth: 380, whiteSpace: 'pre-wrap', fontSize: 12.5 }}>
+                          {f.problema === 'error' ? (f.respuesta_error ?? '—') : 'CAE emitido correctamente, pero el PDF no se generó/subió.'}
+                        </td>
+                        <td>{f.intentos}</td>
+                        <td>{formatFechaPedido(f.actualizado_en)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

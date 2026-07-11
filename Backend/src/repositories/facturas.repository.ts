@@ -81,6 +81,29 @@ export async function encontrarPorId(id: string): Promise<Factura | null> {
   return mapearFactura(data);
 }
 
+export async function encontrarConError(): Promise<Factura[]> {
+  const { data, error } = await supabase
+    .from('facturas')
+    .select('*')
+    .eq('estado', 'error')
+    .order('actualizado_en', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).map(mapearFactura);
+}
+
+export async function encontrarEmitidasSinPdf(): Promise<Factura[]> {
+  const { data, error } = await supabase
+    .from('facturas')
+    .select('*')
+    .eq('estado', 'emitida')
+    .is('pdf_url', null)
+    .order('actualizado_en', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).map(mapearFactura);
+}
+
 export async function encontrarPorPedidoId(pedidoId: string): Promise<Factura | null> {
   const { data, error } = await supabase
     .from('facturas')

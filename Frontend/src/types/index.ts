@@ -244,6 +244,10 @@ export interface Factura {
   actualizado_en: string;
 }
 
+export interface FacturaConProblema extends Factura {
+  problema: 'error' | 'sin_pdf';
+}
+
 export interface CrearPedidoDTO {
   items: {
     producto_id: string;
