@@ -83,9 +83,64 @@ ${imagen ? `<meta name="twitter:image" content="${imagen}" />` : ''}
 </html>`;
 }
 
+// ---------- JSON-LD (schema.org) ----------
+
+function jsonLdScript(data: Record<string, unknown>): string {
+  return `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
+}
+
+function productJsonLd(producto: Producto, url: string): Record<string, unknown> {
+  const imagen = producto.imagenes?.[0] || producto.imagen_url || undefined;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: producto.nombre,
+    description: truncarDescripcion(producto.descripcion, 500),
+    ...(imagen ? { image: imagen } : {}),
+    url,
+    offers: {
+      '@type': 'Offer',
+      price: precioEfectivo(producto),
+      priceCurrency: 'ARS',
+      availability: producto.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url,
+    },
+  };
+}
+
+function pharmacyJsonLd(): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Pharmacy',
+    name: 'Farmacia Apotheka',
+    url: `${SITE_URL}/`,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: 'San Jerónimo 248',
+      addressLocality: 'Córdoba',
+      addressCountry: 'AR',
+    },
+    telephone: '+54 351 835-4942',
+    openingHoursSpecification: [
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        opens: '08:30',
+        closes: '19:00',
+      },
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: ['Saturday'],
+        opens: '09:30',
+        closes: '13:30',
+      },
+    ],
+  };
+}
+
 // ---------- HTML completo para crawlers de busqueda (sin redirect) ----------
 
-function baseHead(titulo: string, descripcion: string, url: string, imagen?: string): string {
+function baseHead(titulo: string, descripcion: string, url: string, imagen?: string, jsonLd?: Record<string, unknown>[]): string {
   return `<meta charset="utf-8" />
 <title>${escapeHtml(titulo)}</title>
 <meta name="description" content="${escapeHtml(descripcion)}" />
@@ -98,7 +153,8 @@ ${imagen ? `<meta property="og:image" content="${escapeHtml(imagen)}" />` : ''}
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${escapeHtml(titulo)}" />
 <meta name="twitter:description" content="${escapeHtml(descripcion)}" />
-${imagen ? `<meta name="twitter:image" content="${escapeHtml(imagen)}" />` : ''}`;
+${imagen ? `<meta name="twitter:image" content="${escapeHtml(imagen)}" />` : ''}
+${(jsonLd ?? []).map(jsonLdScript).join('\n')}`;
 }
 
 function productoListItem(p: Producto): string {
@@ -116,7 +172,7 @@ function buildSearchProductHtml(producto: Producto, url: string): string {
   return `<!doctype html>
 <html lang="es">
 <head>
-${baseHead(titulo, descripcion, url, imagen)}
+${baseHead(titulo, descripcion, url, imagen, [productJsonLd(producto, url)])}
 </head>
 <body>
 <a href="${SITE_URL}/">Volver al catálogo</a>
@@ -134,11 +190,12 @@ function buildSearchListHtml(opts: {
   descripcion: string;
   url: string;
   productos: Producto[];
+  jsonLd?: Record<string, unknown>[];
 }): string {
   return `<!doctype html>
 <html lang="es">
 <head>
-${baseHead(opts.titulo, opts.descripcion, opts.url)}
+${baseHead(opts.titulo, opts.descripcion, opts.url, undefined, opts.jsonLd)}
 </head>
 <body>
 <h1>${escapeHtml(opts.titulo)}</h1>
@@ -208,6 +265,7 @@ export default async function middleware(request: Request): Promise<Response> {
           descripcion: 'Farmacia Apotheka: compra online de productos de farmacia con entrega y retiro en sucursal.',
           url: url.toString(),
           productos,
+          jsonLd: [pharmacyJsonLd()],
         }),
         { headers: { 'content-type': 'text/html; charset=utf-8', ...BOT_CACHE_HEADERS } }
       );
