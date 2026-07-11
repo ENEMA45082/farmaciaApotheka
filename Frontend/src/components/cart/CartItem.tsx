@@ -24,6 +24,9 @@ export function CartItem({ item }: Props) {
         src={producto.imagen_url ?? '/placeholder.png'}
         alt={producto.nombre}
         className="cart-item__image"
+        width={64}
+        height={64}
+        loading="lazy"
       />
       <div className="cart-item__info">
         <p className="cart-item__name">{producto.nombre}</p>

@@ -329,7 +329,7 @@ export function EnvioPage() {
             <ul className="checkout-items-lista">
               {items.map(i => (
                 <li key={i.producto.id} className="checkout-item">
-                  <img src={i.producto.imagen_url ?? '/placeholder.png'} alt={i.producto.nombre} className="checkout-item__img" />
+                  <img src={i.producto.imagen_url ?? '/placeholder.png'} alt={i.producto.nombre} className="checkout-item__img" width={48} height={48} loading="lazy" />
                   <div className="checkout-item__info">
                     <span className="checkout-item__nombre">{i.producto.nombre}</span>
                     <span className="checkout-item__cant">x{i.cantidad}</span>

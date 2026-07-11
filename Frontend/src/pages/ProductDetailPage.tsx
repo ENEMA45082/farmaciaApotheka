@@ -53,6 +53,8 @@ export function ProductDetailPage() {
               src={galeria[imagenActiva] ?? '/placeholder.png'}
               alt={producto.nombre}
               className="product-gallery__main"
+              width={800}
+              height={420}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -66,6 +68,9 @@ export function ProductDetailPage() {
                   key={url}
                   src={url}
                   alt=""
+                  width={70}
+                  height={70}
+                  loading="lazy"
                   className={`product-gallery__thumb ${i === imagenActiva ? 'product-gallery__thumb--activa' : ''}`}
                   onClick={() => setImagenActiva(i)}
                 />

@@ -36,6 +36,9 @@ export function ProductCard({ producto }: Props) {
           src={producto.imagen_url ?? '/placeholder.png'}
           alt={producto.nombre}
           className="product-card__image"
+          width={400}
+          height={180}
+          loading="lazy"
         />
       </Link>
 
