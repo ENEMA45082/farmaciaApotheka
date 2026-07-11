@@ -23,6 +23,10 @@ dotenv.config();
 
 const app = express();
 
+// Vercel corre el backend detrás de su proxy y agrega X-Forwarded-For/Proto —
+// sin esto, express-rate-limit no puede identificar la IP real del cliente.
+app.set('trust proxy', 1);
+
 const origenesPermitidos = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',')
   .map(s => s.trim());
