@@ -161,7 +161,9 @@ ${(jsonLd ?? []).map(jsonLdScript).join('\n')}`;
 function productoListItem(p: Producto): string {
   const nombre = escapeHtml(p.nombre);
   const precio = precioEfectivo(p).toFixed(2);
-  return `<li><a href="${SITE_URL}/productos/${p.id}">${nombre}</a> — $${precio}</li>`;
+  const imagen = p.imagenes?.[0] || p.imagen_url;
+  const img = imagen ? `<img src="${escapeHtml(imagen)}" alt="${nombre}" width="48" height="48" />` : '';
+  return `<li>${img}<a href="${SITE_URL}/productos/${p.id}">${nombre}</a> — $${precio}</li>`;
 }
 
 function buildSearchProductHtml(producto: Producto, url: string): string {
@@ -177,6 +179,7 @@ ${baseHead(titulo, descripcion, url, imagen, [productJsonLd(producto, url)])}
 </head>
 <body>
 <a href="${SITE_URL}/">Volver al catálogo</a>
+${imagen ? `<img src="${escapeHtml(imagen)}" alt="${escapeHtml(producto.nombre)}" />` : ''}
 <h1>${escapeHtml(producto.nombre)}</h1>
 ${producto.categoria ? `<p>${escapeHtml(producto.categoria.nombre)}</p>` : ''}
 ${producto.descripcion ? `<p>${escapeHtml(producto.descripcion)}</p>` : ''}
