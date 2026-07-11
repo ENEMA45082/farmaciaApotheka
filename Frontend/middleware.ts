@@ -118,6 +118,7 @@ function pharmacyJsonLd(): Record<string, unknown> {
       '@type': 'PostalAddress',
       streetAddress: 'San Jerónimo 248',
       addressLocality: 'Córdoba',
+      postalCode: 'X5000AGF',
       addressCountry: 'AR',
     },
     telephone: '+54 351 835-4942',
