@@ -91,6 +91,20 @@ export async function checkout(req: Request, res: Response, next: NextFunction) 
   }
 }
 
+export async function verificarEstado(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { user } = req as AuthRequest;
+    const { pedidoId } = req.params as { pedidoId: string };
+
+    // obtenerPorId ya verifica 404 y ownership (403)
+    const pedido = await pedidosService.obtenerPorId(pedidoId, user.id);
+    const actualizado = await pagosService.verificarEstadoPago(pedido);
+    res.json(actualizado);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function notificacion(req: Request, res: Response) {
   console.log('[Payway Notificacion] body recibido:', JSON.stringify(req.body));
   try {

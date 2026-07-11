@@ -7,14 +7,16 @@ const sdkPayway = require('sdk-node-payway') as {
     grouper: string,
     developer: string,
   ) => {
-    payment:  (args: Record<string, unknown>, cb: (result: any, err: any) => void) => void;
-    checkout: (args: Record<string, unknown>, cb: (result: any, err: any) => void) => void;
+    payment:     (args: Record<string, unknown>, cb: (result: any, err: any) => void) => void;
+    checkout:    (args: Record<string, unknown>, cb: (result: any, err: any) => void) => void;
+    paymentInfo: (paymentId: string, cb: (result: any, err: any) => void) => void;
   };
 };
 
 import * as pedidosRepo   from '../repositories/pedidos.repository';
 import * as productosRepo from '../repositories/productos.repository';
 import * as facturacionService from './facturacion.service';
+import { AppError } from '../errors/AppError';
 import type { Pedido, FraudData } from '../types';
 
 function crearSDK() {
@@ -83,6 +85,21 @@ function buildFraudDetection(pedido: Pedido, fraudData: FraudData, amountCentavo
   };
 }
 
+async function aplicarResultadoPago(pedido: Pedido, status: string, paymentId: string): Promise<void> {
+  if (status === 'approved') {
+    await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: paymentId || undefined });
+    await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
+  } else if (status === 'rejected' || status === 'cancelled') {
+    const motivo = status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
+    await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });
+    for (const detalle of pedido.detalles ?? []) {
+      if (detalle.producto_id) {
+        await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);
+      }
+    }
+  }
+}
+
 export async function procesarPago(
   pedido: Pedido,
   token: string,
@@ -117,19 +134,8 @@ export async function procesarPago(
     );
   });
 
-  if (pagoResult.status === 'approved') {
-    await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: pagoResult.pw_payment_id });
-    await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
-  } else if (pagoResult.status === 'rejected' || pagoResult.status === 'cancelled') {
-    if (pedido.estado === 'PendienteDePago') {
-      const motivo = pagoResult.status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
-      await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });
-      for (const detalle of pedido.detalles ?? []) {
-        if (detalle.producto_id) {
-          await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);
-        }
-      }
-    }
+  if (pedido.estado === 'PendienteDePago') {
+    await aplicarResultadoPago(pedido, pagoResult.status, pagoResult.pw_payment_id);
   }
 
   return pagoResult;
@@ -217,13 +223,18 @@ export async function generarCheckoutHosted(
       }
 
       // Guardar el payment_id para poder identificar el pedido cuando llegue la notificación
+      // (o para poder verificarlo activamente al volver a /pago/exitoso) — se espera antes
+      // de resolver para que quede grabado antes de que el usuario pueda volver de Payway.
       if (paymentId) {
-        pedidosRepo.guardarPwPaymentId(pedido.id, String(paymentId)).catch(err =>
-          console.error('[Payway checkout] Error guardando pw_payment_id:', err),
-        );
+        pedidosRepo.guardarPwPaymentId(pedido.id, String(paymentId))
+          .then(() => resolve(checkoutUrl))
+          .catch(err => {
+            console.error('[Payway checkout] Error guardando pw_payment_id:', err);
+            resolve(checkoutUrl);
+          });
+      } else {
+        resolve(checkoutUrl);
       }
-
-      resolve(checkoutUrl);
     });
   });
 }
@@ -259,16 +270,33 @@ export async function procesarNotificacion(body: Record<string, unknown>): Promi
 
   console.log(`[Payway Notificacion] procesando pedido ${pedido.id}: status=${status}`);
 
-  if (status === 'approved') {
-    await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: paymentId || undefined });
-    await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
-  } else if (status === 'rejected' || status === 'cancelled') {
-    const motivo = status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
-    await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });
-    for (const detalle of pedido.detalles ?? []) {
-      if (detalle.producto_id) {
-        await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);
-      }
-    }
+  await aplicarResultadoPago(pedido, status, paymentId);
+}
+
+// Consulta activa a Payway: se usa cuando el usuario cae en /pago/exitoso, en vez
+// de depender exclusivamente de que Payway llegue a mandar el webhook (poco confiable
+// en la práctica — ver notificaciones que nunca llegan pese a notifications_url correcta).
+export async function verificarEstadoPago(pedido: Pedido): Promise<Pedido> {
+  if (pedido.estado !== 'PendienteDePago' || !pedido.pw_payment_id) {
+    return pedido;
   }
+
+  const info = await new Promise<any>((resolve, reject) => {
+    paywaySDK.paymentInfo(pedido.pw_payment_id as string, (result: any, err: any) => {
+      console.log('[Payway verificarEstado] result:', JSON.stringify(result));
+      console.log('[Payway verificarEstado] err:', JSON.stringify(err));
+      if (!result && err) return reject(new Error(JSON.stringify(err)));
+      resolve(result);
+    });
+  });
+
+  const status = String(info?.status ?? '');
+  if (!status) {
+    throw new AppError('No se pudo obtener el estado del pago desde Payway', 502);
+  }
+
+  await aplicarResultadoPago(pedido, status, pedido.pw_payment_id as string);
+
+  const actualizado = await pedidosRepo.encontrarPorId(pedido.id);
+  return actualizado ?? pedido;
 }
