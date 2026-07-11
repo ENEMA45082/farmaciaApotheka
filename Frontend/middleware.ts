@@ -1,14 +1,34 @@
 import { next } from '@vercel/edge';
 
-const BOT_UA_REGEX = /whatsapp|facebookexternalhit|twitterbot|linkedinbot|slackbot|telegrambot|discordbot/i;
+const SEARCH_BOT_UA_REGEX = /googlebot|bingbot/i;
+const SOCIAL_BOT_UA_REGEX = /whatsapp|facebookexternalhit|twitterbot|linkedinbot|slackbot|telegrambot|discordbot/i;
 const PRODUCTO_ID_REGEX = /^\/productos\/([^/]+)/;
 
-interface ProductoPreview {
+const SITE_URL = (process.env.VITE_SITE_URL ?? 'https://farmaciaapotheka.com.ar').replace(/\/$/, '');
+
+const BOT_CACHE_HEADERS = {
+  'cache-control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+};
+
+interface Categoria {
+  nombre: string;
+}
+
+interface Producto {
+  id: string;
   nombre: string;
   descripcion: string | null;
   precio: number;
+  en_oferta: boolean;
+  precio_oferta: number | null;
+  stock: number;
   imagen_url: string | null;
   imagenes: string[];
+  categoria?: Categoria;
+}
+
+interface ProductosPaginados {
+  datos: Producto[];
 }
 
 function escapeHtml(valor: string): string {
@@ -26,7 +46,13 @@ function truncarDescripcion(descripcion: string | null, maxLength = 150): string
     : descripcion;
 }
 
-function buildBotHtml(producto: ProductoPreview, url: string): string {
+function precioEfectivo(p: Producto): number {
+  return p.en_oferta && p.precio_oferta != null ? p.precio_oferta : p.precio;
+}
+
+// ---------- Snippet liviano para bots de redes sociales (solo /productos/:id) ----------
+
+function buildSocialProductHtml(producto: Producto, url: string): string {
   const titulo = escapeHtml(producto.nombre);
   const descripcion = escapeHtml(truncarDescripcion(producto.descripcion));
   const imagen = escapeHtml(producto.imagenes?.[0] || producto.imagen_url || '');
@@ -42,7 +68,7 @@ function buildBotHtml(producto: ProductoPreview, url: string): string {
 ${imagen ? `<meta property="og:image" content="${imagen}" />` : ''}
 <meta property="og:url" content="${urlSegura}" />
 <meta property="og:type" content="product" />
-<meta property="product:price:amount" content="${producto.precio}" />
+<meta property="product:price:amount" content="${precioEfectivo(producto)}" />
 <meta property="product:price:currency" content="ARS" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${titulo}" />
@@ -57,31 +83,155 @@ ${imagen ? `<meta name="twitter:image" content="${imagen}" />` : ''}
 </html>`;
 }
 
-export default async function middleware(request: Request) {
-  const userAgent = request.headers.get('user-agent') ?? '';
-  if (!BOT_UA_REGEX.test(userAgent)) {
-    return next();
-  }
+// ---------- HTML completo para crawlers de busqueda (sin redirect) ----------
 
-  const url = new URL(request.url);
-  const match = url.pathname.match(PRODUCTO_ID_REGEX);
-  if (!match) return next();
+function baseHead(titulo: string, descripcion: string, url: string, imagen?: string): string {
+  return `<meta charset="utf-8" />
+<title>${escapeHtml(titulo)}</title>
+<meta name="description" content="${escapeHtml(descripcion)}" />
+<meta property="og:type" content="website" />
+<meta property="og:locale" content="es_AR" />
+<meta property="og:title" content="${escapeHtml(titulo)}" />
+<meta property="og:description" content="${escapeHtml(descripcion)}" />
+<meta property="og:url" content="${escapeHtml(url)}" />
+${imagen ? `<meta property="og:image" content="${escapeHtml(imagen)}" />` : ''}
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="${escapeHtml(titulo)}" />
+<meta name="twitter:description" content="${escapeHtml(descripcion)}" />
+${imagen ? `<meta name="twitter:image" content="${escapeHtml(imagen)}" />` : ''}`;
+}
+
+function productoListItem(p: Producto): string {
+  const nombre = escapeHtml(p.nombre);
+  const precio = precioEfectivo(p).toFixed(2);
+  return `<li><a href="${SITE_URL}/productos/${p.id}">${nombre}</a> — $${precio}</li>`;
+}
+
+function buildSearchProductHtml(producto: Producto, url: string): string {
+  const titulo = `${producto.nombre} | Farmacia Apotheka`;
+  const descripcion = truncarDescripcion(producto.descripcion, 160);
+  const imagen = producto.imagenes?.[0] || producto.imagen_url || undefined;
+  const disponibilidad = producto.stock > 0 ? `Stock disponible: ${producto.stock}` : 'Sin stock';
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+${baseHead(titulo, descripcion, url, imagen)}
+</head>
+<body>
+<a href="${SITE_URL}/">Volver al catálogo</a>
+<h1>${escapeHtml(producto.nombre)}</h1>
+${producto.categoria ? `<p>${escapeHtml(producto.categoria.nombre)}</p>` : ''}
+${producto.descripcion ? `<p>${escapeHtml(producto.descripcion)}</p>` : ''}
+<p>$${precioEfectivo(producto).toFixed(2)}</p>
+<p>${disponibilidad}</p>
+</body>
+</html>`;
+}
+
+function buildSearchListHtml(opts: {
+  titulo: string;
+  descripcion: string;
+  url: string;
+  productos: Producto[];
+}): string {
+  return `<!doctype html>
+<html lang="es">
+<head>
+${baseHead(opts.titulo, opts.descripcion, opts.url)}
+</head>
+<body>
+<h1>${escapeHtml(opts.titulo)}</h1>
+<p>${escapeHtml(opts.descripcion)}</p>
+<ul>
+${opts.productos.map(productoListItem).join('\n')}
+</ul>
+</body>
+</html>`;
+}
+
+// ---------- Fetch helpers ----------
+
+async function fetchProducto(apiBase: string, id: string): Promise<Producto | null> {
+  const res = await fetch(`${apiBase}/productos/${id}`);
+  if (!res.ok) return null;
+  return (await res.json()) as Producto;
+}
+
+async function fetchProductos(apiBase: string, params: string): Promise<Producto[]> {
+  const res = await fetch(`${apiBase}/productos?${params}`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as ProductosPaginados;
+  return data.datos ?? [];
+}
+
+// ---------- Middleware ----------
+
+export default async function middleware(request: Request): Promise<Response> {
+  const userAgent = request.headers.get('user-agent') ?? '';
+  const esBotBusqueda = SEARCH_BOT_UA_REGEX.test(userAgent);
+  const esBotSocial = SOCIAL_BOT_UA_REGEX.test(userAgent);
+
+  if (!esBotBusqueda && !esBotSocial) return next();
 
   const apiBase = process.env.VITE_API_URL;
   if (!apiBase) return next();
 
-  try {
-    const res = await fetch(`${apiBase}/productos/${match[1]}`);
-    if (!res.ok) return next();
+  const url = new URL(request.url);
 
-    const producto = (await res.json()) as ProductoPreview;
-    const html = buildBotHtml(producto, url.toString());
-    return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+  try {
+    const matchProducto = url.pathname.match(PRODUCTO_ID_REGEX);
+
+    if (matchProducto) {
+      const producto = await fetchProducto(apiBase, matchProducto[1]);
+      if (!producto) return next();
+
+      if (esBotBusqueda) {
+        return new Response(buildSearchProductHtml(producto, url.toString()), {
+          headers: { 'content-type': 'text/html; charset=utf-8', ...BOT_CACHE_HEADERS },
+        });
+      }
+      return new Response(buildSocialProductHtml(producto, url.toString()), {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    }
+
+    // Home y /ofertas solo se prerenderizan para bots de busqueda: los bots
+    // de redes sociales solo generan preview cards de producto.
+    if (!esBotBusqueda) return next();
+
+    if (url.pathname === '/') {
+      const productos = await fetchProductos(apiBase, 'limite=50');
+      return new Response(
+        buildSearchListHtml({
+          titulo: 'Farmacia Apotheka',
+          descripcion: 'Farmacia Apotheka: compra online de productos de farmacia con entrega y retiro en sucursal.',
+          url: url.toString(),
+          productos,
+        }),
+        { headers: { 'content-type': 'text/html; charset=utf-8', ...BOT_CACHE_HEADERS } }
+      );
+    }
+
+    if (url.pathname === '/ofertas') {
+      const productos = await fetchProductos(apiBase, 'limite=50&en_oferta=true');
+      return new Response(
+        buildSearchListHtml({
+          titulo: 'Ofertas | Farmacia Apotheka',
+          descripcion: 'Productos en oferta de Farmacia Apotheka.',
+          url: url.toString(),
+          productos,
+        }),
+        { headers: { 'content-type': 'text/html; charset=utf-8', ...BOT_CACHE_HEADERS } }
+      );
+    }
+
+    return next();
   } catch {
     return next();
   }
 }
 
 export const config = {
-  matcher: '/productos/:path*',
+  matcher: ['/', '/ofertas', '/productos/:path*'],
 };
