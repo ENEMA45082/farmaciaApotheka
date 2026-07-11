@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /estadisticas
+Disallow: /perfil
+Disallow: /pedidos
+Disallow: /direcciones
+Disallow: /favoritos
+Disallow: /checkout
+Disallow: /envio
+Disallow: /pagar
+Disallow: /pago
+Disallow: /login
+
+Sitemap: https://farmaciaapotheka.com.ar/sitemap.xml
