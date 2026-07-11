@@ -7,9 +7,16 @@ const sdkPayway = require('sdk-node-payway') as {
     grouper: string,
     developer: string,
   ) => {
-    payment:     (args: Record<string, unknown>, cb: (result: any, err: any) => void) => void;
-    checkout:    (args: Record<string, unknown>, cb: (result: any, err: any) => void) => void;
-    paymentInfo: (paymentId: string, cb: (result: any, err: any) => void) => void;
+    payment:        (args: Record<string, unknown>, cb: (result: any, err: any) => void) => void;
+    checkout:       (args: Record<string, unknown>, cb: (result: any, err: any) => void) => void;
+    paymentInfo:    (paymentId: string, cb: (result: any, err: any) => void) => void;
+    getAllPayments: (
+      offset: string | undefined,
+      pageSize: string | undefined,
+      siteOperationId: string | undefined,
+      merchantId: string | undefined,
+      cb: (result: any, err: any) => void,
+    ) => void;
   };
 };
 
@@ -283,13 +290,18 @@ export async function procesarNotificacion(body: Record<string, unknown>): Promi
 // Consulta activa a Payway: se usa cuando el usuario cae en /pago/exitoso, en vez
 // de depender exclusivamente de que Payway llegue a mandar el webhook (poco confiable
 // en la práctica — ver notificaciones que nunca llegan pese a notifications_url correcta).
+//
+// El id de pago que devuelve el link de checkout NO sirve para paymentInfo (probado:
+// devuelve not_found_error — es un hash del formulario, no un id de /payments). En vez
+// de depender de ese id, se busca el pago por site_transaction_id (= pedido.id), que es
+// el identificador que nosotros mismos le mandamos a Payway al crear el checkout.
 export async function verificarEstadoPago(pedido: Pedido): Promise<Pedido> {
-  if (pedido.estado !== 'PendienteDePago' || !pedido.pw_payment_id) {
+  if (pedido.estado !== 'PendienteDePago') {
     return pedido;
   }
 
   const info = await new Promise<any>((resolve, reject) => {
-    paywaySDK.paymentInfo(pedido.pw_payment_id as string, (result: any, err: any) => {
+    paywaySDK.getAllPayments(undefined, undefined, pedido.id, undefined, (result: any, err: any) => {
       console.log('[Payway verificarEstado] result:', JSON.stringify(result));
       console.log('[Payway verificarEstado] err:', JSON.stringify(err));
       if (!result && err) return reject(new Error(JSON.stringify(err)));
@@ -297,12 +309,26 @@ export async function verificarEstadoPago(pedido: Pedido): Promise<Pedido> {
     });
   });
 
-  const status = String(info?.status ?? '');
+  const lista: any[] = Array.isArray(info)          ? info
+    : Array.isArray(info?.payments)                 ? info.payments
+    : Array.isArray(info?.results)                  ? info.results
+    : Array.isArray(info?.data)                      ? info.data
+    : [];
+
+  const pago = lista.find(p => String(p?.site_transaction_id) === pedido.id);
+  if (!pago) {
+    // Todavía no hay registro del pago en Payway (puede no haberse completado, o replicación
+    // en curso) — se deja el pedido como está, el usuario puede reintentar más tarde.
+    return pedido;
+  }
+
+  const status    = String(pago.status ?? '');
+  const paymentId = String(pago.id ?? '');
   if (!status) {
     throw new AppError('No se pudo obtener el estado del pago desde Payway', 502);
   }
 
-  await aplicarResultadoPago(pedido, status, pedido.pw_payment_id as string);
+  await aplicarResultadoPago(pedido, status, paymentId);
 
   const actualizado = await pedidosRepo.encontrarPorId(pedido.id);
   return actualizado ?? pedido;
