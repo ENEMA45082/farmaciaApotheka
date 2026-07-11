@@ -8,10 +8,10 @@ import { iniciarCheckoutHosted } from '../api/pagos.api';
 import { precioEfectivo, formatPrecio } from '../types';
 import type { MetodoPago } from '../types';
 
-const CBU_FARMACIA   = '0720015500000000012345';
-const ALIAS_FARMACIA = 'FARMACIA.APOTHEKA';
-const BANCO_FARMACIA = 'Banco Galicia';
-const TITULAR        = 'Farmacia Apotheka SRL';
+const CBU_FARMACIA   = '0720066320000001483022';
+const ALIAS_FARMACIA = 'farmacia.apotheka';
+const BANCO_FARMACIA = 'Banco Santander';
+const TITULAR        = 'APOTHEKA SRL';
 
 export function PagarPage() {
   const { user, loading: authLoading } = useAuth();

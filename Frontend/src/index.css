@@ -1241,6 +1241,28 @@ img { max-width: 100%; display: block; }
 .metodo-envio-card__precio { font-weight: 700; font-size: 0.95rem; color: var(--navy); white-space: nowrap; }
 .metodo-envio-card__precio--gratis { color: #16a34a; }
 
+.metodo-envio-card--disabled {
+  cursor: default;
+  opacity: 0.6;
+  background: #f7f7f7;
+}
+.metodo-envio-card--disabled:hover { border-color: var(--border); background: #f7f7f7; }
+.metodo-envio-card__badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.metodo-envio-card__whatsapp {
+  color: #16a34a;
+  font-weight: 600;
+  text-decoration: none;
+}
+.metodo-envio-card__whatsapp:hover { text-decoration: underline; }
+
 /* — Panel detalles de envío — */
 .checkout-envio-detalle {
   margin-top: 1rem;

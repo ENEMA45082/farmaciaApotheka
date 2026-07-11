@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useCarritoContext } from '../context/CartContext';
 import { useCheckout } from '../context/CheckoutContext';
 import { fetchDireccion } from '../api/direcciones.api';
 import { fetchPerfil } from '../api/perfil.api';
-import { cotizarEnvio, fetchSucursales } from '../api/envio.api';
-import { formatPrecio, PROVINCIAS } from '../types';
-import type { SucursalCorreoArgentino, Perfil } from '../types';
-import { staggerContainer, staggerItem } from '../components/ui/motion';
+import { formatPrecio } from '../types';
+import type { Perfil } from '../types';
+
+const COSTO_ENVIO_ANILLO = 5000;
+const WHATSAPP_ENVIOS = '5493518354942';
 
 export function EnvioPage() {
   const { user, loading: authLoading } = useAuth();
@@ -17,16 +17,13 @@ export function EnvioPage() {
   const navigate = useNavigate();
 
   const {
-    metodo, costoEnvio, diasEstimados, sucursalSeleccionada, provinciaCodigo, direccion,
+    metodo, costoEnvio, direccion,
     destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono,
-    setMetodo, setCostoEnvio, setDiasEstimados, setSucursalSeleccionada, setProvinciaCodigo, setDireccion,
+    setMetodo, setCostoEnvio, setDiasEstimados, setSucursalSeleccionada, setDireccion,
     setDestinatarioNombre, setDestinatarioDni, setDestinatarioCodArea, setDestinatarioTelefono,
   } = useCheckout();
 
-  const [sucursales,  setSucursales]  = useState<SucursalCorreoArgentino[]>([]);
-  const [cotizando,   setCotizando]   = useState(false);
-  const [buscandoSuc, setBuscandoSuc] = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Sub-paso sólo para domicilio
   const [subpaso,       setSubpaso]       = useState<'seleccion' | 'detalle_domicilio'>('seleccion');
@@ -43,13 +40,14 @@ export function EnvioPage() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (metodo === 'domicilio' && direccion?.codigo_postal) {
-      cotizarMetodo('domicilio', direccion.codigo_postal);
-    } else if (metodo !== 'domicilio' && metodo !== 'retiro_sucursal') {
+    if (metodo === 'domicilio') {
+      setCostoEnvio(COSTO_ENVIO_ANILLO);
+      setDiasEstimados('');
+    } else {
       setCostoEnvio(0);
       setDiasEstimados('');
     }
-  }, [metodo, direccion]);
+  }, [metodo]);
 
   // Cargar perfil al entrar al detalle de domicilio para el auto-fill
   useEffect(() => {
@@ -58,46 +56,8 @@ export function EnvioPage() {
     }
   }, [subpaso]);
 
-  async function cotizarMetodo(m: 'domicilio' | 'retiro_sucursal', cp: string) {
-    setCotizando(true);
-    try {
-      const res = await cotizarEnvio(items, cp, m);
-      setCostoEnvio(res.precio);
-      setDiasEstimados(res.diasEstimados);
-    } catch {
-      setError('No se pudo calcular el costo de envío.');
-    } finally {
-      setCotizando(false);
-    }
-  }
-
-  async function buscarSucursales(prov: string) {
-    setProvinciaCodigo(prov);
-    setSucursales([]);
-    setSucursalSeleccionada(null);
-    setCostoEnvio(0);
-    if (!prov) return;
-    setBuscandoSuc(true);
-    try {
-      const lista = await fetchSucursales(prov);
-      setSucursales(lista);
-    } catch {
-      setError('No se pudieron cargar las sucursales.');
-    } finally {
-      setBuscandoSuc(false);
-    }
-  }
-
-  async function seleccionarSucursal(suc: SucursalCorreoArgentino) {
-    setSucursalSeleccionada(suc);
-    await cotizarMetodo('retiro_sucursal', suc.postalCode ?? provinciaCodigo);
-  }
-
   function cambiarMetodo(m: typeof metodo) {
     setMetodo(m);
-    setCostoEnvio(0);
-    setDiasEstimados('');
-    setSucursales([]);
     setSucursalSeleccionada(null);
     setError(null);
     setSubpaso('seleccion');
@@ -124,11 +84,9 @@ export function EnvioPage() {
   }
 
   const puedeVerDetalle =
-    metodo === 'domicilio' && !!direccion && costoEnvio > 0 && !cotizando;
+    metodo === 'domicilio' && !!direccion && costoEnvio > 0;
 
-  const puedeAvanzarSeleccion =
-    metodo === 'retiro_farmacia' ||
-    (metodo === 'retiro_sucursal' && sucursalSeleccionada !== null && costoEnvio > 0);
+  const puedeAvanzarSeleccion = metodo === 'retiro_farmacia';
 
   const puedeIrAlPago = destinatarioNombre.trim() !== '' && destinatarioDni.trim() !== '';
 
@@ -179,33 +137,35 @@ export function EnvioPage() {
                     </svg>
                   </div>
                   <div className="metodo-envio-card__info">
-                    <span className="metodo-envio-card__nombre">Envío a domicilio</span>
-                    <span className="metodo-envio-card__desc">
-                      {cotizando ? 'Calculando...' : diasEstimados || 'Correo Argentino · 72 a 96 horas hábiles'}
-                    </span>
+                    <span className="metodo-envio-card__nombre">Envío dentro del anillo de circunvalación</span>
+                    <span className="metodo-envio-card__desc">Córdoba Capital · envío gestionado directamente por la farmacia</span>
                   </div>
-                  <span className="metodo-envio-card__precio">
-                    {cotizando ? '...' : costoEnvio > 0 ? `$${formatPrecio(costoEnvio)}` : '—'}
-                  </span>
+                  <span className="metodo-envio-card__precio">${formatPrecio(COSTO_ENVIO_ANILLO)}</span>
                 </label>
 
-                <label className={`metodo-envio-card${metodo === 'retiro_sucursal' ? ' metodo-envio-card--activo' : ''}`}>
-                  <input type="radio" name="metodo" value="retiro_sucursal" checked={metodo === 'retiro_sucursal'} onChange={() => cambiarMetodo('retiro_sucursal')} />
+                <div className="metodo-envio-card metodo-envio-card--disabled">
                   <div className="metodo-envio-card__icono">
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
                     </svg>
                   </div>
                   <div className="metodo-envio-card__info">
-                    <span className="metodo-envio-card__nombre">Retiro en sucursal de Correo Argentino</span>
+                    <span className="metodo-envio-card__nombre">Envío a domicilio (fuera del anillo)</span>
                     <span className="metodo-envio-card__desc">
-                      {sucursalSeleccionada ? sucursalSeleccionada.nombre : 'Elegí una sucursal cercana'}
+                      Consultá directamente por{' '}
+                      <a
+                        href={`https://wa.me/${WHATSAPP_ENVIOS}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="metodo-envio-card__whatsapp"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        WhatsApp: 351 835-4942
+                      </a>
                     </span>
                   </div>
-                  <span className="metodo-envio-card__precio">
-                    {cotizando ? '...' : costoEnvio > 0 && metodo === 'retiro_sucursal' ? `$${formatPrecio(costoEnvio)}` : '—'}
-                  </span>
-                </label>
+                  <span className="metodo-envio-card__badge">No disponible</span>
+                </div>
               </div>
 
               {/* Detalle inline sólo para domicilio (dirección) */}
@@ -237,53 +197,6 @@ export function EnvioPage() {
                       Confirmar domicilio →
                     </button>
                   )}
-                </div>
-              )}
-
-              {/* Buscador de sucursales de Correo Argentino */}
-              {metodo === 'retiro_sucursal' && (
-                <div className="checkout-envio-detalle">
-                  <div className="checkout-cp-busqueda">
-                    <select
-                      className="input"
-                      value={provinciaCodigo}
-                      onChange={e => buscarSucursales(e.target.value)}
-                    >
-                      <option value="">Elegí tu provincia</option>
-                      {PROVINCIAS.map(p => (
-                        <option key={p.codigo} value={p.codigo}>{p.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {buscandoSuc && <p className="checkout-aviso">Buscando sucursales...</p>}
-                  <AnimatePresence>
-                    {sucursales.length > 0 && (
-                      <motion.ul
-                        className="checkout-sucursales-lista"
-                        variants={staggerContainer}
-                        initial="initial"
-                        animate="animate"
-                        exit={{ opacity: 0 }}
-                      >
-                        {sucursales.map(suc => (
-                          <motion.li
-                            key={suc.code}
-                            className={`checkout-sucursal-item${sucursalSeleccionada?.code === suc.code ? ' checkout-sucursal-item--activo' : ''}`}
-                            onClick={() => seleccionarSucursal(suc)}
-                            variants={staggerItem}
-                          >
-                            <div className="checkout-sucursal-item__radio">
-                              {sucursalSeleccionada?.code === suc.code && <span className="checkout-sucursal-item__dot" />}
-                            </div>
-                            <div>
-                              <p className="checkout-sucursal-item__nombre">{suc.nombre}</p>
-                              <p className="checkout-sucursal-item__dir">{suc.direccion} — {suc.ciudad}</p>
-                            </div>
-                          </motion.li>
-                        ))}
-                      </motion.ul>
-                    )}
-                  </AnimatePresence>
                 </div>
               )}
 
@@ -326,9 +239,7 @@ export function EnvioPage() {
                   </svg>
                 </div>
                 <div className="envio-delivery-card__info">
-                  <p className="envio-delivery-card__dias">
-                    {cotizando ? 'Calculando tiempo de entrega...' : diasEstimados || '72 a 96 horas hábiles'}
-                  </p>
+                  <p className="envio-delivery-card__dias">Envío gestionado directamente por la farmacia</p>
                   <p className="envio-delivery-card__costo">
                     Costo de envío: <strong>${formatPrecio(costoEnvio)}</strong>
                   </p>
