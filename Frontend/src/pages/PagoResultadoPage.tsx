@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { useCarritoContext } from '../context/CartContext';
 import { fetchPedidoPorId, cancelarPedido } from '../api/pedidos.api';
+import { verificarPago } from '../api/pagos.api';
 import { formatPrecio } from '../types';
 import type { Pedido } from '../types';
 
@@ -21,6 +22,14 @@ export function PagoResultadoPage() {
   useEffect(() => {
     if (resultado === 'exitoso') vaciarCarrito();
   }, [resultado]);
+
+  useEffect(() => {
+    // El webhook de Payway no siempre llega — al caer acá confirmamos el pago
+    // consultando directo a Payway, en vez de depender solo de esa notificación.
+    if (resultado === 'exitoso' && pedidoId) {
+      verificarPago(pedidoId).catch(() => {});
+    }
+  }, [resultado, pedidoId]);
 
   useEffect(() => {
     // Si el usuario canceló en Payway, cancelamos el pedido en el backend.

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
 import { addErrorInterceptor } from './apiClient';
+import type { Pedido } from '../types';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '/api' });
 
@@ -16,6 +17,11 @@ addErrorInterceptor(api);
 
 export async function iniciarCheckoutHosted(pedidoId: string): Promise<{ checkoutUrl: string }> {
   const { data } = await api.post<{ checkoutUrl: string }>('/pagos/checkout', { pedidoId });
+  return data;
+}
+
+export async function verificarPago(pedidoId: string): Promise<Pedido> {
+  const { data } = await api.get<Pedido>(`/pagos/verificar/${pedidoId}`);
   return data;
 }
 
