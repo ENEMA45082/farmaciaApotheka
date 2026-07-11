@@ -287,6 +287,31 @@ export async function procesarNotificacion(body: Record<string, unknown>): Promi
   await aplicarResultadoPago(pedido, status, paymentId);
 }
 
+function esperar(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function consultarPagosPayway(siteOperationId: string | undefined): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    paywaySDK.getAllPayments(undefined, '20', siteOperationId, undefined, (result: any, err: any) => {
+      const etiqueta = siteOperationId ? `siteOperationId=${siteOperationId}` : 'sin filtro';
+      console.log(`[Payway verificarEstado] getAllPayments(${etiqueta}) result:`, JSON.stringify(result));
+      console.log(`[Payway verificarEstado] getAllPayments(${etiqueta}) err:`, JSON.stringify(err));
+      if (!result && err) return reject(new Error(JSON.stringify(err)));
+
+      const lista: any[] = Array.isArray(result)          ? result
+        : Array.isArray(result?.payments)                 ? result.payments
+        : Array.isArray(result?.results)                  ? result.results
+        : Array.isArray(result?.data)                      ? result.data
+        : [];
+      resolve(lista);
+    });
+  });
+}
+
+const REINTENTOS_VERIFICACION = 3;
+const ESPERA_ENTRE_REINTENTOS_MS = 2000;
+
 // Consulta activa a Payway: se usa cuando el usuario cae en /pago/exitoso, en vez
 // de depender exclusivamente de que Payway llegue a mandar el webhook (poco confiable
 // en la práctica — ver notificaciones que nunca llegan pese a notifications_url correcta).
@@ -300,25 +325,27 @@ export async function verificarEstadoPago(pedido: Pedido): Promise<Pedido> {
     return pedido;
   }
 
-  const info = await new Promise<any>((resolve, reject) => {
-    paywaySDK.getAllPayments(undefined, undefined, pedido.id, undefined, (result: any, err: any) => {
-      console.log('[Payway verificarEstado] result:', JSON.stringify(result));
-      console.log('[Payway verificarEstado] err:', JSON.stringify(err));
-      if (!result && err) return reject(new Error(JSON.stringify(err)));
-      resolve(result);
-    });
-  });
+  let pago: any = null;
+  for (let intento = 1; intento <= REINTENTOS_VERIFICACION && !pago; intento++) {
+    const lista = await consultarPagosPayway(pedido.id);
+    pago = lista.find(p => String(p?.site_transaction_id) === pedido.id) ?? null;
+    if (!pago && intento < REINTENTOS_VERIFICACION) {
+      await esperar(ESPERA_ENTRE_REINTENTOS_MS);
+    }
+  }
 
-  const lista: any[] = Array.isArray(info)          ? info
-    : Array.isArray(info?.payments)                 ? info.payments
-    : Array.isArray(info?.results)                  ? info.results
-    : Array.isArray(info?.data)                      ? info.data
-    : [];
-
-  const pago = lista.find(p => String(p?.site_transaction_id) === pedido.id);
   if (!pago) {
-    // Todavía no hay registro del pago en Payway (puede no haberse completado, o replicación
-    // en curso) — se deja el pedido como está, el usuario puede reintentar más tarde.
+    // Diagnóstico: consulta sin filtro para ver si el pago aparece bajo otro
+    // site_transaction_id (o no aparece en absoluto) — ayuda a distinguir lag de
+    // indexación vs. flujo que no preserva site_transaction_id vs. pago no acreditado.
+    const listaSinFiltro = await consultarPagosPayway(undefined).catch(err => {
+      console.error('[Payway verificarEstado] error en consulta sin filtro:', err);
+      return [] as any[];
+    });
+    console.log(
+      `[Payway verificarEstado] no se encontró el pago tras ${REINTENTOS_VERIFICACION} intentos — diagnóstico sin filtro (${listaSinFiltro.length} resultado(s)):`,
+      JSON.stringify(listaSinFiltro),
+    );
     return pedido;
   }
 
