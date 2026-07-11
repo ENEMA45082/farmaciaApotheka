@@ -92,6 +92,7 @@ export async function checkout(req: Request, res: Response, next: NextFunction) 
 }
 
 export async function notificacion(req: Request, res: Response) {
+  console.log('[Payway Notificacion] body recibido:', JSON.stringify(req.body));
   try {
     await pagosService.procesarNotificacion(req.body as Record<string, unknown>);
   } catch (err) {

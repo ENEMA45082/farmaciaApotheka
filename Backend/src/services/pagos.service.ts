@@ -233,7 +233,10 @@ export async function procesarNotificacion(body: Record<string, unknown>): Promi
   const siteTxId   = String(body.site_transaction_id ?? '');
   const status     = String(body.status ?? '');
 
-  if (!status || (!paymentId && !siteTxId)) return;
+  if (!status || (!paymentId && !siteTxId)) {
+    console.log(`[Payway Notificacion] ignorada: faltan campos (status=${status} paymentId=${paymentId} siteTxId=${siteTxId})`);
+    return;
+  }
 
   // Intentar encontrar el pedido por site_transaction_id (= pedido.id) primero,
   // con fallback a pw_payment_id para pagos directos con token
@@ -245,7 +248,16 @@ export async function procesarNotificacion(body: Record<string, unknown>): Promi
     pedido = await pedidosRepo.encontrarPorPwPaymentId(paymentId);
   }
 
-  if (!pedido || pedido.estado !== 'PendienteDePago') return;
+  if (!pedido) {
+    console.log(`[Payway Notificacion] ignorada: no se encontró pedido (siteTxId=${siteTxId} paymentId=${paymentId})`);
+    return;
+  }
+  if (pedido.estado !== 'PendienteDePago') {
+    console.log(`[Payway Notificacion] ignorada: pedido ${pedido.id} ya está en estado "${pedido.estado}"`);
+    return;
+  }
+
+  console.log(`[Payway Notificacion] procesando pedido ${pedido.id}: status=${status}`);
 
   if (status === 'approved') {
     await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: paymentId || undefined });
