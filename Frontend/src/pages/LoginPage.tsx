@@ -17,7 +17,7 @@ export function LoginPage() {
   }, [user, loading, navigate, searchParams]);
 
   function handleGoogleLogin() {
-    signInWithGoogle(window.location.origin + '/');
+    signInWithGoogle();
   }
 
   if (loading) return null;

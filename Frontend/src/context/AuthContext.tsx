@@ -6,7 +6,7 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  signInWithGoogle: (redirectTo?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -29,11 +29,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function signInWithGoogle(redirectTo?: string) {
+  async function signInWithGoogle() {
+    const configuredSiteUrl = (import.meta.env.VITE_SITE_URL as string | undefined)?.trim().replace(/\/+$/, '');
+    const runtimeOrigin = window.location.origin.replace(/\/+$/, '');
+    const redirectTo = configuredSiteUrl || runtimeOrigin;
+
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: redirectTo ?? window.location.origin + '/',
+        redirectTo,
         queryParams: { prompt: 'select_account' },
       },
     });

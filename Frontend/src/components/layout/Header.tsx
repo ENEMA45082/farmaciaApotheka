@@ -128,7 +128,7 @@ export function Header() {
                       </button>
                     </>
                   ) : (
-                    <button className="header-user__item" onClick={() => { signInWithGoogle(window.location.origin + '/'); setUserMenuAbierto(false); }}>
+                    <button className="header-user__item" onClick={() => { signInWithGoogle(); setUserMenuAbierto(false); }}>
                       Iniciar sesión con Google
                     </button>
                   )}
