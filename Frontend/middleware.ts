@@ -1,6 +1,6 @@
 import { next } from '@vercel/edge';
 
-const SEARCH_BOT_UA_REGEX = /googlebot|bingbot/i;
+const SEARCH_BOT_UA_REGEX = /googlebot|bingbot|google-inspectiontool/i;
 const SOCIAL_BOT_UA_REGEX = /whatsapp|facebookexternalhit|twitterbot|linkedinbot|slackbot|telegrambot|discordbot/i;
 const PRODUCTO_ID_REGEX = /^\/productos\/([^/]+)/;
 
