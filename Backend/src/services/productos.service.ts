@@ -93,6 +93,7 @@ export async function previewImportarPrecios(
     } else {
       no_encontrados.push({
         codigo_barras: fila.codigoBarras,
+        nombre:        fila.nombre,
         precio_csv:    fila.precio,
       });
     }
@@ -105,7 +106,7 @@ export async function confirmarImportarPrecios(
   items: ItemConfirmarPrecio[]
 ): Promise<ResultadoConfirmarPrecios> {
   if (items.length === 0) {
-    return { actualizados: 0, fallidos: [] };
+    return { actualizados: 0, creados: 0, fallidos: [] };
   }
   if (items.length > 500) {
     throw new AppError('No se pueden procesar más de 500 items por vez', 400, 'ITEMS_LIMIT_EXCEEDED');
@@ -123,13 +124,29 @@ export async function confirmarImportarPrecios(
   const codigos = items.map(i => i.codigo_barras);
   const mapa    = await productosRepo.encontrarPorCodigosBarras(codigos);
 
-  const resultados: { ok: boolean; codigo_barras: string; razon?: string }[] = [];
+  const resultados: { ok: boolean; creado?: boolean; codigo_barras: string; razon?: string }[] = [];
   for (const item of items) {
     const encontrado = mapa.get(item.codigo_barras);
+
     if (!encontrado) {
-      resultados.push({ ok: false, codigo_barras: item.codigo_barras, razon: 'No encontrado' });
+      const nombre = item.nombre?.trim();
+      if (!nombre) {
+        resultados.push({ ok: false, codigo_barras: item.codigo_barras, razon: 'No encontrado y sin nombre para crearlo' });
+        continue;
+      }
+      try {
+        await productosRepo.crear({
+          nombre,
+          precio:        item.precio_nuevo,
+          codigo_barras: item.codigo_barras,
+        });
+        resultados.push({ ok: true, creado: true, codigo_barras: item.codigo_barras });
+      } catch {
+        resultados.push({ ok: false, codigo_barras: item.codigo_barras, razon: 'Error al crear el producto' });
+      }
       continue;
     }
+
     try {
       const ok = await productosRepo.actualizarPrecioPorId(encontrado.id, item.precio_nuevo);
       resultados.push(
@@ -142,12 +159,13 @@ export async function confirmarImportarPrecios(
     }
   }
 
-  const actualizados = resultados.filter(r => r.ok).length;
-  const fallidos     = resultados
+  const actualizados = resultados.filter(r => r.ok && !r.creado).length;
+  const creados       = resultados.filter(r => r.ok && r.creado).length;
+  const fallidos       = resultados
     .filter((r): r is { ok: false; codigo_barras: string; razon: string } => !r.ok)
     .map(r => ({ codigo_barras: r.codigo_barras, razon: r.razon }));
 
-  return { actualizados, fallidos };
+  return { actualizados, creados, fallidos };
 }
 
 function validarDatosCreacion(dto: CrearProductoDTO): void {

@@ -241,6 +241,7 @@ export interface FilaPreviewPrecio {
 
 export interface FilaNoEncontrada {
   codigo_barras: string;
+  nombre: string;
   precio_csv: number;
 }
 
@@ -252,10 +253,12 @@ export interface PreviewImportarPreciosResponse {
 export interface ItemConfirmarPrecio {
   codigo_barras: string;
   precio_nuevo: number;
+  nombre?: string;
 }
 
 export interface ResultadoConfirmarPrecios {
   actualizados: number;
+  creados: number;
   fallidos: { codigo_barras: string; razon: string }[];
 }
 

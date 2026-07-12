@@ -43,10 +43,12 @@ const router = Router();
  *                       precio_nuevo:  { type: number }
  *                 no_encontrados:
  *                   type: array
+ *                   description: Filas cuyo código de barras no existe en el sistema. Se pueden crear como productos nuevos al confirmar.
  *                   items:
  *                     type: object
  *                     properties:
  *                       codigo_barras: { type: string }
+ *                       nombre:        { type: string }
  *                       precio_csv:    { type: number }
  *       400:
  *         description: Archivo no recibido o inválido
@@ -76,7 +78,10 @@ router.post(
  * /api/productos/confirmar-importar-precios:
  *   post:
  *     summary: Confirmar importación de precios
- *     description: Aplica la actualización de precios para los items seleccionados del preview. Máximo 500 items por request.
+ *     description: >
+ *       Aplica la actualización de precios para los items seleccionados del preview. Máximo 500 items por request.
+ *       Para items cuyo código de barras no existe en el sistema, se crea un producto nuevo usando `nombre` y `precio_nuevo`
+ *       (requiere que `nombre` venga informado; si falta, el item se reporta como fallido).
  *     tags: [Productos]
  *     security:
  *       - BearerAuth: []
@@ -97,6 +102,7 @@ router.post(
  *                   properties:
  *                     codigo_barras: { type: string }
  *                     precio_nuevo:  { type: number, minimum: 0 }
+ *                     nombre:        { type: string, description: 'Nombre para crear el producto si el código de barras no existe' }
  *     responses:
  *       200:
  *         description: Resultado de la importación
@@ -106,6 +112,7 @@ router.post(
  *               type: object
  *               properties:
  *                 actualizados: { type: integer }
+ *                 creados:      { type: integer }
  *                 fallidos:
  *                   type: array
  *                   items:
