@@ -14,7 +14,9 @@ export function parsearCsvPrecios(buffer: Buffer): {
     return { filas: [], filasSaltadas: 0 };
   }
 
-  const encabezados = lineas[0].split(';').map(h => h.trim());
+  const separador = lineas[0].split(';').length >= lineas[0].split(',').length ? ';' : ',';
+
+  const encabezados = lineas[0].split(separador).map(h => h.trim());
   const idxBarras = encabezados.indexOf('CodBarraPrinc');
   const idxPrecio = encabezados.indexOf('Precio');
 
@@ -28,7 +30,7 @@ export function parsearCsvPrecios(buffer: Buffer): {
   let filasSaltadas = 0;
 
   for (let i = 1; i < lineas.length; i++) {
-    const cols = lineas[i].split(';');
+    const cols = lineas[i].split(separador);
     const codigoBarras = cols[idxBarras]?.trim() ?? '';
     const precioRaw    = cols[idxPrecio]?.trim()  ?? '';
 
