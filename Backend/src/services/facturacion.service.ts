@@ -1,5 +1,6 @@
 import { afip, afipConfigurado, PUNTO_VENTA_ARCA } from '../config/afip';
 import { supabase } from '../config/supabase';
+import { AppError } from '../errors/AppError';
 import * as facturasRepo from '../repositories/facturas.repository';
 import * as perfilRepo from '../repositories/perfil.repository';
 import * as productosRepo from '../repositories/productos.repository';
@@ -8,7 +9,7 @@ import type { Pedido, Factura } from '../types';
 
 const BUCKET_FACTURAS = 'Farmacia-Apotheka';
 
-const CBTE_TIPO_FACTURA_B = 6;
+export const CBTE_TIPO_FACTURA_B = 6;
 
 // Códigos de alícuota de IVA según el padrón de ARCA (getAliquotTypes)
 const ALICUOTA_A_ID: Record<string, number> = {
@@ -224,4 +225,21 @@ export async function emitirFactura(pedido: Pedido): Promise<void> {
     });
     console.error(`[facturacion] Error emitiendo factura para pedido ${pedido.id}:`, err);
   }
+}
+
+// Consulta de solo lectura (FECompUltimoAutorizado): no emite ningún comprobante.
+// Sirve para validar la conexión a ARCA/AfipSDK antes de emitir facturas reales.
+export async function obtenerUltimoComprobanteAutorizado(
+  puntoVenta: number = PUNTO_VENTA_ARCA,
+  tipoComprobante: number = CBTE_TIPO_FACTURA_B,
+) {
+  if (!afipConfigurado || !afip) {
+    throw new AppError(
+      'ARCA/AfipSDK no está configurado: faltan ARCA_CUIT o ARCA_ACCESS_TOKEN en las variables de entorno',
+      503,
+    );
+  }
+
+  const ultimoNumero = await afip.ElectronicBilling.getLastVoucher(puntoVenta, tipoComprobante);
+  return { puntoVenta, tipoComprobante, ultimoNumero };
 }

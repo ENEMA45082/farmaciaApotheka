@@ -2,3 +2,9 @@ node_modules/
 dist/
 .env
 *.js.map
+
+# Certificados/claves de ARCA (WSASS) u otros secretos locales - nunca deben subirse a git
+/secrets/
+*.key
+*.crt
+*.pem
