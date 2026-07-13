@@ -1,43 +1,38 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { fetchBanners } from '../../api/banners.api';
+import type { Banner } from '../../types';
 import { carouselFadeVariants } from '../ui/motion';
-
-interface Slide {
-  src: string;
-  alt: string;
-  href?: string;
-}
-
-// Editar acá para cambiar fotos, textos alternativos o el link de cada slide.
-// Las 5 imagenes deben pesar y medir lo mismo (1600x600px, JPG) para que el
-// carrusel no salte de alto al cambiar de foto.
-const SLIDES: Slide[] = [
-  { src: '/carousel/promo-1.png', alt: 'Equilibra tus emociones', href: '/ofertas' },
-  { src: '/carousel/promo-2.png', alt: 'Julio hasta 50% off', href: '/ofertas' },
-];
 
 const INTERVALO_MS = 5000;
 
 export function HeroCarousel() {
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [indice, setIndice] = useState(0);
   const [pausado, setPausado] = useState(false);
 
   useEffect(() => {
-    if (pausado || SLIDES.length <= 1) return;
+    fetchBanners().then(setBanners).catch(() => setBanners([]));
+  }, []);
+
+  useEffect(() => {
+    if (pausado || banners.length <= 1) return;
     const id = setInterval(() => {
-      setIndice(i => (i + 1) % SLIDES.length);
+      setIndice(i => (i + 1) % banners.length);
     }, INTERVALO_MS);
     return () => clearInterval(id);
-  }, [pausado]);
+  }, [pausado, banners.length]);
 
-  const irA = (i: number) => setIndice(((i % SLIDES.length) + SLIDES.length) % SLIDES.length);
+  if (banners.length === 0) return null;
 
-  const slide = SLIDES[indice];
+  const irA = (i: number) => setIndice(((i % banners.length) + banners.length) % banners.length);
+
+  const banner = banners[indice];
   const imagen = (
     <img
-      src={slide.src}
-      alt={slide.alt}
+      src={banner.imagen_url}
+      alt={banner.alt_texto}
       className="hero-carousel__img"
       width={1600}
       height={600}
@@ -52,18 +47,18 @@ export function HeroCarousel() {
     >
       <AnimatePresence mode="wait">
         <motion.div
-          key={indice}
+          key={banner.id}
           className="hero-carousel__slide"
           variants={carouselFadeVariants}
           initial="initial"
           animate="animate"
           exit="exit"
         >
-          {slide.href ? <Link to={slide.href}>{imagen}</Link> : imagen}
+          {banner.link_url ? <Link to={banner.link_url}>{imagen}</Link> : imagen}
         </motion.div>
       </AnimatePresence>
 
-      {SLIDES.length > 1 && (
+      {banners.length > 1 && (
         <>
           <button
             type="button"
@@ -83,9 +78,9 @@ export function HeroCarousel() {
           </button>
 
           <div className="hero-carousel__dots">
-            {SLIDES.map((s, i) => (
+            {banners.map((b, i) => (
               <button
-                key={s.src}
+                key={b.id}
                 type="button"
                 className={`hero-carousel__dot${i === indice ? ' hero-carousel__dot--activo' : ''}`}
                 aria-label={`Ir a la foto ${i + 1}`}

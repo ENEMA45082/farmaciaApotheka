@@ -308,3 +308,28 @@ export interface ActualizarCategoriaDTO {
   nombre?: string;
   id_padre?: string | null;
 }
+
+export interface Banner {
+  id: string;
+  imagen_url: string;
+  link_url: string | null;
+  alt_texto: string;
+  orden: number;
+  activo: boolean;
+  creado_en: string;
+}
+
+export interface CrearBannerDTO {
+  imagen_url: string;
+  link_url?: string | null;
+  alt_texto: string;
+  orden?: number;
+}
+
+export interface ActualizarBannerDTO {
+  imagen_url?: string;
+  link_url?: string | null;
+  alt_texto?: string;
+  orden?: number;
+  activo?: boolean;
+}
