@@ -44,9 +44,38 @@ img { max-width: 100%; display: block; }
 .ofertas-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem; }
 .ofertas-titulo { display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem; font-weight: 800; color: var(--navy); }
 
-/* ===== Hero Banner ===== */
-.hero-banner { width: 100%; line-height: 0; }
-.hero-banner__img { width: 100%; height: auto; display: block; object-fit: cover; }
+/* ===== Hero Carousel ===== */
+.hero-carousel { position: relative; width: 100%; aspect-ratio: 8 / 3; overflow: hidden; background: #f0f0f0; }
+.hero-carousel__slide { position: absolute; inset: 0; }
+.hero-carousel__slide a { display: block; width: 100%; height: 100%; }
+.hero-carousel__img { width: 100%; height: 100%; display: block; object-fit: cover; }
+
+.hero-carousel__arrow {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: rgba(0, 0, 0, 0.35); color: #fff; font-size: 1.4rem; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.hero-carousel__arrow:hover { background: rgba(0, 0, 0, 0.55); }
+.hero-carousel__arrow--prev { left: 0.75rem; }
+.hero-carousel__arrow--next { right: 0.75rem; }
+
+.hero-carousel__dots {
+  position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 0.4rem;
+}
+.hero-carousel__dot {
+  width: 8px; height: 8px; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, 0.55); cursor: pointer; padding: 0;
+  transition: background 0.15s, transform 0.15s;
+}
+.hero-carousel__dot:hover { background: rgba(255, 255, 255, 0.8); }
+.hero-carousel__dot--activo { background: #fff; transform: scale(1.25); }
+
+@media (max-width: 640px) {
+  .hero-carousel__arrow { width: 30px; height: 30px; font-size: 1.15rem; }
+}
 
 /* ===== Buttons ===== */
 .btn {

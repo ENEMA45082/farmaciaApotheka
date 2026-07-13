@@ -4,6 +4,39 @@ export interface FilaCsvPrecios {
   precio: number;
 }
 
+function dividirLineaCsv(linea: string, separador: string): string[] {
+  const campos: string[] = [];
+  let actual = '';
+  let dentroComillas = false;
+
+  for (let i = 0; i < linea.length; i++) {
+    const char = linea[i];
+
+    if (dentroComillas) {
+      if (char === '"') {
+        if (linea[i + 1] === '"') {
+          actual += '"';
+          i++;
+        } else {
+          dentroComillas = false;
+        }
+      } else {
+        actual += char;
+      }
+    } else if (char === '"' && actual === '') {
+      dentroComillas = true;
+    } else if (char === separador) {
+      campos.push(actual);
+      actual = '';
+    } else {
+      actual += char;
+    }
+  }
+  campos.push(actual);
+
+  return campos;
+}
+
 export function parsearCsvPrecios(buffer: Buffer): {
   filas: FilaCsvPrecios[];
   filasSaltadas: number;
@@ -17,7 +50,7 @@ export function parsearCsvPrecios(buffer: Buffer): {
 
   const separador = lineas[0].split(';').length >= lineas[0].split(',').length ? ';' : ',';
 
-  const encabezados = lineas[0].split(separador).map(h => h.trim());
+  const encabezados = dividirLineaCsv(lineas[0], separador).map(h => h.trim());
   const idxBarras   = encabezados.indexOf('CodBarraPrinc');
   const idxPrecio   = encabezados.indexOf('Precio');
   const idxProducto = encabezados.indexOf('Producto');
@@ -32,7 +65,7 @@ export function parsearCsvPrecios(buffer: Buffer): {
   let filasSaltadas = 0;
 
   for (let i = 1; i < lineas.length; i++) {
-    const cols = lineas[i].split(separador);
+    const cols = dividirLineaCsv(lineas[i], separador);
     const codigoBarras = cols[idxBarras]?.trim()   ?? '';
     const precioRaw    = cols[idxPrecio]?.trim()   ?? '';
     const nombre       = cols[idxProducto]?.trim() ?? '';

@@ -5,6 +5,7 @@ import { fetchProductos, fetchCategorias, fetchCategoriasArbol } from '../api/pr
 import type { Categoria } from '../types';
 import { ProductGrid } from '../components/products/ProductGrid';
 import { FiltrosSidebar } from '../components/products/FiltrosSidebar';
+import { HeroCarousel } from '../components/home/HeroCarousel';
 
 type Ordenar = 'nombre_asc' | 'nombre_desc' | 'precio_asc' | 'precio_desc' | undefined;
 
@@ -185,13 +186,7 @@ export function HomePage() {
 
   return (
     <>
-      <div className="hero-banner">
-        <img
-          src="/Captura de pantalla 2026-05-13 220208.png"
-          alt="Promociones"
-          className="hero-banner__img"
-        />
-      </div>
+      <HeroCarousel />
       <div className="page">
         {mostrarFiltros ? (
           <div className="catalog-layout">
