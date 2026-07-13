@@ -70,6 +70,18 @@ const options: swaggerJsdoc.Options = {
             hijos:     { type: 'array', items: { $ref: '#/components/schemas/Categoria' } },
           },
         },
+        Banner: {
+          type: 'object',
+          properties: {
+            id:         { type: 'string', format: 'uuid' },
+            imagen_url: { type: 'string' },
+            link_url:   { type: 'string', nullable: true },
+            alt_texto:  { type: 'string' },
+            orden:      { type: 'integer' },
+            activo:     { type: 'boolean' },
+            creado_en:  { type: 'string', format: 'date-time' },
+          },
+        },
         DetallePedido: {
           type: 'object',
           properties: {

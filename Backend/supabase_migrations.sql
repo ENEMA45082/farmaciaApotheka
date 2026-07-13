@@ -604,3 +604,23 @@ CREATE INDEX IF NOT EXISTS idx_facturas_pedido_id
 --    storage (los links que devuelve AfipSDK expiran a las 24hs).
 -- --------------------------------------------------------
 ALTER TABLE facturas ADD COLUMN IF NOT EXISTS pdf_url text;
+
+
+-- --------------------------------------------------------
+-- 10. Banners para el carrusel de la home ("Cartelería").
+--     Permite al cliente subir/ordenar/activar las fotos del
+--     carrusel desde el panel admin, sin depender del
+--     desarrollador para cada cambio.
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS banners (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  imagen_url text NOT NULL,
+  link_url   text,
+  alt_texto  text NOT NULL DEFAULT '',
+  orden      integer NOT NULL DEFAULT 0,
+  activo     boolean NOT NULL DEFAULT true,
+  creado_en  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_banners_orden
+  ON banners(orden);

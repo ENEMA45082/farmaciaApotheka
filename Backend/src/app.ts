@@ -9,6 +9,7 @@ import { swaggerSpec } from './config/swagger';
 import { generalLimiter, pagosLimiter, pedidosLimiter } from './middlewares/rateLimiter';
 import productosRoutes     from './routes/productos.routes';
 import categoriasRoutes    from './routes/categorias.routes';
+import bannersRoutes       from './routes/banners.routes';
 import uploadsRoutes       from './routes/uploads.routes';
 import estadisticasRoutes  from './routes/estadisticas.routes';
 import perfilRoutes        from './routes/perfil.routes';
@@ -64,6 +65,7 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use('/api/productos',    productosRoutes);
 app.use('/api/categorias',  categoriasRoutes);
+app.use('/api/banners',     bannersRoutes);
 app.use('/api/uploads',     uploadsRoutes);
 app.use('/api/estadisticas', estadisticasRoutes);
 app.use('/api/perfil',      perfilRoutes);
