@@ -14,7 +14,7 @@ interface Slide {
 // carrusel no salte de alto al cambiar de foto.
 const SLIDES: Slide[] = [
   { src: '/carousel/promo-1.png', alt: 'Equilibra tus emociones', href: '/ofertas' },
-  { src: '/carousel/promo-2.png', alt: 'Promoción', href: '/ofertas' },
+  { src: '/carousel/promo-2.png', alt: 'Julio hasta 50% off', href: '/ofertas' },
 ];
 
 const INTERVALO_MS = 5000;
