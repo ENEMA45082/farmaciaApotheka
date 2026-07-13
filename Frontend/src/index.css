@@ -48,7 +48,7 @@ img { max-width: 100%; display: block; }
 .hero-carousel { position: relative; width: 100%; aspect-ratio: 8 / 3; max-height: 340px; overflow: hidden; background: #f0f0f0; }
 .hero-carousel__slide { position: absolute; inset: 0; }
 .hero-carousel__slide a { display: block; width: 100%; height: 100%; }
-.hero-carousel__img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.hero-carousel__img { width: 100%; height: 100%; display: block; object-fit: cover; }
 
 .hero-carousel__arrow {
   position: absolute; top: 50%; transform: translateY(-50%);
