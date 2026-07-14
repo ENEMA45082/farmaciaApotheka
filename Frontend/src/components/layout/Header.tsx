@@ -48,8 +48,11 @@ export function Header() {
       {/* ── Fila superior: logo + buscador + acciones ── */}
       <div className="header__top">
         <Link to="/" className="header__logo">
-          <span className="header__logo-name">Apotheka</span>
-          <span className="header__logo-sub">FARMACIA</span>
+          <img src="/logo-blanco.png" alt="" className="header__logo-img" />
+          <span className="header__logo-text">
+            <span className="header__logo-name">Apotheka</span>
+            <span className="header__logo-sub">FARMACIA</span>
+          </span>
         </Link>
 
         <form className="header-search" onSubmit={handleBuscar}>

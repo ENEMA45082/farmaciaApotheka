@@ -128,7 +128,9 @@ img { max-width: 100%; display: block; }
   gap: 1.25rem;
 }
 
-.header__logo { display: flex; flex-direction: column; line-height: 1; text-decoration: none; flex-shrink: 0; }
+.header__logo { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; flex-shrink: 0; }
+.header__logo-img { height: 46px; width: auto; display: block; }
+.header__logo-text { display: flex; flex-direction: column; line-height: 1; }
 .header__logo-name { font-size: 1.5rem; font-weight: 800; color: var(--white); letter-spacing: 1px; }
 .header__logo-sub { font-size: 0.6rem; letter-spacing: 3px; color: var(--azul-claro); text-transform: uppercase; }
 
