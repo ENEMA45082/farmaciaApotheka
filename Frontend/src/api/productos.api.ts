@@ -71,9 +71,18 @@ export async function fetchCategorias(): Promise<Categoria[]> {
   return data;
 }
 
-export async function fetchCategoriasArbol(): Promise<Categoria[]> {
-  const { data } = await api.get<Categoria[]>('/categorias/arbol');
-  return data;
+let categoriasArbolCache: Promise<Categoria[]> | null = null;
+
+export function fetchCategoriasArbol(): Promise<Categoria[]> {
+  if (!categoriasArbolCache) {
+    categoriasArbolCache = api.get<Categoria[]>('/categorias/arbol')
+      .then(({ data }) => data)
+      .catch((err) => {
+        categoriasArbolCache = null;
+        throw err;
+      });
+  }
+  return categoriasArbolCache;
 }
 
 export async function crearCategoria(dto: CrearCategoriaDTO): Promise<Categoria> {
