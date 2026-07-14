@@ -624,3 +624,22 @@ CREATE TABLE IF NOT EXISTS banners (
 
 CREATE INDEX IF NOT EXISTS idx_banners_orden
   ON banners(orden);
+
+
+-- --------------------------------------------------------
+-- 11. Documento del comprador para facturación electrónica
+--     - perfiles.documento_tipo: 'DNI' | 'CUIT'. Reutiliza la columna `dni`
+--       ya existente como el número (no se renombra: se usa en otros lados).
+--       Default 'DNI' para no romper perfiles existentes.
+--     - facturas.receptor_doc_tipo/receptor_doc_nro: snapshot de lo que
+--       efectivamente se mandó a ARCA (DocTipo/DocNro) al emitir cada
+--       comprobante, para trazabilidad aunque el perfil cambie después.
+-- --------------------------------------------------------
+ALTER TABLE perfiles ADD COLUMN IF NOT EXISTS documento_tipo text NOT NULL DEFAULT 'DNI';
+
+ALTER TABLE perfiles DROP CONSTRAINT IF EXISTS perfiles_documento_tipo_check;
+ALTER TABLE perfiles ADD CONSTRAINT perfiles_documento_tipo_check
+  CHECK (documento_tipo IN ('DNI', 'CUIT'));
+
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS receptor_doc_tipo integer;
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS receptor_doc_nro  bigint;  -- CUIT (11 dígitos) no entra en integer

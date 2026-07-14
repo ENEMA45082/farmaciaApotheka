@@ -24,6 +24,7 @@ import { FavoritosProvider } from './context/FavoritosContext';
 import { ErrorModalProvider } from './context/ErrorModalContext';
 import { ToastProvider } from './context/ToastContext';
 import { AdminRoute } from './components/auth/AdminRoute';
+import { RequiereDocumentoRoute } from './components/auth/RequiereDocumentoRoute';
 import { pageVariants } from './components/ui/motion';
 import './index.css';
 
@@ -49,8 +50,8 @@ function AnimatedRoutes() {
           <Route path="/ofertas" element={<OfertasPage />} />
           <Route path="/favoritos" element={<FavoritosPage />} />
           <Route path="/checkout" element={<Navigate to="/envio" replace />} />
-          <Route path="/envio" element={<EnvioPage />} />
-          <Route path="/pagar" element={<PagarPage />} />
+          <Route path="/envio" element={<RequiereDocumentoRoute><EnvioPage /></RequiereDocumentoRoute>} />
+          <Route path="/pagar" element={<RequiereDocumentoRoute><PagarPage /></RequiereDocumentoRoute>} />
           <Route path="/pago/:resultado" element={<PagoResultadoPage />} />
           <Route
             path="/admin"

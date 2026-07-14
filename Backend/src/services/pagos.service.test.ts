@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Pedido, DetallePedido } from '../types';
 
-const { actualizarEstado, restaurarStock, emitirFactura } = vi.hoisted(() => ({
+const { actualizarEstado, restaurarStock } = vi.hoisted(() => ({
   actualizarEstado: vi.fn(),
   restaurarStock: vi.fn(),
-  emitirFactura: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../repositories/pedidos.repository', () => ({ actualizarEstado, encontrarPorId: vi.fn() }));
 vi.mock('../repositories/productos.repository', () => ({ restaurarStock }));
-vi.mock('./facturacion.service', () => ({ emitirFactura }));
 
 import { aplicarResultadoPago } from './pagos.service';
 
@@ -61,17 +59,15 @@ function pedido(detalles: DetallePedido[] = []): Pedido {
 beforeEach(() => {
   actualizarEstado.mockReset();
   restaurarStock.mockReset();
-  emitirFactura.mockClear();
 });
 
 describe('aplicarResultadoPago', () => {
-  it('confirma el pedido y dispara la factura cuando el pago fue aprobado', async () => {
+  it('confirma el pedido cuando el pago fue aprobado (la factura se dispara recién al entregar, no acá)', async () => {
     const p = pedido([detalle({})]);
 
     await aplicarResultadoPago(p, 'approved', 'pw-123');
 
     expect(actualizarEstado).toHaveBeenCalledWith('pedido-1', 'Confirmado', { pw_payment_id: 'pw-123' });
-    expect(emitirFactura).toHaveBeenCalledWith(p);
     expect(restaurarStock).not.toHaveBeenCalled();
   });
 
@@ -86,7 +82,6 @@ describe('aplicarResultadoPago', () => {
     expect(actualizarEstado).toHaveBeenCalledWith('pedido-1', 'Cancelado', { motivo_cancelacion: 'pago_rechazado' });
     expect(restaurarStock).toHaveBeenCalledWith('prod-1', 2);
     expect(restaurarStock).toHaveBeenCalledWith('prod-2', 3);
-    expect(emitirFactura).not.toHaveBeenCalled();
   });
 
   it('cancela el pedido con motivo "solicitado_por_cliente" cuando Payway informa cancelled', async () => {
@@ -112,6 +107,5 @@ describe('aplicarResultadoPago', () => {
 
     expect(actualizarEstado).not.toHaveBeenCalled();
     expect(restaurarStock).not.toHaveBeenCalled();
-    expect(emitirFactura).not.toHaveBeenCalled();
   });
 });

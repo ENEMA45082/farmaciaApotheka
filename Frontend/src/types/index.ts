@@ -91,11 +91,14 @@ export interface ActualizarProductoDTO {
   alicuota_iva?: number;
 }
 
+export type TipoDocumento = 'DNI' | 'CUIT';
+
 export interface Perfil {
   user_id: string;
   nombre: string | null;
   apellido: string | null;
   dni: string | null;
+  documento_tipo: TipoDocumento;
   genero: string | null;
   fecha_nacimiento: string | null;
   telefono: string | null;
@@ -108,6 +111,7 @@ export interface ActualizarPerfilDTO {
   nombre?: string;
   apellido?: string;
   dni?: string;
+  documento_tipo?: TipoDocumento;
   genero?: string;
   fecha_nacimiento?: string;
   telefono?: string;
@@ -222,6 +226,7 @@ export interface PedidoDetalleAdmin extends Pedido {
     apellido: string | null;
     telefono: string | null;
     dni: string | null;
+    documento_tipo: TipoDocumento | null;
   };
   direccion_envio: Direccion | null;
   factura: Factura | null;
@@ -236,6 +241,8 @@ export interface Factura {
   nro_comprobante: number | null;
   cae: string | null;
   cae_vencimiento: string | null;
+  receptor_doc_tipo: number | null;
+  receptor_doc_nro: number | null;
   importe_total: number | null;
   respuesta_error: string | null;
   intentos: number;

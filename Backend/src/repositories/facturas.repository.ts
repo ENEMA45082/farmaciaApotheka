@@ -15,6 +15,8 @@ function mapearFactura(row: Record<string, unknown>): Factura {
     respuesta_error:  row.respuesta_error as string | null,
     intentos:         Number(row.intentos ?? 0),
     pdf_url:          row.pdf_url as string | null,
+    receptor_doc_tipo: row.receptor_doc_tipo != null ? Number(row.receptor_doc_tipo) : null,
+    receptor_doc_nro:  row.receptor_doc_nro  != null ? Number(row.receptor_doc_nro)  : null,
     creado_en:        row.creado_en as string,
     actualizado_en:   row.actualizado_en as string,
   };
@@ -41,6 +43,8 @@ export async function actualizar(id: string, cambios: {
   importe_total?: number;
   respuesta_error?: string;
   pdf_url?: string;
+  receptor_doc_tipo?: number;
+  receptor_doc_nro?: number;
   incrementarIntentos?: boolean;
 }): Promise<Factura | null> {
   const actualizacion: Record<string, unknown> = { actualizado_en: new Date().toISOString() };
@@ -53,6 +57,8 @@ export async function actualizar(id: string, cambios: {
   if (cambios.importe_total    !== undefined) actualizacion.importe_total    = cambios.importe_total;
   if (cambios.respuesta_error  !== undefined) actualizacion.respuesta_error  = cambios.respuesta_error;
   if (cambios.pdf_url          !== undefined) actualizacion.pdf_url          = cambios.pdf_url;
+  if (cambios.receptor_doc_tipo !== undefined) actualizacion.receptor_doc_tipo = cambios.receptor_doc_tipo;
+  if (cambios.receptor_doc_nro  !== undefined) actualizacion.receptor_doc_nro  = cambios.receptor_doc_nro;
 
   if (cambios.incrementarIntentos) {
     const actual = await encontrarPorId(id);

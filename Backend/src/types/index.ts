@@ -90,6 +90,8 @@ export type MetodoEnvio = 'retiro_farmacia' | 'domicilio' | 'retiro_sucursal';
 
 export type MetodoPago = 'tarjeta' | 'transferencia' | 'efectivo';
 
+export type TipoDocumento = 'DNI' | 'CUIT';
+
 export interface Pedido {
   id: string;
   user_id: string;
@@ -126,6 +128,7 @@ export interface PedidoDetalleAdmin extends Pedido {
     apellido: string | null;
     telefono: string | null;
     dni: string | null;
+    documento_tipo: TipoDocumento | null;
   };
   direccion_envio: Direccion | null;
   factura: Factura | null;
@@ -144,6 +147,8 @@ export interface Factura {
   respuesta_error: string | null;
   intentos: number;
   pdf_url: string | null;
+  receptor_doc_tipo: number | null;
+  receptor_doc_nro: number | null;
   creado_en: string;
   actualizado_en: string;
 }
@@ -208,6 +213,7 @@ export interface Perfil {
   nombre: string | null;
   apellido: string | null;
   dni: string | null;
+  documento_tipo: TipoDocumento;
   genero: string | null;
   fecha_nacimiento: string | null;
   telefono: string | null;
@@ -220,6 +226,7 @@ export interface ActualizarPerfilDTO {
   nombre?: string;
   apellido?: string;
   dni?: string;
+  documento_tipo?: TipoDocumento;
   genero?: string;
   fecha_nacimiento?: string;
   telefono?: string;

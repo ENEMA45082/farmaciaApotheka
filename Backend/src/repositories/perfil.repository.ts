@@ -7,6 +7,7 @@ function mapearPerfil(row: Record<string, unknown>): Perfil {
     nombre:           row.nombre as string | null,
     apellido:         row.apellido as string | null,
     dni:              row.dni as string | null,
+    documento_tipo:   (row.documento_tipo as Perfil['documento_tipo']) ?? 'DNI',
     genero:           row.genero as string | null,
     fecha_nacimiento: row.fecha_nacimiento as string | null,
     telefono:         row.telefono as string | null,

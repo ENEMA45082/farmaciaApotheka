@@ -6,6 +6,15 @@ import type { Categoria } from '../types';
 import { ProductGrid } from '../components/products/ProductGrid';
 import { FiltrosSidebar } from '../components/products/FiltrosSidebar';
 import { HeroCarousel } from '../components/home/HeroCarousel';
+import { SortSelect } from '../components/ui/SortSelect';
+
+const OPCIONES_ORDEN = [
+  { value: '', label: 'Más recientes' },
+  { value: 'nombre_asc', label: 'Nombre A-Z' },
+  { value: 'nombre_desc', label: 'Nombre Z-A' },
+  { value: 'precio_asc', label: 'Precio ascendente' },
+  { value: 'precio_desc', label: 'Precio descendente' },
+];
 
 type Ordenar = 'nombre_asc' | 'nombre_desc' | 'precio_asc' | 'precio_desc' | undefined;
 
@@ -155,17 +164,11 @@ export function HomePage() {
     <>
       <div className="sort-bar">
         <span className="sort-bar__label">Ordenar por:</span>
-        <select
-          className="sort-select"
+        <SortSelect
           value={ordenar ?? ''}
-          onChange={e => setSearchParams(construirParams({ ordenar: e.target.value || undefined }))}
-        >
-          <option value="">Más recientes</option>
-          <option value="nombre_asc">Nombre A-Z</option>
-          <option value="nombre_desc">Nombre Z-A</option>
-          <option value="precio_asc">Precio ascendente</option>
-          <option value="precio_desc">Precio descendente</option>
-        </select>
+          onChange={value => setSearchParams(construirParams({ ordenar: value || undefined }))}
+          opciones={OPCIONES_ORDEN}
+        />
       </div>
 
       <ProductGrid productos={productos} cargando={cargando} error={error} />

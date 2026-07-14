@@ -37,8 +37,13 @@ Notas importantes:
 
 ## 2. Cómo probar el endpoint
 
-El endpoint es `GET /api/test-afip` y requiere un usuario con rol `admin` (mismo
-esquema que el resto de rutas `/admin/*` del backend).
+Hay dos operaciones, ambas en `/api/test-afip` y ambas requieren un usuario con rol
+`admin` (mismo esquema que el resto de rutas `/admin/*` del backend):
+
+- `GET /api/test-afip`: solo lectura, no emite nada (`FECompUltimoAutorizado`).
+- `POST /api/test-afip`: **emite un comprobante de PRUEBA real** en homologación
+  (`FECAESolicitar`, sin validez fiscal). Es una acción real contra ARCA: cada
+  llamada exitosa consume un número de comprobante que no se puede reutilizar.
 
 1. Levantá el backend (`npm run dev` o el script que uses normalmente).
 2. Conseguí un access token de un usuario admin (por ejemplo, iniciando sesión en el
@@ -86,10 +91,57 @@ Errores comunes: cert/key no autorizados para `wsfe`, punto de venta no habilita
 para el CUIT, `ARCA_ACCESS_TOKEN` inválido o de otra cuenta, o rutas de
 `ARCA_CERT_PATH`/`ARCA_KEY_PATH` mal escritas.
 
+## 2.1 Emitir un comprobante de prueba (POST)
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <ACCESS_TOKEN_ADMIN>" \
+  -H "Content-Type: application/json" \
+  -d '{"puntoVenta": 1, "tipoComprobante": 6, "importeTotal": 121, "docTipo": 99, "docNro": 0}' \
+  "http://localhost:3001/api/test-afip"
+```
+
+Todos los campos del body son opcionales; si no los mandás, se usan esos mismos
+valores por defecto (Punto de Venta 1, Factura B, $121 con 21% de IVA, Consumidor
+Final). Internamente el endpoint hace, en dos pasos separados:
+
+1. `FECompUltimoAutorizado` para saber cuál es el próximo número disponible.
+2. `FECAESolicitar` pidiendo el CAE para ese número (último + 1).
+
+### Respuesta esperada (éxito)
+
+```json
+{
+  "ok": true,
+  "ambiente": "homologacion",
+  "cuit": "20450823350",
+  "puntoVenta": 1,
+  "tipoComprobante": 6,
+  "ultimoNumeroAnterior": 0,
+  "numeroComprobante": 1,
+  "importeTotal": 121,
+  "cae": "...",
+  "caeVencimiento": "yyyy-mm-dd"
+}
+```
+
+### Errores esperados y qué significan
+
+- **10016** — el número de comprobante enviado no es el siguiente al último
+  autorizado (por ejemplo, si emitiste dos veces casi al mismo tiempo, o alguien
+  más usó ese número). El endpoint agrega un campo `pista` explicando que hay que
+  volver a consultar `GET /api/test-afip` y reintentar con el número correcto.
+- **10242** — falta o es inválida la condición de IVA del receptor
+  (`CondicionIVAReceptorId`). El endpoint ya lo manda en 5 (Consumidor Final) por
+  default, así que si ves este error revisá que no lo hayas sobreescrito con un
+  valor inválido en el body.
+- Cualquier otro error de ARCA se devuelve completo, sin transformar, en
+  `error` + `detalleCompleto`.
+
 ## 3. Antes de ir a producción
 
 - Eliminar `src/routes/testAfip.routes.ts`, la línea que lo registra en `src/app.ts`
   y este archivo.
-- La función `obtenerUltimoComprobanteAutorizado` en
-  `src/services/facturacion.service.ts` sí es permanente — quedó ahí porque es
-  reutilizable para el flujo real de facturación, no hace falta borrarla.
+- Las funciones `obtenerUltimoComprobanteAutorizado` y `solicitarComprobantePrueba`
+  en `src/services/facturacion.service.ts` sí son permanentes — quedaron ahí porque
+  son reutilizables para el flujo real de facturación, no hace falta borrarlas.

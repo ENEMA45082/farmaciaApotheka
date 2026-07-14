@@ -5,7 +5,7 @@ import * as perfilRepo from '../repositories/perfil.repository';
 import * as pedidoHistorialRepo from '../repositories/pedidoHistorial.repository';
 import * as facturasRepo from '../repositories/facturas.repository';
 import * as correoArgentino from './correoArgentino.service';
-import * as facturacionService from './facturacion.service';
+import * as facturacionPedidosService from './facturacionPedidos.service';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import { supabase } from '../config/supabase';
@@ -89,6 +89,7 @@ export async function obtenerPorIdAdmin(id: string): Promise<PedidoDetalleAdmin>
       apellido: perfil?.apellido ?? null,
       telefono: perfil?.telefono ?? null,
       dni:      perfil?.dni ?? null,
+      documento_tipo: perfil?.documento_tipo ?? null,
     },
     direccion_envio: direccion,
     factura,
@@ -99,7 +100,7 @@ export async function reintentarFactura(id: string): Promise<Pedido> {
   validarUUID(id, 'pedido');
   const pedido = await pedidosRepo.encontrarPorId(id);
   if (!pedido) throw new AppError('Pedido no encontrado', 404);
-  await facturacionService.emitirFactura(pedido);
+  await facturacionPedidosService.emitirFactura(pedido);
   return pedido;
 }
 
@@ -173,8 +174,10 @@ export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserI
   const pedido = await pedidosRepo.encontrarPorId(id);
   if (!pedido) throw new AppError('Pedido no encontrado', 404);
 
-  if (estado === 'Confirmado') {
-    await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
+  // La factura se emite recién al entregar el pedido (nunca antes: ni al
+  // confirmar el pago, ni en preparación) — regla de negocio explícita.
+  if (estado === 'Entregado') {
+    await facturacionPedidosService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
   }
 
   return pedido;
@@ -193,6 +196,11 @@ export async function cancelarPedido(id: string, motivo: string, adminUserId: st
   const pedido = await pedidosRepo.encontrarPorId(id);
   if (!pedido) throw new AppError('Pedido no encontrado', 404);
 
+  // TODO(nota-de-crédito): hoy es imposible llegar acá con pedido.estado === 'Entregado'
+  // (Entregado es estado final, TRANSICIONES_VALIDAS.Entregado = []) — este guard nunca
+  // deja cancelar un pedido ya facturado. Si en el futuro se habilita cancelar/devolver
+  // un pedido Entregado, hay que emitir una Nota de Crédito B (CbteTipo 8) contra el CAE
+  // de facturasRepo.encontrarPorPedidoId(id) ANTES de restaurar stock — no implementado.
   if (ESTADOS_FINALES.includes(pedido.estado)) {
     throw new AppError(`El pedido ya está en estado '${pedido.estado}' y no se puede cancelar`, 400);
   }

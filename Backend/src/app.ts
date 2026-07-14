@@ -20,6 +20,7 @@ import envioRoutes         from './routes/envio.routes';
 import pagosRoutes         from './routes/pagos.routes';
 import facturasRoutes      from './routes/facturas.routes';
 import testAfipRoutes      from './routes/testAfip.routes'; // TEMPORAL: ver TEST_AFIP.md, eliminar antes de producción
+import testAfipProduccionRoutes from './routes/testAfipProduccion.routes'; // TEMPORAL: ver TEST_AFIP_PRODUCCION.md — pega contra ARCA PRODUCCIÓN real
 import { errorHandler }    from './middlewares/errorHandler';
 
 dotenv.config();
@@ -76,6 +77,7 @@ app.use('/api/envio',       envioRoutes);
 app.use('/api/pagos',       pagosLimiter, pagosRoutes);
 app.use('/api/facturas',    facturasRoutes);
 app.use('/api/test-afip',   testAfipRoutes); // TEMPORAL: eliminar antes de producción
+app.use('/api/test-afip-produccion', testAfipProduccionRoutes); // TEMPORAL: pega contra ARCA PRODUCCIÓN real, ver TEST_AFIP_PRODUCCION.md
 
 app.use(errorHandler);
 

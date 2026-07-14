@@ -5,10 +5,6 @@ const { encontrarPorId } = vi.hoisted(() => ({ encontrarPorId: vi.fn() }));
 
 vi.mock('../repositories/productos.repository', () => ({ encontrarPorId }));
 vi.mock('../config/afip', () => ({ afip: null, afipConfigurado: false, PUNTO_VENTA_ARCA: 1 }));
-vi.mock('../config/supabase', () => ({ supabase: {} }));
-vi.mock('../repositories/facturas.repository', () => ({}));
-vi.mock('../repositories/perfil.repository', () => ({}));
-vi.mock('../repositories/direcciones.repository', () => ({}));
 
 import { calcularDesgloseIva } from './facturacion.service';
 

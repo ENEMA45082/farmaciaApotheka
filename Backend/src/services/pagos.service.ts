@@ -22,7 +22,6 @@ const sdkPayway = require('sdk-node-payway') as {
 
 import * as pedidosRepo   from '../repositories/pedidos.repository';
 import * as productosRepo from '../repositories/productos.repository';
-import * as facturacionService from './facturacion.service';
 import { AppError } from '../errors/AppError';
 import type { Pedido, FraudData } from '../types';
 
@@ -94,8 +93,10 @@ function buildFraudDetection(pedido: Pedido, fraudData: FraudData, amountCentavo
 
 export async function aplicarResultadoPago(pedido: Pedido, status: string, paymentId: string): Promise<void> {
   if (status === 'approved') {
+    // La factura ya no se dispara acá: se emite recién cuando el pedido pasa a
+    // "Entregado" (ver pedidos.service.ts::cambiarEstado), sin importar el
+    // método de pago.
     await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: paymentId || undefined });
-    await facturacionService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
   } else if (status === 'rejected' || status === 'cancelled') {
     const motivo = status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
     await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });

@@ -1880,7 +1880,7 @@ export function AdminPage() {
                       <div className="pedido-detalle__factura">
                         <h3 className="pedido-detalle__seccion-titulo">Factura ARCA</h3>
                         {!pedidoDetalle.factura && (
-                          <p className="pedido-detalle__pago">Sin factura (pedido aún no confirmado, o ARCA no está configurado).</p>
+                          <p className="pedido-detalle__pago">Sin factura (el pedido todavía no fue marcado como Entregado, o ARCA no está configurado).</p>
                         )}
                         {pedidoDetalle.factura?.estado === 'pendiente' && (
                           <p className="pedido-detalle__pago">Factura pendiente de emisión.</p>

@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { useProductos } from '../hooks/useProductos';
 import { ProductGrid } from '../components/products/ProductGrid';
+import { SortSelect } from '../components/ui/SortSelect';
+
+const OPCIONES_ORDEN = [
+  { value: '', label: 'Más recientes' },
+  { value: 'precio_asc', label: 'Precio ascendente' },
+  { value: 'precio_desc', label: 'Precio descendente' },
+  { value: 'nombre_asc', label: 'Nombre A-Z' },
+  { value: 'nombre_desc', label: 'Nombre Z-A' },
+];
 
 export function OfertasPage() {
   const [pagina, setPagina] = useState(1);
@@ -25,20 +34,14 @@ export function OfertasPage() {
 
         <div className="sort-bar">
           <span className="sort-bar__label">Ordenar por:</span>
-          <select
-            className="sort-select"
+          <SortSelect
             value={ordenar ?? ''}
-            onChange={e => {
-              setOrdenar((e.target.value || undefined) as typeof ordenar);
+            onChange={value => {
+              setOrdenar((value || undefined) as typeof ordenar);
               setPagina(1);
             }}
-          >
-            <option value="">Más recientes</option>
-            <option value="precio_asc">Precio ascendente</option>
-            <option value="precio_desc">Precio descendente</option>
-            <option value="nombre_asc">Nombre A-Z</option>
-            <option value="nombre_desc">Nombre Z-A</option>
-          </select>
+            opciones={OPCIONES_ORDEN}
+          />
         </div>
       </div>
 
