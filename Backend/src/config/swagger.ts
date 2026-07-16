@@ -95,6 +95,17 @@ const options: swaggerJsdoc.Options = {
             subtotal:         { type: 'number' },
           },
         },
+        Estado: {
+          type: 'object',
+          properties: {
+            id:          { type: 'integer', example: 1 },
+            nombre:      { type: 'string', enum: ['PendienteDePago', 'Confirmado', 'EnPreparacion', 'Enviado', 'ListoParaRetirar', 'Entregado', 'Cancelado'] },
+            descripcion: { type: 'string', nullable: true },
+            es_final:    { type: 'boolean' },
+            orden:       { type: 'integer' },
+            creado_en:   { type: 'string', format: 'date-time' },
+          },
+        },
         Pedido: {
           type: 'object',
           properties: {

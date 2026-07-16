@@ -92,6 +92,15 @@ export type MetodoPago = 'tarjeta' | 'transferencia' | 'efectivo';
 
 export type TipoDocumento = 'DNI' | 'CUIT';
 
+export interface Estado {
+  id: number;
+  nombre: EstadoPedido;
+  descripcion: string | null;
+  es_final: boolean;
+  orden: number;
+  creado_en: string;
+}
+
 export interface Pedido {
   id: string;
   user_id: string;

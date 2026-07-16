@@ -7,8 +7,10 @@ import swaggerUi from 'swagger-ui-express';
 import { supabase } from './config/supabase';
 import { swaggerSpec } from './config/swagger';
 import { generalLimiter, pagosLimiter, pedidosLimiter } from './middlewares/rateLimiter';
+import * as estadosRepo from './repositories/estados.repository';
 import productosRoutes     from './routes/productos.routes';
 import categoriasRoutes    from './routes/categorias.routes';
+import estadosRoutes       from './routes/estados.routes';
 import bannersRoutes       from './routes/banners.routes';
 import uploadsRoutes       from './routes/uploads.routes';
 import estadisticasRoutes  from './routes/estadisticas.routes';
@@ -64,8 +66,23 @@ app.get('/health', async (_req, res) => {
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// Precarga el catálogo de estados en memoria antes de las rutas de API. En
+// Vercel no hay un "boot" único (serverless): esto corre en el primer
+// request de cada cold start y es un no-op rápido en los siguientes
+// (memoizado dentro de estados.repository.ts). Va después de /health para
+// que el health check no dependa de esta tabla.
+app.use('/api', async (_req, res, next) => {
+  try {
+    await estadosRepo.precargarCache();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.use('/api/productos',    productosRoutes);
 app.use('/api/categorias',  categoriasRoutes);
+app.use('/api/estados',     estadosRoutes);
 app.use('/api/banners',     bannersRoutes);
 app.use('/api/uploads',     uploadsRoutes);
 app.use('/api/estadisticas', estadisticasRoutes);

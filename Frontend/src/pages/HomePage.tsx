@@ -1,12 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useProductos } from '../hooks/useProductos';
 import { fetchProductos, fetchCategorias, fetchCategoriasArbol } from '../api/productos.api';
 import type { Categoria } from '../types';
 import { ProductGrid } from '../components/products/ProductGrid';
-import { FiltrosSidebar } from '../components/products/FiltrosSidebar';
 import { HeroCarousel } from '../components/home/HeroCarousel';
 import { SortSelect } from '../components/ui/SortSelect';
+import { Spinner } from '../components/ui/Spinner';
+
+// FiltrosSidebar carga rc-slider (+ su CSS): solo se usa acá, se saca del
+// bundle inicial de la home vía import dinámico.
+const FiltrosSidebar = lazy(() => import('../components/products/FiltrosSidebar').then(m => ({ default: m.FiltrosSidebar })));
 
 const OPCIONES_ORDEN = [
   { value: '', label: 'Más recientes' },
@@ -194,21 +198,23 @@ export function HomePage() {
         {mostrarFiltros ? (
           <div className="catalog-layout">
             <aside>
-              <FiltrosSidebar
-                titulo={titulo}
-                esBusqueda={!!busqueda}
-                onLimpiarBusqueda={() => setSearchParams(categoriaSeleccionada ? { categoria: categoriaSeleccionada } : {})}
-                total={total}
-                precioMin={precioBounds?.min ?? 0}
-                precioMax={precioBounds?.max ?? 0}
-                precioSeleccionado={precioSeleccionado}
-                onCambiarPrecio={handleCambiarPrecio}
-                categoriasRaiz={categoriasRaiz}
-                categoriasSeleccionadas={categoriasFacet}
-                onToggleCategoria={handleToggleCategoriaFacet}
-                enOferta={enOferta}
-                onToggleEnOferta={handleToggleEnOferta}
-              />
+              <Suspense fallback={<Spinner />}>
+                <FiltrosSidebar
+                  titulo={titulo}
+                  esBusqueda={!!busqueda}
+                  onLimpiarBusqueda={() => setSearchParams(categoriaSeleccionada ? { categoria: categoriaSeleccionada } : {})}
+                  total={total}
+                  precioMin={precioBounds?.min ?? 0}
+                  precioMax={precioBounds?.max ?? 0}
+                  precioSeleccionado={precioSeleccionado}
+                  onCambiarPrecio={handleCambiarPrecio}
+                  categoriasRaiz={categoriasRaiz}
+                  categoriasSeleccionadas={categoriasFacet}
+                  onToggleCategoria={handleToggleCategoriaFacet}
+                  enOferta={enOferta}
+                  onToggleEnOferta={handleToggleEnOferta}
+                />
+              </Suspense>
             </aside>
             <div className="catalog-main">{contenidoPrincipal}</div>
           </div>

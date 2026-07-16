@@ -643,3 +643,131 @@ ALTER TABLE perfiles ADD CONSTRAINT perfiles_documento_tipo_check
 
 ALTER TABLE facturas ADD COLUMN IF NOT EXISTS receptor_doc_tipo integer;
 ALTER TABLE facturas ADD COLUMN IF NOT EXISTS receptor_doc_nro  bigint;  -- CUIT (11 dígitos) no entra en integer
+
+
+-- --------------------------------------------------------
+-- 12. Normalizar pedidos.estado (text + CHECK) a tabla catálogo
+--     `estados` referenciada por FK. Corte en UNA sola migración:
+--     se agrega estado_id, se migran los datos, y se dropea la
+--     columna/constraint viejos en el mismo script.
+--
+--     ⚠️ RIESGO OPERACIONAL: esta migración y el deploy del backend
+--     nuevo deben aplicarse en la misma ventana, lo más juntos posible.
+--     El backend viejo lee/escribe `estado` (text) y rompe apenas se
+--     dropea esa columna; el backend nuevo lee/escribe `estado_id` y
+--     rompe si corre contra el schema viejo (no existe la columna).
+--     No hay forma de tener ambos backends funcionando a la vez contra
+--     el mismo schema durante esta migración. Ejecutar envuelto en
+--     BEGIN;/COMMIT; en el SQL Editor de Supabase.
+--
+--     `pedido_historial_estados` NO se toca: queda congelada como
+--     snapshot de texto plano de cada cambio histórico, a propósito
+--     (columnas estado_anterior/estado_nuevo siguen siendo text).
+-- --------------------------------------------------------
+
+-- 12a. Catálogo de estados. PK entero simple explícito (no uuid, no
+--      serial/identity): son ~7 filas fijas y curadas a mano, los ids
+--      se documentan acá mismo en vez de depender del autoincrement.
+CREATE TABLE IF NOT EXISTS estados (
+  id          smallint PRIMARY KEY,
+  nombre      text NOT NULL UNIQUE,
+  descripcion text,
+  es_final    boolean NOT NULL DEFAULT false,
+  orden       smallint NOT NULL,
+  creado_en   timestamptz NOT NULL DEFAULT now()
+);
+
+-- Metadata para mostrar (descripción/orden/es_final) — la MÁQUINA DE
+-- ESTADOS real sigue viviendo en src/config/estadosPedido.ts
+-- (TRANSICIONES_VALIDAS), esta tabla NO se usa para decidir transiciones.
+INSERT INTO estados (id, nombre, descripcion, es_final, orden) VALUES
+  (1, 'PendienteDePago',  'Pedido creado, esperando confirmación de pago.',     false, 1),
+  (2, 'Confirmado',       'Pago confirmado, pendiente de preparación.',         false, 2),
+  (3, 'EnPreparacion',    'El pedido se está preparando en la farmacia.',       false, 3),
+  (4, 'Enviado',          'El pedido fue despachado para entrega a domicilio.', false, 4),
+  (5, 'ListoParaRetirar', 'El pedido está listo para retirar en la farmacia.',  false, 5),
+  (6, 'Entregado',        'El pedido fue entregado/retirado. Estado final.',    true,  6),
+  (7, 'Cancelado',        'El pedido fue cancelado. Estado final.',             true,  7)
+ON CONFLICT (id) DO UPDATE SET
+  nombre      = EXCLUDED.nombre,
+  descripcion = EXCLUDED.descripcion,
+  es_final    = EXCLUDED.es_final,
+  orden       = EXCLUDED.orden;
+
+-- 12b. Agregar estado_id como NULLABLE primero, backfillear, verificar,
+--      y recién ahí poner NOT NULL/DEFAULT — evita que exista una
+--      ventana con datos incorrectos si el backfill tarda o falla.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS estado_id smallint REFERENCES estados(id);
+
+UPDATE pedidos p
+SET estado_id = e.id
+FROM estados e
+WHERE p.estado = e.nombre
+  AND p.estado_id IS NULL;
+
+-- Verificación defensiva: si algún pedido quedó sin mapear (no debería
+-- pasar, dado que el CHECK constraint viejo solo permitía estos 7
+-- valores), la migración aborta acá en vez de dropear la columna vieja
+-- y perder el dato en silencio.
+DO $$
+DECLARE
+  huerfanos integer;
+BEGIN
+  SELECT COUNT(*) INTO huerfanos FROM pedidos WHERE estado_id IS NULL;
+  IF huerfanos > 0 THEN
+    RAISE EXCEPTION 'Migración de estados abortada: % pedido(s) con estado sin mapear a la tabla estados', huerfanos;
+  END IF;
+END $$;
+
+ALTER TABLE pedidos ALTER COLUMN estado_id SET NOT NULL;
+-- 1 = 'PendienteDePago' (ver INSERT de estados arriba). Postgres no
+-- permite subqueries en un DEFAULT de columna, así que el id va literal.
+ALTER TABLE pedidos ALTER COLUMN estado_id SET DEFAULT 1;
+
+CREATE INDEX IF NOT EXISTS idx_pedidos_estado_id ON pedidos(estado_id);
+
+-- 12c. Dropear la columna vieja y su CHECK (el CHECK cae solo al
+--      dropear la columna; se lo nombra igual por documentación).
+ALTER TABLE pedidos DROP CONSTRAINT IF EXISTS pedidos_estado_check;
+ALTER TABLE pedidos DROP COLUMN IF EXISTS estado;
+
+-- 12d. cancelar_pedidos_expirados() ahora opera sobre estado_id.
+--      Resuelve los ids por nombre dentro de la función (no un magic
+--      number pelado) para que quede legible aunque los ids ya sean
+--      estables. Se mantiene el mismo motivo fijo del cron
+--      ('pago_no_recibido') introducido en la sección 6c.
+CREATE OR REPLACE FUNCTION cancelar_pedidos_expirados()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  pedido_row   RECORD;
+  detalle_row  RECORD;
+  id_pendiente smallint;
+  id_cancelado smallint;
+BEGIN
+  SELECT id INTO id_pendiente FROM estados WHERE nombre = 'PendienteDePago';
+  SELECT id INTO id_cancelado FROM estados WHERE nombre = 'Cancelado';
+
+  FOR pedido_row IN
+    SELECT id FROM pedidos
+    WHERE estado_id = id_pendiente
+      AND fecha_pedido < NOW() - INTERVAL '48 hours'
+  LOOP
+    FOR detalle_row IN
+      SELECT producto_id, cantidad
+      FROM detalles_pedido
+      WHERE pedido_id = pedido_row.id
+        AND producto_id IS NOT NULL
+    LOOP
+      PERFORM restaurar_stock(detalle_row.producto_id, detalle_row.cantidad);
+    END LOOP;
+
+    UPDATE pedidos SET
+      estado_id          = id_cancelado,
+      fecha_cancelacion  = NOW(),
+      motivo_cancelacion = 'pago_no_recibido'
+    WHERE id = pedido_row.id;
+  END LOOP;
+END;
+$$;

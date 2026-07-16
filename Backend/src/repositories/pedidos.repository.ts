@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import * as estadosRepo from './estados.repository';
 import type { Pedido, DetallePedido, CrearPedidoDTO } from '../types';
 
 function mapearDetalle(row: Record<string, unknown>): DetallePedido {
@@ -18,7 +19,7 @@ function mapearPedido(row: Record<string, unknown>): Pedido {
   return {
     id:               row.id as string,
     user_id:          row.user_id as string,
-    estado:           row.estado as Pedido['estado'],
+    estado:           estadosRepo.getNombreById(row.estado_id as number),
     total:            Number(row.total),
     subtotal_lista:   Number(row.subtotal_lista),
     nro_pedido:       Number(row.nro_pedido),
@@ -122,7 +123,7 @@ export async function actualizarEstado(
     shipping_error?: string;
   },
 ): Promise<void> {
-  const cambios: Record<string, unknown> = { estado };
+  const cambios: Record<string, unknown> = { estado_id: estadosRepo.getIdByNombre(estado) };
   if (extras?.pw_payment_id)              cambios.pw_payment_id              = extras.pw_payment_id;
   if (extras?.motivo_cancelacion)         cambios.motivo_cancelacion         = extras.motivo_cancelacion;
   if (extras?.shipping_tracking_number)   cambios.shipping_tracking_number   = extras.shipping_tracking_number;
@@ -174,13 +175,13 @@ export async function cancelar(
   const { data, error } = await supabase
     .from('pedidos')
     .update({
-      estado: 'Cancelado',
+      estado_id: estadosRepo.getIdByNombre('Cancelado'),
       fecha_cancelacion: new Date().toISOString(),
       motivo_cancelacion: motivo ?? null,
     })
     .eq('id', id)
     .eq('user_id', userId)
-    .eq('estado', 'PendienteDePago')
+    .eq('estado_id', estadosRepo.getIdByNombre('PendienteDePago'))
     .select('id');
 
   if (error || !data || data.length === 0) return null;

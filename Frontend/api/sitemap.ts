@@ -51,6 +51,7 @@ export default async function handler(): Promise<Response> {
   const urlsEstaticas = [
     urlEntry(`${siteUrl}/`, '    <changefreq>daily</changefreq>\n'),
     urlEntry(`${siteUrl}/ofertas`, '    <changefreq>daily</changefreq>\n'),
+    urlEntry(`${siteUrl}/contacto`, '    <changefreq>monthly</changefreq>\n'),
   ];
 
   // creado_en es la fecha de creacion: la tabla `products` no tiene columna

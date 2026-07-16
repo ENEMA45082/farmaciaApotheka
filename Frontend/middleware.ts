@@ -108,6 +108,10 @@ function productJsonLd(producto: Producto, url: string): Record<string, unknown>
   };
 }
 
+// NAP hardcodeado a propósito: este archivo pertenece al proyecto TS "node"
+// (tsconfig.node.json) y no puede importar src/config/negocio.ts (proyecto
+// "app", tsconfig.app.json distinto). Si los datos del negocio cambian,
+// actualizar también src/config/negocio.ts a mano.
 function pharmacyJsonLd(): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
@@ -116,12 +120,22 @@ function pharmacyJsonLd(): Record<string, unknown> {
     url: `${SITE_URL}/`,
     address: {
       '@type': 'PostalAddress',
-      streetAddress: 'San Jerónimo 248',
+      streetAddress: 'San Jerónimo 248 Loc. 3-4',
       addressLocality: 'Córdoba',
+      addressRegion: 'Córdoba',
       postalCode: 'X5000AGF',
       addressCountry: 'AR',
     },
-    telephone: '+54 351 835-4942',
+    telephone: '+5493518354942',
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: -31.418128,
+      longitude: -64.181276,
+    },
+    sameAs: [
+      'https://www.instagram.com/farmacia.apotheka/',
+      'https://www.google.com/search?kgmid=/g/1vs1szpg',
+    ],
     openingHoursSpecification: [
       {
         '@type': 'OpeningHoursSpecification',
@@ -132,10 +146,13 @@ function pharmacyJsonLd(): Record<string, unknown> {
       {
         '@type': 'OpeningHoursSpecification',
         dayOfWeek: ['Saturday'],
-        opens: '09:30',
+        opens: '10:00',
         closes: '13:30',
       },
     ],
+    // TODO: aggregateRating — agregar solo cuando se pueda sincronizar con
+    // reseñas reales (p. ej. Google Business Profile). Nunca inventar
+    // ratingValue/reviewCount.
   };
 }
 
@@ -211,6 +228,35 @@ ${opts.productos.map(productoListItem).join('\n')}
 </html>`;
 }
 
+function buildContactoHtml(url: string): string {
+  const titulo = 'Contacto y Cómo Llegar | Farmacia Apotheka — Centro, Córdoba';
+  const descripcion = 'Farmacia Apotheka en San Jerónimo 248 Loc. 3-4, Centro de Córdoba. Horarios de atención, teléfono, WhatsApp y ubicación en el mapa.';
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+${baseHead(titulo, descripcion, url, undefined, [pharmacyJsonLd()])}
+</head>
+<body>
+<h1>Contacto — Farmacia Apotheka</h1>
+<p>Estamos en pleno Centro de Córdoba.</p>
+<address>
+San Jerónimo 248 Loc. 3-4<br/>
+X5000AGF, Córdoba, Argentina
+</address>
+<p><a href="tel:+5493518354942">+54 351 835-4942</a></p>
+<p><a href="https://wa.me/5493518354942">WhatsApp: +54 351 835-4942</a></p>
+<ul>
+<li>Lunes a Viernes: 8:30 a 19:00</li>
+<li>Sábados: 10:00 a 13:30</li>
+<li>Domingos: Cerrado</li>
+</ul>
+<p><a href="https://www.instagram.com/farmacia.apotheka/">Instagram: @farmacia.apotheka</a></p>
+<a href="${SITE_URL}/">Volver al catálogo</a>
+</body>
+</html>`;
+}
+
 // ---------- Fetch helpers ----------
 
 async function fetchProducto(apiBase: string, id: string): Promise<Producto | null> {
@@ -235,10 +281,18 @@ export default async function middleware(request: Request): Promise<Response> {
 
   if (!esBotBusqueda && !esBotSocial) return next();
 
+  const url = new URL(request.url);
+
+  // /contacto es contenido estatico (no depende de la API), se sirve incluso
+  // si el backend esta caido.
+  if (esBotBusqueda && url.pathname === '/contacto') {
+    return new Response(buildContactoHtml(url.toString()), {
+      headers: { 'content-type': 'text/html; charset=utf-8', ...BOT_CACHE_HEADERS },
+    });
+  }
+
   const apiBase = process.env.VITE_API_URL;
   if (!apiBase) return next();
-
-  const url = new URL(request.url);
 
   try {
     const matchProducto = url.pathname.match(PRODUCTO_ID_REGEX);
@@ -295,5 +349,5 @@ export default async function middleware(request: Request): Promise<Response> {
 }
 
 export const config = {
-  matcher: ['/', '/ofertas', '/productos/:path*'],
+  matcher: ['/', '/ofertas', '/productos/:path*', '/contacto'],
 };
