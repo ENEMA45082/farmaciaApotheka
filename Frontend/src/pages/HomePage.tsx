@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useProductos } from '../hooks/useProductos';
 import { fetchProductos, fetchCategorias, fetchCategoriasArbol } from '../api/productos.api';
 import type { Categoria } from '../types';
@@ -7,6 +8,8 @@ import { ProductGrid } from '../components/products/ProductGrid';
 import { HeroCarousel } from '../components/home/HeroCarousel';
 import { SortSelect } from '../components/ui/SortSelect';
 import { Spinner } from '../components/ui/Spinner';
+import { slugify } from '../utils/slug';
+import { overlayVariants } from '../components/ui/motion';
 
 // FiltrosSidebar carga rc-slider (+ su CSS): solo se usa acá, se saca del
 // bundle inicial de la home vía import dinámico.
@@ -24,10 +27,9 @@ type Ordenar = 'nombre_asc' | 'nombre_desc' | 'precio_asc' | 'precio_desc' | und
 
 export function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { slug } = useParams<{ slug?: string }>();
+  const navigate = useNavigate();
 
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string | undefined>(
-    searchParams.get('categoria') ?? undefined
-  );
   const [busqueda, setBusqueda] = useState<string | undefined>(
     searchParams.get('busqueda') ?? undefined
   );
@@ -41,15 +43,26 @@ export function HomePage() {
   const [pagina, setPagina] = useState(1);
 
   const [categoriasRaiz, setCategoriasRaiz] = useState<Categoria[]>([]);
-  const [categoriaNombre, setCategoriaNombre] = useState<string | undefined>(undefined);
+  const [categoriasFlat, setCategoriasFlat] = useState<Categoria[]>([]);
   const [precioBounds, setPrecioBounds] = useState<{ min: number; max: number } | null>(null);
   const [precioSeleccionado, setPrecioSeleccionado] = useState<[number, number]>([0, 0]);
+  const [filtrosMovilAbierto, setFiltrosMovilAbierto] = useState(false);
 
-  const mostrarFiltros = !!busqueda || !!categoriaSeleccionada;
+  // Categoría activa: por slug (ruta /categoria/:slug) o, para compatibilidad
+  // con links viejos, por uuid en ?categoria= (query param que se usaba antes
+  // de tener rutas por path).
+  const categoriaActiva = useMemo(() => {
+    if (!categoriasFlat.length) return undefined;
+    if (slug) return categoriasFlat.find(c => slugify(c.nombre) === slug);
+    const uuidLegacy = searchParams.get('categoria');
+    if (uuidLegacy) return categoriasFlat.find(c => c.id === uuidLegacy);
+    return undefined;
+  }, [categoriasFlat, slug, searchParams]);
+
+  const mostrarFiltros = !!busqueda || !!categoriaActiva;
 
   // Resincroniza el estado local cada vez que cambia la URL (back/forward, links, etc.)
   useEffect(() => {
-    setCategoriaSeleccionada(searchParams.get('categoria') ?? undefined);
     setBusqueda(searchParams.get('busqueda') ?? undefined);
     setOrdenar((searchParams.get('ordenar') as Ordenar) ?? undefined);
     setEnOferta(searchParams.get('en_oferta') === 'true');
@@ -62,16 +75,29 @@ export function HomePage() {
     fetchCategoriasArbol().then(setCategoriasRaiz).catch(() => setCategoriasRaiz([]));
   }, []);
 
-  // Nombre de la categoría activa (cuando se navega por categoría puntual, no por búsqueda)
+  // Lista plana de categorías, para resolver slug/uuid -> categoría activa
   useEffect(() => {
-    if (!categoriaSeleccionada) {
-      setCategoriaNombre(undefined);
-      return;
+    fetchCategorias().then(setCategoriasFlat).catch(() => setCategoriasFlat([]));
+  }, []);
+
+  // Compat: si la categoría se resolvió por el ?categoria=uuid viejo (no por
+  // /categoria/:slug), canonicaliza la URL a la ruta nueva sin perder el
+  // resto de los query params.
+  useEffect(() => {
+    const uuidLegacy = searchParams.get('categoria');
+    if (slug || !uuidLegacy || !categoriaActiva) return;
+    const nuevosParams = new URLSearchParams(searchParams);
+    nuevosParams.delete('categoria');
+    const queryString = nuevosParams.toString();
+    navigate(`/categoria/${slugify(categoriaActiva.nombre)}${queryString ? `?${queryString}` : ''}`, { replace: true });
+  }, [slug, categoriaActiva, searchParams, navigate]);
+
+  // Slug en la ruta que no matchea ninguna categoría (link roto/typo): volver a la home
+  useEffect(() => {
+    if (slug && categoriasFlat.length && !categoriaActiva) {
+      navigate('/', { replace: true });
     }
-    fetchCategorias()
-      .then(cats => setCategoriaNombre(cats.find(c => c.id === categoriaSeleccionada)?.nombre))
-      .catch(() => setCategoriaNombre(undefined));
-  }, [categoriaSeleccionada]);
+  }, [slug, categoriasFlat, categoriaActiva, navigate]);
 
   const categoriasFacetKey = categoriasFacet.join(',');
 
@@ -81,7 +107,7 @@ export function HomePage() {
     if (!mostrarFiltros) return;
     let cancelado = false;
     const contexto = {
-      categoria: categoriaSeleccionada,
+      categoria: categoriaActiva?.id,
       categorias: categoriasFacetKey || undefined,
       busqueda,
       en_oferta: enOferta || undefined,
@@ -108,10 +134,10 @@ export function HomePage() {
 
     return () => { cancelado = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mostrarFiltros, categoriaSeleccionada, busqueda, categoriasFacetKey, enOferta]);
+  }, [mostrarFiltros, categoriaActiva, busqueda, categoriasFacetKey, enOferta]);
 
   const { productos, total, totalPaginas, cargando, error } = useProductos({
-    categoria: categoriaSeleccionada,
+    categoria: categoriaActiva?.id,
     categorias: categoriasFacetKey || undefined,
     busqueda,
     en_oferta: enOferta || undefined,
@@ -125,7 +151,6 @@ export function HomePage() {
   function construirParams(overrides: Record<string, string | undefined>) {
     const base: Record<string, string> = {};
     if (busqueda) base.busqueda = busqueda;
-    if (categoriaSeleccionada) base.categoria = categoriaSeleccionada;
     if (ordenar) base.ordenar = ordenar;
     if (enOferta) base.en_oferta = 'true';
     if (categoriasFacet.length) base.categorias = categoriasFacet.join(',');
@@ -160,9 +185,16 @@ export function HomePage() {
 
   const titulo = useMemo(() => {
     if (busqueda) return `Resultados para "${busqueda}"`;
-    if (categoriaNombre) return categoriaNombre;
+    if (categoriaActiva) return categoriaActiva.nombre;
     return 'Todos los productos';
-  }, [busqueda, categoriaNombre]);
+  }, [busqueda, categoriaActiva]);
+
+  const cantidadFiltrosActivos = useMemo(() => {
+    const precioActivo = precioBounds != null && (
+      precioSeleccionado[0] > precioBounds.min || precioSeleccionado[1] < precioBounds.max
+    );
+    return categoriasFacet.length + (enOferta ? 1 : 0) + (precioActivo ? 1 : 0);
+  }, [categoriasFacet, enOferta, precioBounds, precioSeleccionado]);
 
   const contenidoPrincipal = (
     <>
@@ -173,6 +205,14 @@ export function HomePage() {
           onChange={value => setSearchParams(construirParams({ ordenar: value || undefined }))}
           opciones={OPCIONES_ORDEN}
         />
+        {mostrarFiltros && (
+          <button className="filtros-trigger-btn" onClick={() => setFiltrosMovilAbierto(true)}>
+            Filtros
+            {cantidadFiltrosActivos > 0 && (
+              <span className="filtros-trigger-btn__badge">{cantidadFiltrosActivos}</span>
+            )}
+          </button>
+        )}
       </div>
 
       <ProductGrid productos={productos} cargando={cargando} error={error} />
@@ -197,12 +237,31 @@ export function HomePage() {
       <div className="page">
         {mostrarFiltros ? (
           <div className="catalog-layout">
-            <aside>
+            <AnimatePresence>
+              {filtrosMovilAbierto && (
+                <motion.div
+                  className="filtros-overlay"
+                  variants={overlayVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  onClick={() => setFiltrosMovilAbierto(false)}
+                />
+              )}
+            </AnimatePresence>
+            <aside className={`filtros-drawer${filtrosMovilAbierto ? ' filtros-drawer--abierto' : ''}`}>
+              <button
+                className="filtros-drawer__cerrar"
+                onClick={() => setFiltrosMovilAbierto(false)}
+                aria-label="Cerrar filtros"
+              >
+                ✕
+              </button>
               <Suspense fallback={<Spinner />}>
                 <FiltrosSidebar
                   titulo={titulo}
                   esBusqueda={!!busqueda}
-                  onLimpiarBusqueda={() => setSearchParams(categoriaSeleccionada ? { categoria: categoriaSeleccionada } : {})}
+                  onLimpiarBusqueda={() => setSearchParams(construirParams({ busqueda: undefined }))}
                   total={total}
                   precioMin={precioBounds?.min ?? 0}
                   precioMax={precioBounds?.max ?? 0}

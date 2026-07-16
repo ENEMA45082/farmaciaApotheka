@@ -36,6 +36,13 @@ export const drawerVariants: Variants = {
   exit:    { x: '100%', transition: { duration: 0.2, ease: 'easeIn' } },
 };
 
+// Igual que drawerVariants pero entra desde la izquierda (menú mobile).
+export const drawerVariantsLeft: Variants = {
+  initial: { x: '-100%' },
+  animate: { x: 0, transition: { type: 'spring', stiffness: 300, damping: 30 } },
+  exit:    { x: '-100%', transition: { duration: 0.2, ease: 'easeIn' } },
+};
+
 // ── Menús desplegables ────────────────────────────────────────────────────────
 export const menuVariants: Variants = {
   initial: { opacity: 0, scaleY: 0.92, y: -6 },

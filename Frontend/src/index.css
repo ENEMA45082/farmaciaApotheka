@@ -1,6 +1,15 @@
 /* ===== Reset & Base ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/*
+ * ===== Breakpoints estándar =====
+ * 640px  — celular -> celular grande/tablet chica
+ * 768px  — tablet -> desktop chico (límite principal: nav mobile vs desktop)
+ * 1024px — desktop
+ * Usar estos 3 valores para todo layout nuevo. Los @media con otros valores
+ * que ya existían en el archivo se mantienen si cambiarlos rompe algo puntual.
+ */
+
 :root {
   --navy:        #002D62;
   --navy-dark:   #004080;
@@ -81,7 +90,7 @@ img { max-width: 100%; display: block; }
 /* ===== Buttons ===== */
 .btn {
   display: inline-block;
-  padding: 0.6rem 1.2rem;
+  padding: 0.75rem 1.25rem;
   border-radius: var(--radius);
   font-size: 0.9rem;
   font-weight: 600;
@@ -98,10 +107,10 @@ img { max-width: 100%; display: block; }
 .btn--whatsapp:hover { background: #1ebe5a; }
 .input {
   width: 100%;
-  padding: 0.55rem 0.85rem;
+  padding: 0.6rem 0.85rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 0.9rem;
+  font-size: 16px;
   font-family: inherit;
   background: var(--white);
   color: var(--text);
@@ -130,6 +139,18 @@ img { max-width: 100%; display: block; }
   gap: 1.25rem;
 }
 
+.header__hamburger-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  color: var(--white);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.header__hamburger-btn:hover { background: rgba(255,255,255,0.15); }
+
 .header__logo { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; flex-shrink: 0; }
 .header__logo-img { height: 46px; width: auto; display: block; }
 .header__logo-text { display: flex; flex-direction: column; line-height: 1; }
@@ -139,6 +160,7 @@ img { max-width: 100%; display: block; }
 /* Buscador siempre visible */
 .header-search {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   background: var(--white);
@@ -338,6 +360,113 @@ img { max-width: 100%; display: block; }
 .mega-menu__col-arrow { color: var(--text); font-size: 0.85rem; flex-shrink: 0; transition: color 0.15s; }
 .mega-menu__col-item:hover .mega-menu__col-arrow { color: var(--navy); }
 
+/* ===== Header: mobile (<=768px) ===== */
+/* El header no wrappeaba: buscador/carrito/cuenta quedaban fuera de la
+   pantalla en celulares (confirmado con overflow real de 200-250px). Bajo
+   768px pasa a 2 filas y la fila de categorías se reemplaza por el
+   MobileNavDrawer (hamburguesa), que además tapa .mega-menu por completo. */
+@media (max-width: 768px) {
+  .header__hamburger-btn { display: flex; }
+  .header__top {
+    flex-wrap: wrap;
+    row-gap: 0.6rem;
+    padding: 0.6rem 0.9rem;
+  }
+  .header__actions { margin-left: auto; }
+  .header-search { order: 10; flex-basis: 100%; max-width: none; }
+
+  .header__pedidos-btn__label { display: none; }
+  .header__pedidos-btn {
+    padding: 0;
+    width: 40px; height: 40px;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .header-user__label { display: none; }
+  .cart-btn__precio { display: none; }
+
+  .header__nav-bar { display: none; }
+}
+
+/* ===== Menú mobile (hamburguesa) ===== */
+/* Mismo tier de z-index que .cart-overlay/.cart-drawer (200/201): ambos
+   drawers tapan el header entero (con su propio trigger adentro), así que
+   nunca pueden estar abiertos los dos a la vez y no hace falta un valor
+   nuevo en el stack. */
+.mobile-nav-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 200;
+}
+.mobile-nav-drawer {
+  position: fixed;
+  top: 0; left: 0;
+  width: min(340px, 100vw);
+  height: 100vh;
+  background: var(--white);
+  box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.mobile-nav-drawer__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mobile-nav-drawer__header h2 { font-size: 1.1rem; font-weight: 700; color: var(--navy); }
+.mobile-nav-drawer__cerrar { font-size: 1.2rem; color: var(--text-light); padding: 0.5rem; }
+.mobile-nav-drawer__body { padding: 1rem 1.25rem 2rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.mobile-nav-drawer__ofertas {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #16a34a;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.6rem 0;
+}
+.mobile-nav-drawer__admin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.mobile-nav-drawer__admin .header__nav-item { padding: 0.5rem 0; color: var(--verde-dark); }
+
+.mobile-nav-accordion { display: flex; flex-direction: column; margin-top: 0.5rem; }
+.mobile-nav-accordion__seccion { border-bottom: 1px solid var(--border); }
+.mobile-nav-accordion__titulo {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0.1rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: left;
+}
+.mobile-nav-accordion__hijos {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 0.75rem 0.75rem;
+}
+.mobile-nav-accordion__hijos .mega-menu__col-item { padding: 0.5rem 0; font-size: 0.85rem; }
+
+/* Red de seguridad: si el estado quedara en true al agrandar la ventana
+   sin recargar, esto lo oculta igual (todo el mecanismo es CSS show/hide). */
+@media (min-width: 769px) {
+  .mobile-nav-overlay, .mobile-nav-drawer { display: none !important; }
+}
+
 /* ===== Filters ===== */
 .filters { padding: 1rem 0; }
 .filters__categories { display: flex; flex-wrap: wrap; gap: 0.5rem; }
@@ -365,7 +494,7 @@ img { max-width: 100%; display: block; }
 }
 .search-result-clear:hover { background: var(--navy); color: #fff; }
 
-.sort-bar { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; margin-bottom: 0.5rem; }
+.sort-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem 0.75rem; padding: 0.5rem 0; margin-bottom: 0.5rem; }
 .sort-bar__label { font-size: 0.9rem; font-weight: 600; color: var(--text); white-space: nowrap; }
 
 .sort-select { position: relative; }
@@ -428,10 +557,69 @@ img { max-width: 100%; display: block; }
   gap: 2rem;
   align-items: start;
 }
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .catalog-layout { grid-template-columns: 1fr; }
 }
 .catalog-main { min-width: 0; }
+
+/* Botón "Filtros" (solo mobile) dentro de .sort-bar */
+.filtros-trigger-btn {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--navy);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.filtros-trigger-btn__badge {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px;
+  padding: 0 0.3rem;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+/* Drawer de filtros (mobile): mismo patrón visual que .cart-drawer */
+@media (max-width: 768px) {
+  .filtros-trigger-btn { display: flex; }
+
+  .filtros-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 200;
+  }
+  .filtros-drawer {
+    position: fixed;
+    top: 0; right: 0;
+    width: min(400px, 100vw);
+    height: 100vh;
+    z-index: 201;
+    overflow-y: auto;
+    background: var(--white);
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+  .filtros-drawer--abierto { transform: translateX(0); }
+  .filtros-drawer__cerrar {
+    position: absolute;
+    top: 0.9rem; right: 0.9rem;
+    font-size: 1.2rem;
+    color: var(--text-light);
+    padding: 0.5rem;
+    z-index: 1;
+  }
+  .filtros-drawer .filtros-sidebar { border-radius: 0; box-shadow: none; height: 100%; }
+}
 
 .filtros-sidebar {
   background: var(--white);
@@ -451,11 +639,12 @@ img { max-width: 100%; display: block; }
 .filtros-sidebar__precio-valores { font-size: 0.85rem; color: var(--text); font-weight: 600; }
 .filtros-sidebar__checkboxes { display: flex; flex-direction: column; gap: 0.6rem; }
 .filtros-sidebar__checkbox-label {
-  display: flex; align-items: center; gap: 0.5rem;
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.35rem 0;
   font-size: 0.88rem; color: var(--text);
   cursor: pointer; user-select: none;
 }
-.filtros-sidebar__checkbox-label input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--navy); cursor: pointer; }
+.filtros-sidebar__checkbox-label input[type="checkbox"] { width: 1.15rem; height: 1.15rem; accent-color: var(--navy); cursor: pointer; }
 
 /* Override de colores default de rc-slider */
 .filtros-sidebar__slider-wrap .rc-slider-track { background: var(--navy); }
@@ -466,6 +655,15 @@ img { max-width: 100%; display: block; }
 .filtros-sidebar__slider-wrap .rc-slider-handle-dragging.rc-slider-handle-dragging.rc-slider-handle-dragging {
   border-color: var(--navy-dark);
   box-shadow: 0 0 0 5px rgba(0,45,98,0.15);
+}
+/* El handle default de rc-slider es de 14x14px, muy chico para arrastrar
+   con el dedo — se agranda solo en mobile/tablet. */
+@media (max-width: 768px) {
+  .filtros-sidebar__slider-wrap { padding: 0 0.6rem; }
+  .filtros-sidebar__slider-wrap .rc-slider-handle {
+    width: 22px; height: 22px;
+    margin-top: -9px;
+  }
 }
 
 
@@ -624,9 +822,11 @@ img { max-width: 100%; display: block; }
 .footer__brand-desc { font-size: 0.85rem; color: #888; margin-top: 0.25rem; line-height: 1.5; }
 
 .footer__contact { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 0 2rem; }
-.footer__contact-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; font-size: 0.875rem; line-height: 1.4; }
+.footer__contact-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; font-size: 0.875rem; line-height: 1.4; }
 .footer__contact-item svg { width: 16px; height: 16px; flex-shrink: 0; stroke: var(--verde); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.footer__contact-item a { color: #ccc; text-decoration: none; }
+/* Padding en el <a> (no en el div) para que el área táctil real sea del
+   tamaño del link, no solo el texto de su línea. */
+.footer__contact-item a { display: inline-block; padding: 0.6rem 0; color: #ccc; text-decoration: none; }
 .footer__contact-item a:hover { color: #fff; }
 
 .footer__copy { text-align: center; font-size: 0.75rem; color: #555; margin-top: 1rem; }
@@ -644,7 +844,7 @@ img { max-width: 100%; display: block; }
 .contacto-info__item h2 { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--verde-dark); margin-bottom: 0.25rem; }
 .contacto-info__item address,
 .contacto-info__item a { font-style: normal; font-size: 0.95rem; color: var(--text); }
-.contacto-info__item a { text-decoration: none; }
+.contacto-info__item a { display: inline-block; padding: 0.4rem 0; margin: -0.4rem 0; text-decoration: none; }
 .contacto-info__item a:hover { color: var(--navy); text-decoration: underline; }
 
 .contacto-horarios { list-style: none; display: flex; flex-direction: column; gap: 0.2rem; }
@@ -733,7 +933,10 @@ img { max-width: 100%; display: block; }
 
 .admin-form-actions { display: flex; gap: 0.75rem; margin-top: 1.25rem; flex-wrap: wrap; }
 
-.btn { display: inline-block; padding: 0.55rem 1.25rem; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; transition: background 0.15s, opacity 0.15s; }
+/* .btn base ya está definido arriba (línea ~91) — era una redeclaración
+   muerta que, por ir después en la cascada, pisaba el padding real del
+   botón en TODO el sitio dejándolo en ~35px de alto (por debajo de los
+   ~44px recomendados para tap-target). */
 .btn-primary { background: var(--navy); color: var(--white); }
 .btn-primary:hover:not(:disabled) { background: var(--navy-dark); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1502,6 +1705,7 @@ img { max-width: 100%; display: block; }
 }
 .envio-yo-toggle {
   display: flex; align-items: center; gap: 0.45rem;
+  padding: 0.4rem 0;
   font-size: 0.85rem; font-weight: 500; color: var(--navy);
   cursor: pointer; user-select: none;
 }

@@ -51,6 +51,7 @@ function AnimatedRoutes() {
         <Suspense fallback={<Spinner />}>
           <Routes location={location}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/categoria/:slug" element={<HomePage />} />
             <Route path="/productos/:id" element={<ProductDetailPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/perfil" element={<PerfilPage />} />

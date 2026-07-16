@@ -270,6 +270,8 @@ export function EnvioPage() {
                   />
                   <input
                     className="input"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="DNI*"
                     value={destinatarioDni}
                     onChange={e => { setDestiEsYo(false); setDestinatarioDni(e.target.value); }}
@@ -281,6 +283,8 @@ export function EnvioPage() {
                     <span className="envio-destinatario__hint">(Cod. área con 0)</span>
                     <input
                       className="input"
+                      type="text"
+                      inputMode="numeric"
                       placeholder="Código de área"
                       value={destinatarioCodArea}
                       onChange={e => setDestinatarioCodArea(e.target.value)}
@@ -290,6 +294,8 @@ export function EnvioPage() {
                     <span className="envio-destinatario__hint">(Número con 15)</span>
                     <input
                       className="input"
+                      type="text"
+                      inputMode="numeric"
                       placeholder="Teléfono de contacto"
                       value={destinatarioTelefono}
                       onChange={e => setDestinatarioTelefono(e.target.value)}

@@ -1,6 +1,12 @@
+import { useLocation } from 'react-router-dom';
 import { NEGOCIO } from '../../config/negocio';
 
+const RUTAS_SIN_FAB = ['/envio', '/pagar'];
+
 export function WhatsAppButton() {
+  const { pathname } = useLocation();
+  if (RUTAS_SIN_FAB.includes(pathname)) return null;
+
   return (
     <a
       className="whatsapp-fab"

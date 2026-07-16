@@ -3,6 +3,7 @@ import { next } from '@vercel/edge';
 const SEARCH_BOT_UA_REGEX = /googlebot|bingbot|google-inspectiontool/i;
 const SOCIAL_BOT_UA_REGEX = /whatsapp|facebookexternalhit|twitterbot|linkedinbot|slackbot|telegrambot|discordbot/i;
 const PRODUCTO_ID_REGEX = /^\/productos\/([^/]+)/;
+const CATEGORIA_SLUG_REGEX = /^\/categoria\/([^/]+)/;
 
 const SITE_URL = (process.env.VITE_SITE_URL ?? 'https://farmaciaapotheka.com.ar').replace(/\/$/, '');
 
@@ -11,7 +12,22 @@ const BOT_CACHE_HEADERS = {
 };
 
 interface Categoria {
+  id: string;
   nombre: string;
+}
+
+// Duplicado a propósito: este archivo pertenece al proyecto TS "node"
+// (tsconfig.node.json) y no puede importar src/utils/slug.ts (proyecto
+// "app", tsconfig.app.json distinto). Si la normalización cambia, actualizar
+// también src/utils/slug.ts y api/sitemap.ts (mismo motivo ahí).
+function slugify(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 interface Producto {
@@ -272,6 +288,12 @@ async function fetchProductos(apiBase: string, params: string): Promise<Producto
   return data.datos ?? [];
 }
 
+async function fetchCategorias(apiBase: string): Promise<Categoria[]> {
+  const res = await fetch(`${apiBase}/categorias`);
+  if (!res.ok) return [];
+  return (await res.json()) as Categoria[];
+}
+
 // ---------- Middleware ----------
 
 export default async function middleware(request: Request): Promise<Response> {
@@ -342,6 +364,25 @@ export default async function middleware(request: Request): Promise<Response> {
       );
     }
 
+    const matchCategoria = url.pathname.match(CATEGORIA_SLUG_REGEX);
+    if (matchCategoria) {
+      const slug = matchCategoria[1];
+      const categorias = await fetchCategorias(apiBase);
+      const categoria = categorias.find(c => slugify(c.nombre) === slug);
+      if (!categoria) return next();
+
+      const productos = await fetchProductos(apiBase, `limite=50&categoria=${categoria.id}`);
+      return new Response(
+        buildSearchListHtml({
+          titulo: `${categoria.nombre} | Farmacia Apotheka`,
+          descripcion: `Productos de ${categoria.nombre} en Farmacia Apotheka.`,
+          url: url.toString(),
+          productos,
+        }),
+        { headers: { 'content-type': 'text/html; charset=utf-8', ...BOT_CACHE_HEADERS } }
+      );
+    }
+
     return next();
   } catch {
     return next();
@@ -349,5 +390,5 @@ export default async function middleware(request: Request): Promise<Response> {
 }
 
 export const config = {
-  matcher: ['/', '/ofertas', '/productos/:path*', '/contacto'],
+  matcher: ['/', '/ofertas', '/productos/:path*', '/contacto', '/categoria/:path*'],
 };
