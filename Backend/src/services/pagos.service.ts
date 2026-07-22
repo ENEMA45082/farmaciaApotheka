@@ -20,6 +20,7 @@ const sdkPayway = require('sdk-node-payway') as {
   };
 };
 
+import axios from 'axios';
 import * as pedidosRepo   from '../repositories/pedidos.repository';
 import * as productosRepo from '../repositories/productos.repository';
 import { AppError } from '../errors/AppError';
@@ -136,7 +137,13 @@ export async function procesarPago(
       (result: any, err: any) => {
         console.log('[Payway pagar] result:', JSON.stringify(result));
         console.log('[Payway pagar] err:', JSON.stringify(err));
-        if (!result && err) return reject(new Error(JSON.stringify(err)));
+        if (!result || result.error_type) {
+          console.error('[Payway pagar] Error de Payway al procesar el pago:', JSON.stringify(result ?? err));
+          return reject(new AppError(
+            'No pudimos procesar el pago con tarjeta en este momento. Probá de nuevo en unos minutos o con otro medio de pago.',
+            502,
+          ));
+        }
         resolve({ status: String(result.status), pw_payment_id: String(result.id) });
       },
     );
@@ -205,54 +212,88 @@ export async function generarCheckoutHosted(
     auth_3ds:         false,
   };
 
+  // Llamada HTTP directa (no vía sdk-node-payway) para este endpoint puntual:
+  // el SDK descarta el status code y los headers de la respuesta de Payway y
+  // solo nos deja ver el body ya parseado — con esto vemos exactamente qué se
+  // manda y qué contesta Payway, byte a byte, para diagnosticar el rechazo de
+  // notifications_url. TEMPORAL: una vez resuelto, se puede simplificar el logging.
+  const checkoutApiBase = env === 'production'
+    ? 'https://ventasonline.payway.com.ar/api/v1/checkout-payment-button'
+    : 'https://developers.decidir.com/api/v1/checkout-payment-button';
+  const checkoutEndpoint = `${checkoutApiBase}/link`;
+  const xSourceHeader = Buffer.from(JSON.stringify({
+    service:   'SDK-NODE',
+    grouper:   process.env.PAYWAY_MERCHANT_ID ?? 'Farmacia Apotheka',
+    developer: process.env.PAYWAY_DEVELOPER   ?? 'apotheka-dev',
+  })).toString('base64');
+
   console.log(`[Payway checkout] templateId=${templateId} siteId=${siteId} env=${env} esLocal=${esLocal}`);
+  console.log(`[Payway checkout] notifications_url="${notifUrl}" (${notifUrl.length} caracteres)`);
+  console.log(`[Payway checkout] success_url="${successUrl}" (${successUrl.length} caracteres)`);
+  console.log('[Payway checkout] POST', checkoutEndpoint);
   console.log('[Payway checkout] args:', JSON.stringify(args));
 
-  return new Promise<string>((resolve, reject) => {
-    paywaySDK.checkout(args, (result: any, err: any) => {
-      console.log('[Payway checkout] result:', JSON.stringify(result));
-      console.log('[Payway checkout] err:',    JSON.stringify(err));
-
-      if (!result || result.error_type) {
-        reject(new Error(`Payway checkout error: ${JSON.stringify(result ?? err)}`));
-        return;
-      }
-
-      let paymentId = result?.payment_id ?? result?.id;
-      const baseUrl   = env === 'production'
-        ? 'https://live.decidir.com/web/checkout/'
-        : 'https://developers.decidir.com/web/checkout/';
-      const checkoutUrl = result?.checkout_url
-        ?? result?.payment_link
-        ?? (paymentId ? `${baseUrl}${paymentId}` : null);
-
-      if (!checkoutUrl) {
-        reject(new Error(`No se recibió URL de checkout. Respuesta: ${JSON.stringify(result)}`));
-        return;
-      }
-
-      // La respuesta del link de checkout a veces no trae payment_id/id explícito
-      // (solo payment_link) — el último segmento del link ES el identificador del pago.
-      if (!paymentId) {
-        const match = String(checkoutUrl).match(/\/checkout\/([^/?#]+)/);
-        if (match) paymentId = match[1];
-      }
-
-      // Guardar el payment_id para poder identificar el pedido cuando llegue la notificación
-      // (o para poder verificarlo activamente al volver a /pago/exitoso) — se espera antes
-      // de resolver para que quede grabado antes de que el usuario pueda volver de Payway.
-      if (paymentId) {
-        pedidosRepo.guardarPwPaymentId(pedido.id, String(paymentId))
-          .then(() => resolve(checkoutUrl))
-          .catch(err => {
-            console.error('[Payway checkout] Error guardando pw_payment_id:', err);
-            resolve(checkoutUrl);
-          });
-      } else {
-        resolve(checkoutUrl);
-      }
-    });
+  const respuesta = await axios.post(checkoutEndpoint, args, {
+    headers: {
+      apikey:         process.env.PAYWAY_PRIVATE_KEY ?? '',
+      'Content-Type': 'application/json',
+      'X-Source':     xSourceHeader,
+    },
+    // Queremos ver la respuesta completa de Payway incluso cuando es un error —
+    // por default axios tira una excepción en 4xx/5xx y hay que ir a buscar el
+    // detalle dentro de err.response; así lo tenemos directo.
+    validateStatus: () => true,
   });
+
+  console.log('[Payway checkout] HTTP status:', respuesta.status);
+  console.log('[Payway checkout] response headers:', JSON.stringify(respuesta.headers));
+  console.log('[Payway checkout] response body:', JSON.stringify(respuesta.data));
+
+  const result = respuesta.data;
+
+  if (respuesta.status >= 400 || !result || result.error_type) {
+    console.error('[Payway checkout] Error de Payway al crear el checkout:', respuesta.status, JSON.stringify(result));
+    throw new AppError(
+      'No pudimos iniciar el pago con tarjeta en este momento. Probá de nuevo en unos minutos o con otro medio de pago.',
+      502,
+    );
+  }
+
+  let paymentId = result?.payment_id ?? result?.id;
+  const webCheckoutBaseUrl = env === 'production'
+    ? 'https://live.decidir.com/web/checkout/'
+    : 'https://developers.decidir.com/web/checkout/';
+  const checkoutUrl = result?.checkout_url
+    ?? result?.payment_link
+    ?? (paymentId ? `${webCheckoutBaseUrl}${paymentId}` : null);
+
+  if (!checkoutUrl) {
+    console.error('[Payway checkout] Respuesta sin URL de checkout:', JSON.stringify(result));
+    throw new AppError(
+      'No pudimos iniciar el pago con tarjeta en este momento. Probá de nuevo en unos minutos o con otro medio de pago.',
+      502,
+    );
+  }
+
+  // La respuesta del link de checkout a veces no trae payment_id/id explícito
+  // (solo payment_link) — el último segmento del link ES el identificador del pago.
+  if (!paymentId) {
+    const match = String(checkoutUrl).match(/\/checkout\/([^/?#]+)/);
+    if (match) paymentId = match[1];
+  }
+
+  // Guardar el payment_id para poder identificar el pedido cuando llegue la notificación
+  // (o para poder verificarlo activamente al volver a /pago/exitoso) — se espera antes
+  // de devolver la URL para que quede grabado antes de que el usuario vuelva de Payway.
+  if (paymentId) {
+    try {
+      await pedidosRepo.guardarPwPaymentId(pedido.id, String(paymentId));
+    } catch (err) {
+      console.error('[Payway checkout] Error guardando pw_payment_id:', err);
+    }
+  }
+
+  return checkoutUrl;
 }
 
 export async function procesarNotificacion(body: Record<string, unknown>): Promise<void> {
