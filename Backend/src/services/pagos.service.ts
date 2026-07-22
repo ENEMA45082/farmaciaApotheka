@@ -174,8 +174,11 @@ export async function generarCheckoutHosted(
   const cancelUrl      = `${baseUrl}/pago/cancelado?pedido=${pedido.id}`;
   // Payway requiere notifications_url — cuando el backend corre en localhost usar la URL pública desplegada
   const publicBackUrl = process.env.BACKEND_PUBLIC_URL ?? backUrl;
-  const webhookSecret  = process.env.PAYWAY_WEBHOOK_SECRET ?? '';
-  const notifUrl       = `${publicBackUrl}/api/pagos/notificacion?secret=${encodeURIComponent(webhookSecret)}`;
+  // DIAGNÓSTICO TEMPORAL: Payway rechaza esta URL con "param_required: notifications_url"
+  // solo cuando lleva ?secret=<hex largo> — ya se descartó dominio y "cualquier" query
+  // string (success_url/cancel_url llevan uno y pasan). Se prueba sin el query param
+  // para aislar si el nombre/valor "secret" es lo que dispara el rechazo.
+  const notifUrl = `${publicBackUrl}/api/pagos/notificacion`;
 
   const productosPayway = items.map((item, idx) => ({
     id:          idx + 1,
