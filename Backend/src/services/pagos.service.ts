@@ -201,11 +201,15 @@ export async function generarCheckoutHosted(
   const args: Record<string, unknown> = {
     origin_platform:     'SDK-Node',
     currency:            'ARS',
-    site_transaction_id: pedido.id, // permite identificar el pedido en la notificación webhook
+    site_transaction_id: pedido.id, // Payway NO lo respeta en el checkout hosteado — genera su propio id (ver verificarEstadoPago)
     products:            productosPayway,
     total_price:      pedido.total,
     site:             siteId,
-    success_url:      successUrl,
+    // DIAGNÓSTICO TEMPORAL: redirect_url en vez de success_url — la doc dice que
+    // "redirect_url" vuelve con los datos de la operación finalizada (success_url
+    // es un redirect simple, confirmado que no trae nada extra). Buscamos el ID
+    // real del pago de Payway para poder linkearlo al pedido de forma confiable.
+    redirect_url:     successUrl,
     cancel_url:       cancelUrl,
     notifications_url: notifUrl,
     template_id:      templateId,
