@@ -8,6 +8,7 @@ import * as correoArgentino from './correoArgentino.service';
 import * as facturacionPedidosService from './facturacionPedidos.service';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
+import { asegurarPropietario } from '../utils/ownership';
 import { supabase } from '../config/supabase';
 import { PESO_DEFAULT_GRAMOS } from '../config/envioConfig';
 import {
@@ -17,7 +18,7 @@ import {
   esMotivoCancelacionValido,
   type EstadoPedido,
 } from '../config/estadosPedido';
-import type { Pedido, CrearPedidoDTO, PedidoDetalleAdmin } from '../types';
+import type { Pedido, CrearPedidoDTO, PedidoDetalleAdmin, ItemPedidoConfirmado } from '../types';
 import type { ResultadoTracking } from './correoArgentino.service';
 
 export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido> {
@@ -30,6 +31,11 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
     if (!dto.destinatario_dni?.trim())    throw new AppError('El DNI del destinatario es obligatorio', 400);
   }
 
+  // El precio SIEMPRE se toma del catálogo, nunca de lo que manda el cliente:
+  // precio_unitario/precio_lista del DTO se ignoran por completo acá. pedido.total
+  // termina siendo el monto real cobrado por tarjeta (pagos.service.ts) y la base
+  // imponible de la factura AFIP — no puede depender de un valor client-controlled.
+  const itemsConfirmados: ItemPedidoConfirmado[] = [];
   for (const item of dto.items) {
     const producto = await productosRepo.encontrarPorId(item.producto_id);
     if (!producto) {
@@ -41,16 +47,23 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
         400,
       );
     }
+    itemsConfirmados.push({
+      producto_id:     producto.id,
+      nombre_producto: producto.nombre,
+      cantidad:        item.cantidad,
+      precio_unitario: producto.en_oferta && producto.precio_oferta != null ? producto.precio_oferta : producto.precio,
+      precio_lista:    producto.precio,
+    });
   }
 
-  const total         = dto.items.reduce((s, i) => s + i.precio_unitario * i.cantidad, 0);
-  const subtotalLista = dto.items.reduce((s, i) => s + i.precio_lista    * i.cantidad, 0);
+  const total         = itemsConfirmados.reduce((s, i) => s + i.precio_unitario * i.cantidad, 0);
+  const subtotalLista = itemsConfirmados.reduce((s, i) => s + i.precio_lista    * i.cantidad, 0);
 
   // 'transferencia' y 'efectivo' son flujos manuales: el admin confirma el pago
   // cambiando el estado a 'Confirmado' via PATCH /api/pedidos/:id/estado
-  const pedido = await pedidosRepo.crear(userId, dto, total, subtotalLista);
+  const pedido = await pedidosRepo.crear(userId, dto, itemsConfirmados, total, subtotalLista);
 
-  for (const item of dto.items) {
+  for (const item of itemsConfirmados) {
     await productosRepo.descontarStock(item.producto_id, item.cantidad);
   }
 
@@ -64,9 +77,7 @@ export async function listar(userId: string): Promise<Pedido[]> {
 export async function obtenerPorId(id: string, userId: string): Promise<Pedido> {
   validarUUID(id, 'pedido');
   const pedido = await pedidosRepo.encontrarPorId(id);
-  if (!pedido) throw new AppError('Pedido no encontrado', 404);
-  if (pedido.user_id !== userId) throw new AppError('Acceso denegado', 403);
-  return pedido;
+  return asegurarPropietario(pedido, userId, 'Pedido');
 }
 
 export async function obtenerPorIdAdmin(id: string): Promise<PedidoDetalleAdmin> {

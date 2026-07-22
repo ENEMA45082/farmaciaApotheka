@@ -1,29 +1,16 @@
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import * as productosService from '../services/productos.service';
-import { parseNumero } from '../utils/parseNumero';
 import type { CrearProductoDTO, ActualizarProductoDTO, FiltrosProducto, ItemConfirmarPrecio, AuthRequest } from '../types';
 
 export async function listar(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const modoAdmin = (req as AuthRequest).user?.app_metadata?.role === 'admin';
 
+    // req.query ya viene validado y coercionado por validate(filtrosProductoQuerySchema)
     const filtros: FiltrosProducto = {
-      adminMode:         modoAdmin,
-      categoria:         req.query.categoria         as string | undefined,
-      categorias:        req.query.categorias        as string | undefined,
-      busqueda:          req.query.busqueda          as string | undefined,
-      codigo_barras:     req.query.codigo_barras     as string | undefined,
-      en_oferta:         req.query.en_oferta === 'true' ? true : req.query.en_oferta === 'false' ? false : undefined,
-      precio_min:        parseNumero(req.query.precio_min),
-      precio_max:        parseNumero(req.query.precio_max),
-      stock_min:         parseNumero(req.query.stock_min),
-      stock_max:         parseNumero(req.query.stock_max),
-      vencimiento_desde: req.query.vencimiento_desde as string | undefined,
-      vencimiento_hasta: req.query.vencimiento_hasta as string | undefined,
-      pagina:            parseNumero(req.query.pagina),
-      limite:            parseNumero(req.query.limite),
-      ordenar:           req.query.ordenar as FiltrosProducto['ordenar'] | undefined,
+      ...(req.query as unknown as FiltrosProducto),
+      adminMode: modoAdmin,
     };
 
     const resultado = await productosService.listar(filtros);

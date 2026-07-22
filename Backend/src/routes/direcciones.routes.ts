@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import * as direccionesController from '../controllers/direcciones.controller';
 import { requireAuth } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import { guardarDireccionSchema } from '../schemas/direcciones.schema';
 
 const router = Router();
 
@@ -48,6 +50,6 @@ router.use(requireAuth);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/', direccionesController.obtener);
-router.put('/', direccionesController.guardar);
+router.put('/', validate(guardarDireccionSchema), direccionesController.guardar);
 
 export default router;

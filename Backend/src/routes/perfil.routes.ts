@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import * as perfilController from '../controllers/perfil.controller';
 import { requireAuth } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import { actualizarPerfilSchema } from '../schemas/perfil.schema';
 
 const router = Router();
 
@@ -60,6 +62,6 @@ const router = Router();
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/', requireAuth, perfilController.obtener);
-router.put('/', requireAuth, perfilController.actualizar);
+router.put('/', requireAuth, validate(actualizarPerfilSchema), perfilController.actualizar);
 
 export default router;

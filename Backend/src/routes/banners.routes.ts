@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import * as bannersController from '../controllers/banners.controller';
 import { requireAdmin, optionalAuth } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import { crearBannerSchema, actualizarBannerSchema } from '../schemas/banners.schema';
 
 const router = Router();
 
@@ -60,7 +62,7 @@ const router = Router();
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/',  optionalAuth, bannersController.listar);
-router.post('/', requireAdmin, bannersController.crear);
+router.post('/', requireAdmin, validate(crearBannerSchema), bannersController.crear);
 
 /**
  * @openapi
@@ -127,7 +129,7 @@ router.post('/', requireAdmin, bannersController.crear);
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.put('/:id',    requireAdmin, bannersController.actualizar);
+router.put('/:id',    requireAdmin, validate(actualizarBannerSchema), bannersController.actualizar);
 router.delete('/:id', requireAdmin, bannersController.eliminar);
 
 export default router;

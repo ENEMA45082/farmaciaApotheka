@@ -1,6 +1,13 @@
 import { Router } from 'express';
 import * as pedidosController from '../controllers/pedidos.controller';
 import { requireAuth, requireAdmin } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import {
+  crearPedidoSchema,
+  cambiarEstadoSchema,
+  cancelarPedidoAdminSchema,
+  listarPedidosAdminQuerySchema,
+} from '../schemas/pedidos.schema';
 
 const router = Router();
 
@@ -33,7 +40,7 @@ const router = Router();
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get('/admin',              requireAdmin, pedidosController.listarAdmin);
+router.get('/admin',              requireAdmin, validate(listarPedidosAdminQuerySchema, 'query'), pedidosController.listarAdmin);
 
 /**
  * @openapi
@@ -94,7 +101,7 @@ router.get('/admin/:id',          requireAdmin, pedidosController.obtenerPorIdAd
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.patch('/:id/estado',       requireAdmin, pedidosController.cambiarEstadoAdmin);
+router.patch('/:id/estado',       requireAdmin, validate(cambiarEstadoSchema), pedidosController.cambiarEstadoAdmin);
 
 /**
  * @openapi
@@ -125,7 +132,7 @@ router.patch('/:id/estado',       requireAdmin, pedidosController.cambiarEstadoA
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Pedido' }
  */
-router.patch('/:id/cancelar-admin', requireAdmin, pedidosController.cancelarPedidoAdmin);
+router.patch('/:id/cancelar-admin', requireAdmin, validate(cancelarPedidoAdminSchema), pedidosController.cancelarPedidoAdmin);
 
 /**
  * @openapi
@@ -201,7 +208,7 @@ router.post('/:id/reintentar-factura', requireAdmin, pedidosController.reintenta
  *               type: array
  *               items: { $ref: '#/components/schemas/Pedido' }
  */
-router.post('/',              requireAuth,  pedidosController.crear);
+router.post('/',              requireAuth,  validate(crearPedidoSchema), pedidosController.crear);
 router.get('/',               requireAuth,  pedidosController.listar);
 
 /**

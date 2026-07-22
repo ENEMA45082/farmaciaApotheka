@@ -162,6 +162,17 @@ export interface Factura {
   actualizado_en: string;
 }
 
+// Item de pedido con precio ya confirmado contra el catálogo (products.precio /
+// precio_oferta) — nunca se construye a partir de valores enviados por el cliente.
+// Ver pedidos.service.ts::crear.
+export interface ItemPedidoConfirmado {
+  producto_id: string;
+  nombre_producto: string;
+  cantidad: number;
+  precio_unitario: number;
+  precio_lista: number;
+}
+
 export interface CrearPedidoDTO {
   items: {
     producto_id: string;

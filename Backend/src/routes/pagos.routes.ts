@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware';
 import * as pagosController from '../controllers/pagos.controller';
+import { validate } from '../middlewares/validate';
+import { pagarSchema, checkoutSchema } from '../schemas/pagos.schema';
 
 const router = Router();
 
@@ -46,7 +48,7 @@ const router = Router();
  *                 success: { type: boolean, example: false }
  *                 error:   { type: string }
  */
-router.post('/pagar',              requireAuth, pagosController.pagar);
+router.post('/pagar',              requireAuth, validate(pagarSchema), pagosController.pagar);
 
 /**
  * @openapi
@@ -80,7 +82,7 @@ router.post('/pagar',              requireAuth, pagosController.pagar);
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/checkout',           requireAuth, pagosController.checkout);
+router.post('/checkout',           requireAuth, validate(checkoutSchema), pagosController.checkout);
 
 /**
  * @openapi

@@ -1,6 +1,13 @@
 import { Router } from 'express';
 import * as productosController from '../controllers/productos.controller';
 import { requireAdmin, optionalAuth } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import {
+  crearProductoSchema,
+  actualizarProductoSchema,
+  filtrosProductoQuerySchema,
+  confirmarImportarPreciosSchema,
+} from '../schemas/productos.schema';
 
 const router = Router();
 
@@ -139,6 +146,7 @@ router.post(
 router.post(
   '/confirmar-importar-precios',
   requireAdmin,
+  validate(confirmarImportarPreciosSchema),
   productosController.confirmarImportarPrecios
 );
 
@@ -218,7 +226,7 @@ router.post(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get('/', optionalAuth, productosController.listar);
+router.get('/', optionalAuth, validate(filtrosProductoQuerySchema, 'query'), productosController.listar);
 
 /**
  * @openapi

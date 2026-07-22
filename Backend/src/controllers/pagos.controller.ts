@@ -9,17 +9,14 @@ import type { AuthRequest } from '../types';
 export async function pagar(req: Request, res: Response, next: NextFunction) {
   try {
     const { user } = req as AuthRequest;
+    // req.body ya viene validado por validate(pagarSchema)
     const { pedidoId, token, bin, cuotas, paymentMethodId } = req.body as {
       pedidoId: string;
       token: string;
       bin: string;
-      cuotas: number;
-      paymentMethodId: number;
+      cuotas?: number;
+      paymentMethodId?: number;
     };
-
-    if (!pedidoId || !token || !bin) {
-      throw new AppError('pedidoId, token y bin son requeridos', 400);
-    }
 
     // obtenerPorId ya verifica 404 y ownership (403)
     const pedido = await pedidosService.obtenerPorId(pedidoId, user.id);
@@ -65,11 +62,8 @@ export async function pagar(req: Request, res: Response, next: NextFunction) {
 export async function checkout(req: Request, res: Response, next: NextFunction) {
   try {
     const { user } = req as AuthRequest;
+    // req.body ya viene validado por validate(checkoutSchema)
     const { pedidoId } = req.body as { pedidoId: string };
-
-    if (!pedidoId) {
-      throw new AppError('pedidoId es requerido', 400);
-    }
 
     // obtenerPorId ya verifica 404 y ownership (403)
     const pedido = await pedidosService.obtenerPorId(pedidoId, user.id);

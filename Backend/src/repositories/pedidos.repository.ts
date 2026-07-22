@@ -1,6 +1,6 @@
 import { supabase } from '../config/supabase';
 import * as estadosRepo from './estados.repository';
-import type { Pedido, DetallePedido, CrearPedidoDTO } from '../types';
+import type { Pedido, DetallePedido, CrearPedidoDTO, ItemPedidoConfirmado } from '../types';
 
 function mapearDetalle(row: Record<string, unknown>): DetallePedido {
   return {
@@ -51,10 +51,11 @@ function mapearPedido(row: Record<string, unknown>): Pedido {
 export async function crear(
   userId: string,
   dto: CrearPedidoDTO,
+  itemsConfirmados: ItemPedidoConfirmado[],
   total: number,
   subtotalLista: number,
 ): Promise<Pedido> {
-  const items = dto.items.map(i => ({
+  const items = itemsConfirmados.map(i => ({
     producto_id:     i.producto_id,
     nombre_producto: i.nombre_producto,
     cantidad:        i.cantidad,

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware';
 import * as envioController from '../controllers/envio.controller';
+import { validate } from '../middlewares/validate';
+import { cotizarEnvioSchema, sucursalesQuerySchema } from '../schemas/envio.schema';
 
 const router = Router();
 
@@ -44,7 +46,7 @@ const router = Router();
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/cotizar',   requireAuth, envioController.cotizar);
+router.post('/cotizar',   requireAuth, validate(cotizarEnvioSchema), envioController.cotizar);
 
 /**
  * @openapi
@@ -72,6 +74,6 @@ router.post('/cotizar',   requireAuth, envioController.cotizar);
  *                   nombre:    { type: string }
  *                   direccion: { type: string }
  */
-router.get('/sucursales', requireAuth, envioController.sucursales);
+router.get('/sucursales', requireAuth, validate(sucursalesQuerySchema, 'query'), envioController.sucursales);
 
 export default router;

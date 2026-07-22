@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import * as categoriasController from '../controllers/categorias.controller';
 import { requireAdmin } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import { crearCategoriaSchema, actualizarCategoriaSchema } from '../schemas/categorias.schema';
 
 const router = Router();
 
@@ -147,8 +149,8 @@ router.get('/arbol',   categoriasController.obtenerArbol);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id',     categoriasController.obtenerPorId);
-router.post('/',      requireAdmin, categoriasController.crear);
-router.put('/:id',    requireAdmin, categoriasController.actualizar);
+router.post('/',      requireAdmin, validate(crearCategoriaSchema), categoriasController.crear);
+router.put('/:id',    requireAdmin, validate(actualizarCategoriaSchema), categoriasController.actualizar);
 router.delete('/:id', requireAdmin, categoriasController.eliminar);
 
 export default router;

@@ -258,10 +258,9 @@ export async function generarCheckoutHosted(
 export async function procesarNotificacion(body: Record<string, unknown>): Promise<void> {
   const paymentId  = String(body.id ?? body.payment_id ?? '');
   const siteTxId   = String(body.site_transaction_id ?? '');
-  const status     = String(body.status ?? '');
 
-  if (!status || (!paymentId && !siteTxId)) {
-    console.log(`[Payway Notificacion] ignorada: faltan campos (status=${status} paymentId=${paymentId} siteTxId=${siteTxId})`);
+  if (!paymentId && !siteTxId) {
+    console.log(`[Payway Notificacion] ignorada: faltan paymentId/siteTransactionId (body=${JSON.stringify(body)})`);
     return;
   }
 
@@ -279,14 +278,15 @@ export async function procesarNotificacion(body: Record<string, unknown>): Promi
     console.log(`[Payway Notificacion] ignorada: no se encontró pedido (siteTxId=${siteTxId} paymentId=${paymentId})`);
     return;
   }
-  if (pedido.estado !== 'PendienteDePago') {
-    console.log(`[Payway Notificacion] ignorada: pedido ${pedido.id} ya está en estado "${pedido.estado}"`);
-    return;
-  }
 
-  console.log(`[Payway Notificacion] procesando pedido ${pedido.id}: status=${status}`);
-
-  await aplicarResultadoPago(pedido, status, paymentId);
+  // El body de esta notificación NUNCA se usa como fuente del estado del pago —
+  // Payway lo manda server-to-server pero cualquiera puede simular el mismo POST
+  // (no está firmado, y el chequeo de PAYWAY_WEBHOOK_SECRET es defensa secundaria,
+  // no la única barrera). El webhook solo dispara una verificación activa contra
+  // la API de Payway (misma lógica que GET /api/pagos/verificar/:pedidoId) — el
+  // pedido únicamente se confirma si Payway confirma el pago de su lado.
+  console.log(`[Payway Notificacion] pedido ${pedido.id} encontrado — verificando estado real contra Payway antes de aplicar ningún cambio`);
+  await verificarEstadoPago(pedido);
 }
 
 function esperar(ms: number): Promise<void> {

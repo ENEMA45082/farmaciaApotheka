@@ -51,8 +51,8 @@ export async function tracking(req: Request, res: Response, next: NextFunction):
 
 export async function listarAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const pagina = parseInt(String(req.query.pagina ?? '1'), 10);
-    const limite = parseInt(String(req.query.limite ?? '20'), 10);
+    // req.query ya viene validado y coercionado por validate(listarPedidosAdminQuerySchema)
+    const { pagina, limite } = req.query as { pagina?: number; limite?: number };
     const resultado = await pedidosService.listarTodos(pagina, limite);
     res.json(resultado);
   } catch (err) { next(err); }
