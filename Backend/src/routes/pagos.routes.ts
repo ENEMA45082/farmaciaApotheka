@@ -114,6 +114,33 @@ router.get('/verificar/:pedidoId', requireAuth, pagosController.verificarEstado)
 
 /**
  * @openapi
+ * /api/pagos/retorno-checkout/{pedidoId}:
+ *   get:
+ *     summary: Retorno del checkout hosteado de Payway (redirect_url)
+ *     description: >
+ *       Endpoint público al que Payway redirige el navegador del cliente después de pagar.
+ *       Nunca confía en el query param "result" (lo arma el navegador) — lo usa solo como
+ *       pista de qué transacción buscar, y verifica el pago real contra la API de Payway
+ *       antes de confirmar el pedido. Siempre redirige (302) a la página del frontend.
+ *     tags: [Pagos]
+ *     parameters:
+ *       - in: path
+ *         name: pedidoId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: result
+ *         required: false
+ *         schema: { type: string }
+ *         description: JSON del pago codificado en base64, agregado por Payway.
+ *     responses:
+ *       302:
+ *         description: Redirige al frontend, haya podido confirmar el pago o no.
+ */
+router.get('/retorno-checkout/:pedidoId', pagosController.retornoCheckout);
+
+/**
+ * @openapi
  * /api/pagos/notificacion:
  *   post:
  *     summary: Webhook de notificaciones de Payway

@@ -24,7 +24,16 @@ import axios from 'axios';
 import * as pedidosRepo   from '../repositories/pedidos.repository';
 import * as productosRepo from '../repositories/productos.repository';
 import { AppError } from '../errors/AppError';
+import { validarUUID } from '../utils/validarUUID';
 import type { Pedido, FraudData } from '../types';
+
+// Payway rechaza URLs de localhost — usar la URL pública del frontend cuando se corre localmente.
+export function obtenerFrontendBaseUrl(): string {
+  const frontUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+  const publicFrontUrl = process.env.FRONTEND_PUBLIC_URL ?? frontUrl;
+  const esLocal = frontUrl.includes('localhost') || frontUrl.includes('127.0.0.1');
+  return esLocal ? publicFrontUrl : frontUrl;
+}
 
 function crearSDK() {
   const env = process.env.PAYWAY_ENVIRONMENT ?? 'developer';
@@ -163,22 +172,20 @@ export async function generarCheckoutHosted(
   const env      = process.env.PAYWAY_ENVIRONMENT ?? 'developer';
   const siteId   = process.env.PAYWAY_SITE_ID     ?? '';
   const templateId = Number(process.env.PAYWAY_TEMPLATE_ID ?? '1');
-  const frontUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
   const backUrl  = process.env.BACKEND_URL  ?? 'http://localhost:3001';
 
-  // Payway rechaza URLs de localhost — usar la URL pública del frontend cuando se corre localmente
-  const publicFrontUrl = process.env.FRONTEND_PUBLIC_URL ?? frontUrl;
-  const esLocal        = frontUrl.includes('localhost') || frontUrl.includes('127.0.0.1');
-  const baseUrl        = esLocal ? publicFrontUrl : frontUrl;
-  const successUrl     = `${baseUrl}/pago/exitoso?pedido=${pedido.id}`;
+  const baseUrl        = obtenerFrontendBaseUrl();
   const cancelUrl      = `${baseUrl}/pago/cancelado?pedido=${pedido.id}`;
-  // Payway requiere notifications_url — cuando el backend corre en localhost usar la URL pública desplegada
+  // Payway requiere notifications_url — cuando el backend corre en localhost usar la URL pública desplegada.
+  // Sin query string propia (Payway rechazaba ?secret=<hex largo> con param_required).
   const publicBackUrl = process.env.BACKEND_PUBLIC_URL ?? backUrl;
-  // DIAGNÓSTICO TEMPORAL: Payway rechaza esta URL con "param_required: notifications_url"
-  // solo cuando lleva ?secret=<hex largo> — ya se descartó dominio y "cualquier" query
-  // string (success_url/cancel_url llevan uno y pasan). Se prueba sin el query param
-  // para aislar si el nombre/valor "secret" es lo que dispara el rechazo.
   const notifUrl = `${publicBackUrl}/api/pagos/notificacion`;
+  // redirect_url (no success_url): Payway vuelve acá con ?result=<base64 con el pago
+  // real> — se recibe en el backend (no directo al frontend) para poder verificarlo
+  // contra la API de Payway antes de confirmar el pedido (ver confirmarRetornoCheckout).
+  // Va como path param, sin query string propia, para no chocar con el ?result= que
+  // Payway pega sin fijarse si la URL ya tenía query string.
+  const retornoUrl = `${publicBackUrl}/api/pagos/retorno-checkout/${pedido.id}`;
 
   const productosPayway = items.map((item, idx) => ({
     id:          idx + 1,
@@ -205,11 +212,7 @@ export async function generarCheckoutHosted(
     products:            productosPayway,
     total_price:      pedido.total,
     site:             siteId,
-    // DIAGNÓSTICO TEMPORAL: redirect_url en vez de success_url — la doc dice que
-    // "redirect_url" vuelve con los datos de la operación finalizada (success_url
-    // es un redirect simple, confirmado que no trae nada extra). Buscamos el ID
-    // real del pago de Payway para poder linkearlo al pedido de forma confiable.
-    redirect_url:     successUrl,
+    redirect_url:     retornoUrl,
     cancel_url:       cancelUrl,
     notifications_url: notifUrl,
     template_id:      templateId,
@@ -219,11 +222,10 @@ export async function generarCheckoutHosted(
     auth_3ds:         false,
   };
 
-  // Llamada HTTP directa (no vía sdk-node-payway) para este endpoint puntual:
-  // el SDK descarta el status code y los headers de la respuesta de Payway y
-  // solo nos deja ver el body ya parseado — con esto vemos exactamente qué se
-  // manda y qué contesta Payway, byte a byte, para diagnosticar el rechazo de
-  // notifications_url. TEMPORAL: una vez resuelto, se puede simplificar el logging.
+  // Llamada HTTP directa (no vía sdk-node-payway) para este endpoint puntual: el SDK
+  // descarta el status code y los headers de la respuesta de Payway y solo deja ver
+  // el body ya parseado — con esto se ve exactamente qué se manda y qué contesta
+  // Payway, útil para diagnosticar cualquier rechazo futuro de la creación del checkout.
   const checkoutApiBase = env === 'production'
     ? 'https://ventasonline.payway.com.ar/api/v1/checkout-payment-button'
     : 'https://developers.decidir.com/api/v1/checkout-payment-button';
@@ -234,9 +236,9 @@ export async function generarCheckoutHosted(
     developer: process.env.PAYWAY_DEVELOPER   ?? 'apotheka-dev',
   })).toString('base64');
 
-  console.log(`[Payway checkout] templateId=${templateId} siteId=${siteId} env=${env} esLocal=${esLocal}`);
-  console.log(`[Payway checkout] notifications_url="${notifUrl}" (${notifUrl.length} caracteres)`);
-  console.log(`[Payway checkout] success_url="${successUrl}" (${successUrl.length} caracteres)`);
+  console.log(`[Payway checkout] templateId=${templateId} siteId=${siteId} env=${env}`);
+  console.log(`[Payway checkout] notifications_url="${notifUrl}"`);
+  console.log(`[Payway checkout] redirect_url="${retornoUrl}"`);
   console.log('[Payway checkout] POST', checkoutEndpoint);
   console.log('[Payway checkout] args:', JSON.stringify(args));
 
@@ -409,4 +411,62 @@ export async function verificarEstadoPago(pedido: Pedido): Promise<Pedido> {
 
   const actualizado = await pedidosRepo.encontrarPorId(pedido.id);
   return actualizado ?? pedido;
+}
+
+// Se llama desde el retorno del checkout hosteado (redirect_url) cuando el cliente
+// vuelve de pagar. Payway le agrega a esa URL un ?result=<base64> con el pago
+// completo — pero esa URL la arma el NAVEGADOR DEL CLIENTE, así que `resultHint`
+// nunca es fuente de verdad. Se usa únicamente su `site_transaction_id` (el que
+// Payway le asignó de verdad al pago, no el nuestro) como pista de qué transacción
+// buscar; la confirmación depende solo de lo que Payway responda acá.
+export async function confirmarRetornoCheckout(pedidoId: string, resultHint: unknown): Promise<void> {
+  validarUUID(pedidoId, 'pedido');
+  const pedido = await pedidosRepo.encontrarPorId(pedidoId);
+  if (!pedido) {
+    console.log(`[Payway retorno] ignorado: pedido ${pedidoId} no encontrado`);
+    return;
+  }
+  if (pedido.estado !== 'PendienteDePago') {
+    console.log(`[Payway retorno] ignorado: pedido ${pedido.id} ya está en estado "${pedido.estado}"`);
+    return;
+  }
+
+  const siteTxIdReal = String((resultHint as Record<string, unknown> | null)?.site_transaction_id ?? '');
+  if (!siteTxIdReal) {
+    console.error(`[Payway retorno] pedido ${pedido.id}: no se pudo extraer site_transaction_id del resultado de Payway`);
+    return;
+  }
+
+  const lista = await consultarPagosPayway(siteTxIdReal);
+  const pago = lista.find(p => String(p?.site_transaction_id) === siteTxIdReal) ?? null;
+
+  if (!pago) {
+    console.error(`[Payway retorno] pedido ${pedido.id}: no se encontró en Payway ningún pago con site_transaction_id=${siteTxIdReal}`);
+    return;
+  }
+
+  const montoEsperado  = Math.round(pedido.total * 100);
+  const siteIdEsperado = process.env.PAYWAY_SITE_ID ?? '';
+  if (Number(pago.amount) !== montoEsperado || String(pago.site_id) !== siteIdEsperado) {
+    console.error(
+      `[Payway retorno] pedido ${pedido.id}: el pago encontrado no coincide ` +
+      `(monto esperado=${montoEsperado} recibido=${pago.amount}, site esperado=${siteIdEsperado} recibido=${pago.site_id}) — no se confirma`,
+    );
+    return;
+  }
+
+  const paymentIdReal = String(pago.id ?? '');
+
+  // Guarda anti-replay: si este pago de Payway ya está linkeado a OTRO pedido,
+  // alguien está reusando una URL de retorno ya consumida contra un pedido distinto.
+  const pedidoExistente = await pedidosRepo.encontrarPorPwPaymentId(paymentIdReal);
+  if (pedidoExistente && pedidoExistente.id !== pedido.id) {
+    console.error(
+      `[Payway retorno] ALERTA posible replay: el pago ${paymentIdReal} ya está asociado al pedido ${pedidoExistente.id} — ` +
+      `se intentó reusar contra el pedido ${pedido.id}. No se confirma.`,
+    );
+    return;
+  }
+
+  await aplicarResultadoPago(pedido, String(pago.status ?? ''), paymentIdReal);
 }

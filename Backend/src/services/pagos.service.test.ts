@@ -1,15 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Pedido, DetallePedido } from '../types';
 
-const { actualizarEstado, restaurarStock } = vi.hoisted(() => ({
+const { actualizarEstado, restaurarStock, encontrarPorId, encontrarPorPwPaymentId } = vi.hoisted(() => ({
   actualizarEstado: vi.fn(),
   restaurarStock: vi.fn(),
+  encontrarPorId: vi.fn(),
+  encontrarPorPwPaymentId: vi.fn(),
 }));
 
-vi.mock('../repositories/pedidos.repository', () => ({ actualizarEstado, encontrarPorId: vi.fn() }));
+vi.mock('../repositories/pedidos.repository', () => ({ actualizarEstado, encontrarPorId, encontrarPorPwPaymentId }));
 vi.mock('../repositories/productos.repository', () => ({ restaurarStock }));
 
-import { aplicarResultadoPago } from './pagos.service';
+// NOTA: pagos.service.ts carga sdk-node-payway con require() (no import), y Vitest
+// no logra interceptarlo con vi.mock (queda pegando a la red real). Por eso los tests
+// de confirmarRetornoCheckout de acá abajo se limitan a los casos que retornan ANTES
+// de tocar el SDK (consultarPagosPayway) — cubrir el resto (matching de monto/sitio,
+// guarda anti-replay) queda pendiente hasta resolver el mockeo del SDK.
+import { aplicarResultadoPago, confirmarRetornoCheckout } from './pagos.service';
 
 function detalle(overrides: Partial<DetallePedido>): DetallePedido {
   return {
@@ -25,7 +32,7 @@ function detalle(overrides: Partial<DetallePedido>): DetallePedido {
   };
 }
 
-function pedido(detalles: DetallePedido[] = []): Pedido {
+function pedido(detalles: DetallePedido[] = [], overrides: Partial<Pedido> = {}): Pedido {
   return {
     id: 'pedido-1',
     user_id: 'user-1',
@@ -53,12 +60,16 @@ function pedido(detalles: DetallePedido[] = []): Pedido {
     destinatario_cod_area: null,
     destinatario_telefono: null,
     detalles,
+    ...overrides,
   };
 }
 
 beforeEach(() => {
   actualizarEstado.mockReset();
   restaurarStock.mockReset();
+  encontrarPorId.mockReset();
+  encontrarPorPwPaymentId.mockReset();
+  encontrarPorPwPaymentId.mockResolvedValue(null);
 });
 
 describe('aplicarResultadoPago', () => {
@@ -107,5 +118,33 @@ describe('aplicarResultadoPago', () => {
 
     expect(actualizarEstado).not.toHaveBeenCalled();
     expect(restaurarStock).not.toHaveBeenCalled();
+  });
+});
+
+describe('confirmarRetornoCheckout', () => {
+  const PEDIDO_ID = '11111111-1111-1111-1111-111111111111';
+
+  it('no confirma si no se pudo extraer site_transaction_id del resultado', async () => {
+    encontrarPorId.mockResolvedValue(pedido([], { id: PEDIDO_ID, total: 200 }));
+
+    await confirmarRetornoCheckout(PEDIDO_ID, {});
+
+    expect(actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  it('no hace nada si el pedido ya no está en PendienteDePago (evita reprocesar)', async () => {
+    encontrarPorId.mockResolvedValue(pedido([], { id: PEDIDO_ID, total: 200, estado: 'Confirmado' }));
+
+    await confirmarRetornoCheckout(PEDIDO_ID, { site_transaction_id: 'CH2107202656e7' });
+
+    expect(actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  it('no hace nada si el pedido no existe', async () => {
+    encontrarPorId.mockResolvedValue(null);
+
+    await confirmarRetornoCheckout(PEDIDO_ID, { site_transaction_id: 'CH2107202656e7' });
+
+    expect(actualizarEstado).not.toHaveBeenCalled();
   });
 });

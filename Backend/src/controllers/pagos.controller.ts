@@ -99,6 +99,31 @@ export async function verificarEstado(req: Request, res: Response, next: NextFun
   }
 }
 
+// Adonde vuelve el navegador del cliente después de pagar en el checkout hosteado
+// de Payway (redirect_url). Público — lo pisa el navegador viniendo de Payway, sin
+// token de sesión. Nunca confía en `result` (lo arma el navegador del cliente):
+// pagosService.confirmarRetornoCheckout solo lo usa como pista y verifica el pago
+// real contra la API de Payway antes de confirmar nada. Pase lo que pase, siempre
+// termina redirigiendo a la página del frontend — un error acá no puede dejar al
+// usuario colgado en una pantalla rota.
+export async function retornoCheckout(req: Request, res: Response) {
+  const { pedidoId } = req.params as { pedidoId: string };
+  const resultRaw = req.query.result as string | undefined;
+
+  if (resultRaw) {
+    try {
+      const decoded = JSON.parse(Buffer.from(resultRaw, 'base64').toString('utf8'));
+      await pagosService.confirmarRetornoCheckout(pedidoId, decoded);
+    } catch (err) {
+      console.error('[Payway retorno] Error procesando el retorno del checkout:', err);
+    }
+  } else {
+    console.log(`[Payway retorno] pedido ${pedidoId}: volvió sin parámetro "result"`);
+  }
+
+  res.redirect(302, `${pagosService.obtenerFrontendBaseUrl()}/pago/exitoso?pedido=${pedidoId}`);
+}
+
 export async function notificacion(req: Request, res: Response) {
   const secretEsperado = process.env.PAYWAY_WEBHOOK_SECRET;
   if (secretEsperado && req.query.secret !== secretEsperado) {
