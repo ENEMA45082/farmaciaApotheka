@@ -195,7 +195,10 @@ export function DetallePedidoPage() {
           )}
           <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedido.total)}</strong></p>
           {pedido.pw_payment_id && (
-            <p className="pedido-detalle__pago">Pago procesado · ID: {pedido.pw_payment_id}</p>
+            <p className="pedido-detalle__pago">
+              Pago procesado · ID: {pedido.pw_payment_id}
+              {pedido.pw_site_transaction_id && ` · Ref. Payway: ${pedido.pw_site_transaction_id}`}
+            </p>
           )}
         </div>
 

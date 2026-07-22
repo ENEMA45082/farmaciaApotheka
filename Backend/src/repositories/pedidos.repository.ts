@@ -30,6 +30,7 @@ function mapearPedido(row: Record<string, unknown>): Pedido {
     codigo_postal_envio: row.codigo_postal_envio as string | null ?? null,
     metodo_pago:   row.metodo_pago as import('../types').MetodoPago | null ?? null,
     pw_payment_id:      row.pw_payment_id as string | null ?? null,
+    pw_site_transaction_id: row.pw_site_transaction_id as string | null ?? null,
     fecha_pedido:       row.fecha_pedido as string,
     fecha_cancelacion:  row.fecha_cancelacion as string | null,
     motivo_cancelacion: row.motivo_cancelacion as string | null ?? null,
@@ -117,6 +118,7 @@ export async function actualizarEstado(
   estado: Pedido['estado'],
   extras?: {
     pw_payment_id?: string;
+    pw_site_transaction_id?: string;
     motivo_cancelacion?: string;
     shipping_tracking_number?: string;
     shipping_fecha_envio?: string;
@@ -126,6 +128,7 @@ export async function actualizarEstado(
 ): Promise<void> {
   const cambios: Record<string, unknown> = { estado_id: estadosRepo.getIdByNombre(estado) };
   if (extras?.pw_payment_id)              cambios.pw_payment_id              = extras.pw_payment_id;
+  if (extras?.pw_site_transaction_id)     cambios.pw_site_transaction_id     = extras.pw_site_transaction_id;
   if (extras?.motivo_cancelacion)         cambios.motivo_cancelacion         = extras.motivo_cancelacion;
   if (extras?.shipping_tracking_number)   cambios.shipping_tracking_number   = extras.shipping_tracking_number;
   if (extras?.shipping_fecha_envio)       cambios.shipping_fecha_envio       = extras.shipping_fecha_envio;

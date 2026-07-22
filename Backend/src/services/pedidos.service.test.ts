@@ -73,6 +73,7 @@ function pedidoFixture(): Pedido {
     codigo_postal_envio: null,
     metodo_pago: 'tarjeta',
     pw_payment_id: null,
+    pw_site_transaction_id: null,
     fecha_pedido: '2026-07-11T00:00:00.000Z',
     fecha_cancelacion: null,
     motivo_cancelacion: null,

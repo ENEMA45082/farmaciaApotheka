@@ -1873,7 +1873,10 @@ export function AdminPage() {
                         )}
                         <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedidoDetalle.total)}</strong></p>
                         {pedidoDetalle.pw_payment_id && (
-                          <p className="pedido-detalle__pago">Pago procesado · ID: {pedidoDetalle.pw_payment_id}</p>
+                          <p className="pedido-detalle__pago">
+                            Pago procesado · ID: {pedidoDetalle.pw_payment_id}
+                            {pedidoDetalle.pw_site_transaction_id && ` · Ref. Payway: ${pedidoDetalle.pw_site_transaction_id}`}
+                          </p>
                         )}
                       </div>
 

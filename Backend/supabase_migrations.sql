@@ -771,3 +771,13 @@ BEGIN
   END LOOP;
 END;
 $$;
+
+
+-- --------------------------------------------------------
+-- 13. pw_site_transaction_id: referencia "humana" que Payway muestra en
+--     su propio portal (ej. "CH210720261701"), distinta del pw_payment_id
+--     (id numérico interno de la API, usado para paymentInfo/getAllPayments).
+--     Se guarda además del pw_payment_id para poder comparar un pedido
+--     contra el panel de Payway a simple vista.
+-- --------------------------------------------------------
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pw_site_transaction_id text;

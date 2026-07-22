@@ -115,6 +115,10 @@ export interface Pedido {
   codigo_postal_envio: string | null;
   metodo_pago: MetodoPago | null;
   pw_payment_id: string | null;
+  // Referencia "humana" que Payway muestra en su portal (ej. "CH210720261701") —
+  // distinta del pw_payment_id (id numérico interno de la API). Se guarda para
+  // poder comparar un pedido contra el panel de Payway.
+  pw_site_transaction_id: string | null;
   fecha_pedido: string;
   fecha_cancelacion: string | null;
   motivo_cancelacion: string | null;

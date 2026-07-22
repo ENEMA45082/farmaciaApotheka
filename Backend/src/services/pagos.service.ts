@@ -101,12 +101,20 @@ function buildFraudDetection(pedido: Pedido, fraudData: FraudData, amountCentavo
   };
 }
 
-export async function aplicarResultadoPago(pedido: Pedido, status: string, paymentId: string): Promise<void> {
+export async function aplicarResultadoPago(
+  pedido: Pedido,
+  status: string,
+  paymentId: string,
+  siteTransactionId?: string,
+): Promise<void> {
   if (status === 'approved') {
     // La factura ya no se dispara acá: se emite recién cuando el pedido pasa a
     // "Entregado" (ver pedidos.service.ts::cambiarEstado), sin importar el
     // método de pago.
-    await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', { pw_payment_id: paymentId || undefined });
+    await pedidosRepo.actualizarEstado(pedido.id, 'Confirmado', {
+      pw_payment_id: paymentId || undefined,
+      pw_site_transaction_id: siteTransactionId || undefined,
+    });
   } else if (status === 'rejected' || status === 'cancelled') {
     const motivo = status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
     await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });
@@ -407,7 +415,7 @@ export async function verificarEstadoPago(pedido: Pedido): Promise<Pedido> {
     throw new AppError('No se pudo obtener el estado del pago desde Payway', 502);
   }
 
-  await aplicarResultadoPago(pedido, status, paymentId);
+  await aplicarResultadoPago(pedido, status, paymentId, String(pago.site_transaction_id ?? ''));
 
   const actualizado = await pedidosRepo.encontrarPorId(pedido.id);
   return actualizado ?? pedido;
@@ -468,5 +476,5 @@ export async function confirmarRetornoCheckout(pedidoId: string, resultHint: unk
     return;
   }
 
-  await aplicarResultadoPago(pedido, String(pago.status ?? ''), paymentIdReal);
+  await aplicarResultadoPago(pedido, String(pago.status ?? ''), paymentIdReal, siteTxIdReal);
 }
