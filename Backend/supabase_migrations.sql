@@ -781,3 +781,149 @@ $$;
 --     contra el panel de Payway a simple vista.
 -- --------------------------------------------------------
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pw_site_transaction_id text;
+
+
+-- --------------------------------------------------------
+  -- 14. Atomicidad real de stock en creación/cancelación de pedidos.
+  --
+  --     Hasta ahora, crear un pedido era: 1) crear_pedido_completo (atómica,
+  --     inserta pedido + detalles) y 2) DESPUÉS, desde Node, un loop que
+  --     descuenta stock item por item con descontar_stock() — cada llamada
+  --     es su propia transacción, separada del insert. Si el loop fallaba a
+  --     mitad de camino (stock consumido por otro pedido en el medio, error
+  --     transitorio), el pedido ya había quedado creado con el stock de
+  --     algunos items descontado y el de otros no. Mismo patrón, al revés,
+  --     en la cancelación (restaurar stock) — tanto la de pedidos.service.ts
+  --     como la de pagos.service.ts cuando Payway rechaza un pago.
+  --
+  --     Acá se mueve el ajuste de stock ADENTRO de la misma transacción que
+  --     el insert/update del pedido, así todo pasa o nada pasa.
+  --
+  --     descontar_stock()/restaurar_stock() NO se tocan — ya tienen el patrón
+  --     correcto (UPDATE ... WHERE stock >= cantidad + RAISE EXCEPTION si no
+  --     matchea ninguna fila) y llamarlas desde otra función plpgsql las deja
+  --     corriendo dentro de la misma transacción del caller, sin duplicar esa
+  --     lógica acá.
+  -- --------------------------------------------------------
+
+  -- 14a. crear_pedido_completo: mismo contrato de siempre (mismos parámetros,
+  --      mismo valor de retorno), pero ahora también descuenta stock de cada
+  --      item antes de devolver. Si algún item no tiene stock suficiente,
+  --      descontar_stock() lanza 'stock_insuficiente' y Postgres deshace TODO
+  --      (el insert del pedido, el de sus detalles, y los descuentos de stock
+  --      de los items anteriores del mismo loop) — no solo ese item.
+  CREATE OR REPLACE FUNCTION crear_pedido_completo(
+    p_user_id                    uuid,
+    p_total                      numeric,
+    p_subtotal_lista             numeric,
+    p_notas                      text,
+    p_metodo_envio               text,
+    p_costo_envio                numeric,
+    p_sucursal_correo_argentino  text,
+    p_codigo_postal_envio        text,
+    p_metodo_pago                text,
+    p_items                      jsonb,
+    p_destinatario_nombre        text DEFAULT NULL,
+    p_destinatario_dni           text DEFAULT NULL,
+    p_destinatario_cod_area      text DEFAULT NULL,
+    p_destinatario_telefono      text DEFAULT NULL
+  )
+  RETURNS jsonb
+  LANGUAGE plpgsql
+  AS $$
+  DECLARE
+    nuevo_pedido pedidos%ROWTYPE;
+    v_item jsonb;
+  BEGIN
+    INSERT INTO pedidos (
+      user_id, total, subtotal_lista, notas,
+      metodo_envio, costo_envio, sucursal_correo_argentino,
+      codigo_postal_envio, metodo_pago,
+      destinatario_nombre, destinatario_dni, destinatario_cod_area, destinatario_telefono
+    ) VALUES (
+      p_user_id, p_total, p_subtotal_lista, p_notas,
+      p_metodo_envio, p_costo_envio, p_sucursal_correo_argentino,
+      p_codigo_postal_envio, p_metodo_pago,
+      p_destinatario_nombre, p_destinatario_dni, p_destinatario_cod_area, p_destinatario_telefono
+    )
+    RETURNING * INTO nuevo_pedido;
+
+    INSERT INTO detalles_pedido (
+      pedido_id, producto_id, nombre_producto,
+      cantidad, precio_unitario, precio_lista, subtotal
+    )
+    SELECT
+      nuevo_pedido.id,
+      (item->>'producto_id')::uuid,
+      item->>'nombre_producto',
+      (item->>'cantidad')::int,
+      (item->>'precio_unitario')::numeric,
+      (item->>'precio_lista')::numeric,
+      (item->>'subtotal')::numeric
+    FROM jsonb_array_elements(p_items) AS item;
+
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+      PERFORM descontar_stock((v_item->>'producto_id')::uuid, (v_item->>'cantidad')::int);
+    END LOOP;
+
+    RETURN row_to_json(nuevo_pedido)::jsonb;
+  END;
+  $$;
+
+  -- 14b. cancelar_pedido_completo: cambia el estado a Cancelado y restaura el
+  --      stock de todos los detalles del pedido, atómico. Un solo punto para
+  --      los tres lugares que cancelaban a mano (cancelación del cliente,
+  --      cancelación de admin, y pago rechazado/cancelado por Payway):
+  --
+  --      - p_user_id: si se pasa, exige que el pedido sea de ese usuario
+  --        (caso: el cliente cancela su propio pedido).
+  --      - p_estado_id_requerido: si se pasa, exige que el pedido esté
+  --        exactamente en ese estado (caso: el cliente solo puede cancelar
+  --        en PendienteDePago).
+  --      Ambos NULL = sin esas restricciones (caso: admin, o el webhook de
+  --      Payway) — la app ya valida las reglas de negocio correspondientes
+  --      antes de llamar a esta función.
+  --
+  --      Devuelve NULL si el UPDATE no matcheó ninguna fila (no existe el
+  --      pedido, no es el dueño, o no estaba en el estado requerido) — la app
+  --      lo distingue de un error real.
+  CREATE OR REPLACE FUNCTION cancelar_pedido_completo(
+    p_pedido_id           uuid,
+    p_motivo              text,
+    p_user_id             uuid DEFAULT NULL,
+    p_estado_id_requerido smallint DEFAULT NULL
+  )
+  RETURNS jsonb
+  LANGUAGE plpgsql
+  AS $$
+  DECLARE
+    id_cancelado       smallint;
+    pedido_actualizado pedidos%ROWTYPE;
+    detalle            RECORD;
+  BEGIN
+    SELECT id INTO id_cancelado FROM estados WHERE nombre = 'Cancelado';
+
+    UPDATE pedidos SET
+      estado_id          = id_cancelado,
+      fecha_cancelacion  = now(),
+      motivo_cancelacion = p_motivo
+    WHERE id = p_pedido_id
+      AND (p_user_id IS NULL OR user_id = p_user_id)
+      AND (p_estado_id_requerido IS NULL OR estado_id = p_estado_id_requerido)
+    RETURNING * INTO pedido_actualizado;
+
+    IF NOT FOUND THEN
+      RETURN NULL;
+    END IF;
+
+    FOR detalle IN
+      SELECT producto_id, cantidad FROM detalles_pedido
+      WHERE pedido_id = p_pedido_id AND producto_id IS NOT NULL
+    LOOP
+      PERFORM restaurar_stock(detalle.producto_id, detalle.cantidad);
+    END LOOP;
+
+    RETURN row_to_json(pedido_actualizado)::jsonb;
+  END;
+  $$;

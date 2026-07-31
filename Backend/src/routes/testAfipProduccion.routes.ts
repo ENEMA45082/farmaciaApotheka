@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdmin } from '../middlewares/auth.middleware';
+import { requiereAdmin } from '../middlewares/autenticacion.middleware';
 import { AppError } from '../errors/AppError';
 import {
   verificarConexionProduccion,
@@ -28,7 +28,7 @@ import {
  */
 const router = Router();
 
-router.get('/', requireAdmin, async (req, res) => {
+router.get('/', requiereAdmin, async (req, res) => {
   // Fricción extra a propósito: esto pega contra ARCA real, no alcanza con
   // tener el token de admin, hay que confirmar explícitamente por query string.
   if (req.query.confirmo !== 'produccion') {
@@ -55,7 +55,7 @@ router.get('/', requireAdmin, async (req, res) => {
 // (web, producción) — PUNTO_VENTA_WEB_PRODUCCION, NUNCA el 5 (MercadoLibre).
 // Requiere pasar puntoVenta/tipoComprobante explícitos por query string para
 // que nunca quede ambiguo qué se está consultando en producción.
-router.get('/ultimo-comprobante', requireAdmin, async (req, res) => {
+router.get('/ultimo-comprobante', requiereAdmin, async (req, res) => {
   if (req.query.confirmo !== 'produccion') {
     res.status(400).json({
       ok: false,
@@ -90,7 +90,7 @@ router.get('/ultimo-comprobante', requireAdmin, async (req, res) => {
 // real e irreversible. Doble fricción a propósito: ?confirmo=produccion en la
 // URL Y "confirmoEmisionReal": true en el body. Todos los datos del comprobante
 // son obligatorios y explícitos, sin ningún default.
-router.post('/emitir', requireAdmin, async (req, res) => {
+router.post('/emitir', requiereAdmin, async (req, res) => {
   if (req.query.confirmo !== 'produccion') {
     res.status(400).json({
       ok: false,
@@ -138,7 +138,7 @@ router.post('/emitir', requireAdmin, async (req, res) => {
 // Genera el PDF de la Factura B N°1 (PtoVta 6) ya emitida el 2026-07-13 — NO emite
 // nada nuevo, solo llama a CreatePDF con los datos reales de ese comprobante
 // (hardcodeados a propósito, para no arriesgar un typo de CAE pasándolo a mano).
-router.get('/pdf-factura-1', requireAdmin, async (req, res) => {
+router.get('/pdf-factura-1', requiereAdmin, async (req, res) => {
   if (req.query.confirmo !== 'produccion') {
     res.status(400).json({
       ok: false,

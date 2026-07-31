@@ -1,23 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Producto, Pedido, CrearPedidoDTO } from '../types';
 
-const { encontrarPorId, descontarStock } = vi.hoisted(() => ({
+const { encontrarPorId } = vi.hoisted(() => ({
   encontrarPorId: vi.fn(),
-  descontarStock: vi.fn(),
 }));
 
-const { crearPedido, pedidosEncontrarPorId } = vi.hoisted(() => ({
+const { crearPedido, pedidosEncontrarPorId, cancelarCliente, cancelarSinRestricciones } = vi.hoisted(() => ({
   crearPedido: vi.fn(),
   pedidosEncontrarPorId: vi.fn(),
+  cancelarCliente: vi.fn(),
+  cancelarSinRestricciones: vi.fn(),
 }));
+const { registrarHistorial } = vi.hoisted(() => ({ registrarHistorial: vi.fn() }));
 
-vi.mock('../repositories/productos.repository', () => ({ encontrarPorId, descontarStock }));
+vi.mock('../repositories/productos.repository', () => ({ encontrarPorId }));
 vi.mock('../repositories/pedidos.repository', () => ({
-  crear:          crearPedido,
-  encontrarPorId: pedidosEncontrarPorId,
+  crear:                     crearPedido,
+  encontrarPorId:            pedidosEncontrarPorId,
+  cancelar:                  cancelarCliente,
+  cancelarSinRestricciones:  cancelarSinRestricciones,
 }));
+vi.mock('../repositories/pedidoHistorial.repository', () => ({ registrar: registrarHistorial }));
 
-import { crear, obtenerPorId } from './pedidos.service';
+import { crear, obtenerPorId, cancelar, cancelarPedido } from './pedidos.service';
 
 function producto(overrides: Partial<Producto> = {}): Producto {
   return {
@@ -92,10 +97,12 @@ function pedidoFixture(): Pedido {
 
 beforeEach(() => {
   encontrarPorId.mockReset();
-  descontarStock.mockReset();
   crearPedido.mockReset();
   crearPedido.mockResolvedValue(pedidoFixture());
   pedidosEncontrarPorId.mockReset();
+  cancelarCliente.mockReset();
+  cancelarSinRestricciones.mockReset();
+  registrarHistorial.mockReset();
 });
 
 describe('crear', () => {
@@ -152,12 +159,39 @@ describe('crear', () => {
     expect(encontrarPorId).not.toHaveBeenCalled();
   });
 
-  it('descuenta stock usando cantidad/producto_id confirmados, no los del DTO', async () => {
+  it('rechaza destinatario_dni con formato inválido cuando el envío es a domicilio', async () => {
+    await expect(crear('user-1', dto({
+      metodo_envio: 'domicilio',
+      destinatario_nombre: 'Juan Pérez',
+      destinatario_dni: 'no-es-un-dni',
+    }))).rejects.toMatchObject({ statusCode: 400 });
+    expect(crearPedido).not.toHaveBeenCalled();
+  });
+
+  it('acepta destinatario_dni válido cuando el envío es a domicilio', async () => {
+    encontrarPorId.mockResolvedValue(producto());
+
+    await crear('user-1', dto({
+      metodo_envio: 'domicilio',
+      destinatario_nombre: 'Juan Pérez',
+      destinatario_dni: '30111222',
+    }));
+
+    expect(crearPedido).toHaveBeenCalled();
+  });
+
+  it('pasa cantidad/producto_id confirmados (no los del DTO) a pedidosRepo.crear, que descuenta stock atómicamente', async () => {
     encontrarPorId.mockResolvedValue(producto());
 
     await crear('user-1', dto());
 
-    expect(descontarStock).toHaveBeenCalledWith('prod-1', 2);
+    expect(crearPedido).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      [expect.objectContaining({ producto_id: 'prod-1', cantidad: 2 })],
+      expect.any(Number),
+      expect.any(Number),
+    );
   });
 });
 
@@ -182,5 +216,57 @@ describe('obtenerPorId', () => {
     const pedido = await obtenerPorId('11111111-1111-1111-1111-111111111111', 'user-1');
 
     expect(pedido.user_id).toBe('user-1');
+  });
+});
+
+describe('cancelar (cliente)', () => {
+  const ID = '11111111-1111-1111-1111-111111111111';
+
+  it('rechaza si el pedido no está en PendienteDePago', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), user_id: 'user-1', estado: 'Confirmado' });
+
+    await expect(cancelar(ID, 'user-1')).rejects.toMatchObject({ statusCode: 400 });
+    expect(cancelarCliente).not.toHaveBeenCalled();
+  });
+
+  it('llama a pedidosRepo.cancelar (que restaura stock atómicamente) cuando está en PendienteDePago', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), user_id: 'user-1', estado: 'PendienteDePago' });
+    cancelarCliente.mockResolvedValue({ ...pedidoFixture(), estado: 'Cancelado' });
+
+    await cancelar(ID, 'user-1');
+
+    expect(cancelarCliente).toHaveBeenCalledWith(ID, 'user-1', 'solicitado_por_cliente');
+  });
+});
+
+describe('cancelarPedido (admin)', () => {
+  const ID = '11111111-1111-1111-1111-111111111111';
+
+  it('rechaza un motivo inválido', async () => {
+    await expect(cancelarPedido(ID, 'motivo-inventado', 'admin-1')).rejects.toMatchObject({ statusCode: 400 });
+    expect(cancelarSinRestricciones).not.toHaveBeenCalled();
+  });
+
+  it('rechaza si el pedido ya está en un estado final', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), estado: 'Entregado' });
+
+    await expect(cancelarPedido(ID, 'sin_stock', 'admin-1')).rejects.toMatchObject({ statusCode: 400 });
+    expect(cancelarSinRestricciones).not.toHaveBeenCalled();
+  });
+
+  it('llama a pedidosRepo.cancelarSinRestricciones (que restaura stock atómicamente) y registra el historial', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), estado: 'EnPreparacion' });
+    cancelarSinRestricciones.mockResolvedValue({ ...pedidoFixture(), estado: 'Cancelado' });
+
+    await cancelarPedido(ID, 'sin_stock', 'admin-1');
+
+    expect(cancelarSinRestricciones).toHaveBeenCalledWith(ID, 'sin_stock');
+    expect(registrarHistorial).toHaveBeenCalledWith(expect.objectContaining({
+      pedido_id: ID,
+      estado_anterior: 'EnPreparacion',
+      estado_nuevo: 'Cancelado',
+      motivo: 'sin_stock',
+      changed_by: 'admin-1',
+    }));
   });
 });

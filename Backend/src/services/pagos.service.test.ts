@@ -1,15 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Pedido, DetallePedido } from '../types';
 
-const { actualizarEstado, restaurarStock, encontrarPorId, encontrarPorPwPaymentId } = vi.hoisted(() => ({
+const { actualizarEstado, cancelarSinRestricciones, encontrarPorId, encontrarPorPwPaymentId } = vi.hoisted(() => ({
   actualizarEstado: vi.fn(),
-  restaurarStock: vi.fn(),
+  cancelarSinRestricciones: vi.fn(),
   encontrarPorId: vi.fn(),
   encontrarPorPwPaymentId: vi.fn(),
 }));
 
-vi.mock('../repositories/pedidos.repository', () => ({ actualizarEstado, encontrarPorId, encontrarPorPwPaymentId }));
-vi.mock('../repositories/productos.repository', () => ({ restaurarStock }));
+vi.mock('../repositories/pedidos.repository', () => ({
+  actualizarEstado,
+  cancelarSinRestricciones,
+  encontrarPorId,
+  encontrarPorPwPaymentId,
+}));
 
 // NOTA: pagos.service.ts carga sdk-node-payway con require() (no import), y Vitest
 // no logra interceptarlo con vi.mock (queda pegando a la red real). Por eso los tests
@@ -67,7 +71,7 @@ function pedido(detalles: DetallePedido[] = [], overrides: Partial<Pedido> = {})
 
 beforeEach(() => {
   actualizarEstado.mockReset();
-  restaurarStock.mockReset();
+  cancelarSinRestricciones.mockReset();
   encontrarPorId.mockReset();
   encontrarPorPwPaymentId.mockReset();
   encontrarPorPwPaymentId.mockResolvedValue(null);
@@ -80,10 +84,10 @@ describe('aplicarResultadoPago', () => {
     await aplicarResultadoPago(p, 'approved', 'pw-123');
 
     expect(actualizarEstado).toHaveBeenCalledWith('pedido-1', 'Confirmado', { pw_payment_id: 'pw-123' });
-    expect(restaurarStock).not.toHaveBeenCalled();
+    expect(cancelarSinRestricciones).not.toHaveBeenCalled();
   });
 
-  it('cancela el pedido y restaura el stock de cada detalle cuando el pago fue rechazado', async () => {
+  it('cancela el pedido cuando el pago fue rechazado (cancelarSinRestricciones restaura el stock atómicamente)', async () => {
     const p = pedido([
       detalle({ id: 'd1', producto_id: 'prod-1', cantidad: 2 }),
       detalle({ id: 'd2', producto_id: 'prod-2', cantidad: 3 }),
@@ -91,9 +95,8 @@ describe('aplicarResultadoPago', () => {
 
     await aplicarResultadoPago(p, 'rejected', 'pw-123');
 
-    expect(actualizarEstado).toHaveBeenCalledWith('pedido-1', 'Cancelado', { motivo_cancelacion: 'pago_rechazado' });
-    expect(restaurarStock).toHaveBeenCalledWith('prod-1', 2);
-    expect(restaurarStock).toHaveBeenCalledWith('prod-2', 3);
+    expect(cancelarSinRestricciones).toHaveBeenCalledWith('pedido-1', 'pago_rechazado');
+    expect(actualizarEstado).not.toHaveBeenCalled();
   });
 
   it('cancela el pedido con motivo "solicitado_por_cliente" cuando Payway informa cancelled', async () => {
@@ -101,15 +104,7 @@ describe('aplicarResultadoPago', () => {
 
     await aplicarResultadoPago(p, 'cancelled', 'pw-123');
 
-    expect(actualizarEstado).toHaveBeenCalledWith('pedido-1', 'Cancelado', { motivo_cancelacion: 'solicitado_por_cliente' });
-  });
-
-  it('no restaura stock de detalles sin producto_id (item eliminado del catálogo)', async () => {
-    const p = pedido([detalle({ producto_id: null })]);
-
-    await aplicarResultadoPago(p, 'rejected', 'pw-123');
-
-    expect(restaurarStock).not.toHaveBeenCalled();
+    expect(cancelarSinRestricciones).toHaveBeenCalledWith('pedido-1', 'solicitado_por_cliente');
   });
 
   it('no hace nada si el status no es un valor reconocido', async () => {
@@ -118,7 +113,7 @@ describe('aplicarResultadoPago', () => {
     await aplicarResultadoPago(p, 'pending', 'pw-123');
 
     expect(actualizarEstado).not.toHaveBeenCalled();
-    expect(restaurarStock).not.toHaveBeenCalled();
+    expect(cancelarSinRestricciones).not.toHaveBeenCalled();
   });
 });
 

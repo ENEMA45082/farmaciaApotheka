@@ -3,7 +3,7 @@ import { ESTADOS_PEDIDO, MOTIVOS_CANCELACION } from '../config/estadosPedido';
 
 const itemPedidoSchema = z.object({
   producto_id:     z.string().uuid(),
-  nombre_producto: z.string().min(1),
+  nombre_producto: z.string().min(1).max(200),
   cantidad:        z.number().int().positive(),
   // Se aceptan en el shape porque el service los recalcula contra el catálogo
   // (ver pedidos.service.ts::crear) — acá solo se valida que tengan forma numérica.
@@ -12,17 +12,19 @@ const itemPedidoSchema = z.object({
 });
 
 export const crearPedidoSchema = z.object({
-  items:        z.array(itemPedidoSchema).min(1, 'El pedido debe tener al menos un producto'),
-  notas:        z.string().optional(),
+  // Tope para que un pedido con miles de items no dispare la misma cantidad
+  // de consultas secuenciales a la base en pedidos.service.ts::crear.
+  items:        z.array(itemPedidoSchema).min(1, 'El pedido debe tener al menos un producto').max(100),
+  notas:        z.string().max(500).optional(),
   metodo_envio: z.enum(['retiro_farmacia', 'domicilio', 'retiro_sucursal']),
   costo_envio:  z.number().nonnegative(),
-  sucursal_correo_argentino: z.string().optional(),
-  codigo_postal_envio:       z.string().optional(),
+  sucursal_correo_argentino: z.string().max(100).optional(),
+  codigo_postal_envio:       z.string().max(20).optional(),
   metodo_pago:               z.enum(['tarjeta', 'transferencia', 'efectivo']),
-  destinatario_nombre:       z.string().optional(),
-  destinatario_dni:          z.string().optional(),
-  destinatario_cod_area:     z.string().optional(),
-  destinatario_telefono:     z.string().optional(),
+  destinatario_nombre:       z.string().max(200).optional(),
+  destinatario_dni:          z.string().max(20).optional(),
+  destinatario_cod_area:     z.string().max(10).optional(),
+  destinatario_telefono:     z.string().max(30).optional(),
 });
 
 export const cambiarEstadoSchema = z.object({

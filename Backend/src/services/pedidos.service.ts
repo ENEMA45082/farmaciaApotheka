@@ -8,6 +8,7 @@ import * as correoArgentino from './correoArgentino.service';
 import * as facturacionPedidosService from './facturacionPedidos.service';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
+import { validarDocumento } from '../utils/validarDocumento';
 import { asegurarPropietario } from '../utils/ownership';
 import { supabase } from '../config/supabase';
 import { PESO_DEFAULT_GRAMOS } from '../config/envioConfig';
@@ -23,12 +24,13 @@ import type { ResultadoTracking } from './correoArgentino.service';
 
 export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido> {
   if (!dto.items?.length) {
-    throw new AppError('El pedido debe tener al menos un producto', 400);
+    throw new AppError('El pedido debe tener al menos un producto', 400, 'PEDIDO_SIN_ITEMS');
   }
 
   if (dto.metodo_envio === 'domicilio') {
-    if (!dto.destinatario_nombre?.trim()) throw new AppError('El nombre del destinatario es obligatorio', 400);
-    if (!dto.destinatario_dni?.trim())    throw new AppError('El DNI del destinatario es obligatorio', 400);
+    if (!dto.destinatario_nombre?.trim()) throw new AppError('El nombre del destinatario es obligatorio', 400, 'DESTINATARIO_NOMBRE_REQUERIDO');
+    if (!dto.destinatario_dni?.trim())    throw new AppError('El DNI del destinatario es obligatorio', 400, 'DESTINATARIO_DNI_REQUERIDO');
+    validarDocumento('DNI', dto.destinatario_dni);
   }
 
   // El precio SIEMPRE se toma del catálogo, nunca de lo que manda el cliente:
@@ -39,12 +41,13 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
   for (const item of dto.items) {
     const producto = await productosRepo.encontrarPorId(item.producto_id);
     if (!producto) {
-      throw new AppError(`Producto no encontrado: ${item.nombre_producto}`, 404);
+      throw new AppError(`Producto no encontrado: ${item.nombre_producto}`, 404, 'PRODUCTO_NOT_FOUND');
     }
     if (producto.stock < item.cantidad) {
       throw new AppError(
         `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stock}`,
         400,
+        'STOCK_INSUFICIENTE',
       );
     }
     itemsConfirmados.push({
@@ -61,13 +64,14 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
 
   // 'transferencia' y 'efectivo' son flujos manuales: el admin confirma el pago
   // cambiando el estado a 'Confirmado' via PATCH /api/pedidos/:id/estado
-  const pedido = await pedidosRepo.crear(userId, dto, itemsConfirmados, total, subtotalLista);
-
-  for (const item of itemsConfirmados) {
-    await productosRepo.descontarStock(item.producto_id, item.cantidad);
-  }
-
-  return pedido;
+  //
+  // El descuento de stock ya NO se hace acá con un loop aparte — pedidosRepo.crear
+  // llama a la RPC crear_pedido_completo, que inserta el pedido y descuenta el
+  // stock de cada item en la MISMA transacción de Postgres (ver supabase_migrations.sql,
+  // sección 14). El chequeo de stock del loop de arriba sigue sirviendo como
+  // camino feliz con mensaje claro; la RPC es la garantía real ante una carrera
+  // con otro pedido consumiendo el mismo stock justo en el medio.
+  return pedidosRepo.crear(userId, dto, itemsConfirmados, total, subtotalLista);
 }
 
 export async function listar(userId: string): Promise<Pedido[]> {
@@ -83,7 +87,7 @@ export async function obtenerPorId(id: string, userId: string): Promise<Pedido> 
 export async function obtenerPorIdAdmin(id: string): Promise<PedidoDetalleAdmin> {
   validarUUID(id, 'pedido');
   const pedido = await pedidosRepo.encontrarPorId(id);
-  if (!pedido) throw new AppError('Pedido no encontrado', 404);
+  if (!pedido) throw new AppError('Pedido no encontrado', 404, 'PEDIDO_NOT_FOUND');
 
   const [perfil, direccion, userResult, factura] = await Promise.all([
     perfilRepo.encontrarOCrear(pedido.user_id).catch(() => null),
@@ -110,7 +114,7 @@ export async function obtenerPorIdAdmin(id: string): Promise<PedidoDetalleAdmin>
 export async function reintentarFactura(id: string): Promise<Pedido> {
   validarUUID(id, 'pedido');
   const pedido = await pedidosRepo.encontrarPorId(id);
-  if (!pedido) throw new AppError('Pedido no encontrado', 404);
+  if (!pedido) throw new AppError('Pedido no encontrado', 404, 'PEDIDO_NOT_FOUND');
   await facturacionPedidosService.emitirFactura(pedido);
   return pedido;
 }
@@ -131,29 +135,31 @@ export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserI
     throw new AppError(
       `Estado inválido: '${estado}'. Valores permitidos: ${ESTADOS_PEDIDO.join(', ')}`,
       400,
+      'ESTADO_INVALIDO',
     );
   }
 
   if (estado === 'Cancelado') {
-    throw new AppError('Para cancelar un pedido usá la acción de cancelación e indicá un motivo', 400);
+    throw new AppError('Para cancelar un pedido usá la acción de cancelación e indicá un motivo', 400, 'CANCELACION_REQUIERE_MOTIVO');
   }
 
   const pedidoActual = await pedidosRepo.encontrarPorId(id);
-  if (!pedidoActual) throw new AppError('Pedido no encontrado', 404);
+  if (!pedidoActual) throw new AppError('Pedido no encontrado', 404, 'PEDIDO_NOT_FOUND');
 
   if (!puedeTransicionar(pedidoActual.estado, estado)) {
     const validos = TRANSICIONES_VALIDAS_PARA(pedidoActual.estado);
     throw new AppError(
       `No se puede pasar de '${pedidoActual.estado}' a '${estado}'. Transiciones válidas: ${validos.length ? validos.join(', ') : 'ninguna (estado final)'}`,
       400,
+      'TRANSICION_INVALIDA',
     );
   }
 
   if (estado === 'Enviado' && pedidoActual.metodo_envio === 'retiro_farmacia') {
-    throw new AppError('Los pedidos con retiro en farmacia deben pasar a "Listo para retirar", no a "Enviado"', 400);
+    throw new AppError('Los pedidos con retiro en farmacia deben pasar a "Listo para retirar", no a "Enviado"', 400, 'ENVIO_METODO_INCOMPATIBLE');
   }
   if (estado === 'ListoParaRetirar' && pedidoActual.metodo_envio !== 'retiro_farmacia') {
-    throw new AppError('Solo los pedidos con retiro en farmacia pueden marcarse como "Listo para retirar"', 400);
+    throw new AppError('Solo los pedidos con retiro en farmacia pueden marcarse como "Listo para retirar"', 400, 'ENVIO_METODO_INCOMPATIBLE');
   }
 
   if (estado === 'Enviado' && !pedidoActual.shipping_tracking_number) {
@@ -183,7 +189,7 @@ export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserI
   });
 
   const pedido = await pedidosRepo.encontrarPorId(id);
-  if (!pedido) throw new AppError('Pedido no encontrado', 404);
+  if (!pedido) throw new AppError('Pedido no encontrado', 404, 'PEDIDO_NOT_FOUND');
 
   // La factura se emite recién al entregar el pedido (nunca antes: ni al
   // confirmar el pago, ni en preparación) — regla de negocio explícita.
@@ -201,11 +207,11 @@ function TRANSICIONES_VALIDAS_PARA(estado: EstadoPedido): EstadoPedido[] {
 export async function cancelarPedido(id: string, motivo: string, adminUserId: string): Promise<Pedido> {
   validarUUID(id, 'pedido');
   if (!esMotivoCancelacionValido(motivo)) {
-    throw new AppError(`Motivo inválido: '${motivo}'`, 400);
+    throw new AppError(`Motivo inválido: '${motivo}'`, 400, 'MOTIVO_CANCELACION_INVALIDO');
   }
 
   const pedido = await pedidosRepo.encontrarPorId(id);
-  if (!pedido) throw new AppError('Pedido no encontrado', 404);
+  if (!pedido) throw new AppError('Pedido no encontrado', 404, 'PEDIDO_NOT_FOUND');
 
   // TODO(nota-de-crédito): hoy es imposible llegar acá con pedido.estado === 'Entregado'
   // (Entregado es estado final, TRANSICIONES_VALIDAS.Entregado = []) — este guard nunca
@@ -213,16 +219,14 @@ export async function cancelarPedido(id: string, motivo: string, adminUserId: st
   // un pedido Entregado, hay que emitir una Nota de Crédito B (CbteTipo 8) contra el CAE
   // de facturasRepo.encontrarPorPedidoId(id) ANTES de restaurar stock — no implementado.
   if (ESTADOS_FINALES.includes(pedido.estado)) {
-    throw new AppError(`El pedido ya está en estado '${pedido.estado}' y no se puede cancelar`, 400);
+    throw new AppError(`El pedido ya está en estado '${pedido.estado}' y no se puede cancelar`, 400, 'PEDIDO_ESTADO_FINAL');
   }
 
-  await pedidosRepo.actualizarEstado(id, 'Cancelado', { motivo_cancelacion: motivo });
-
-  for (const detalle of pedido.detalles ?? []) {
-    if (detalle.producto_id) {
-      await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);
-    }
-  }
+  // cancelarSinRestricciones cambia el estado y restaura el stock de todos
+  // los detalles en una sola transacción (ver supabase_migrations.sql,
+  // sección 14) — ya no hace falta el loop de restaurarStock() aparte.
+  const actualizado = await pedidosRepo.cancelarSinRestricciones(id, motivo);
+  if (!actualizado) throw new AppError('Error al cancelar el pedido', 500, 'CANCELACION_FALLIDA');
 
   await pedidoHistorialRepo.registrar({
     pedido_id: id,
@@ -232,8 +236,6 @@ export async function cancelarPedido(id: string, motivo: string, adminUserId: st
     changed_by: adminUserId,
   });
 
-  const actualizado = await pedidosRepo.encontrarPorId(id);
-  if (!actualizado) throw new AppError('Pedido no encontrado', 404);
   return actualizado;
 }
 
@@ -277,7 +279,7 @@ async function crearEnvioReal(pedido: Pedido) {
 export async function obtenerTracking(id: string, userId: string): Promise<ResultadoTracking> {
   const pedido = await obtenerPorId(id, userId);
   if (!pedido.shipping_tracking_number) {
-    throw new AppError('Este pedido todavía no tiene un envío generado', 400);
+    throw new AppError('Este pedido todavía no tiene un envío generado', 400, 'PEDIDO_SIN_ENVIO');
   }
   return correoArgentino.obtenerTracking(pedido.shipping_tracking_number);
 }
@@ -286,16 +288,12 @@ export async function cancelar(id: string, userId: string): Promise<Pedido> {
   validarUUID(id, 'pedido');
   const pedido = await obtenerPorId(id, userId);
   if (pedido.estado !== 'PendienteDePago') {
-    throw new AppError('Solo se pueden cancelar pedidos en estado pendiente de pago', 400);
+    throw new AppError('Solo se pueden cancelar pedidos en estado pendiente de pago', 400, 'CANCELACION_ESTADO_INVALIDO');
   }
+  // pedidosRepo.cancelar restaura el stock de todos los detalles en la misma
+  // transacción que el cambio de estado (ver supabase_migrations.sql, sección 14).
   const cancelado = await pedidosRepo.cancelar(id, userId, 'solicitado_por_cliente');
-  if (!cancelado) throw new AppError('Error al cancelar el pedido', 500);
-
-  for (const detalle of cancelado.detalles ?? []) {
-    if (detalle.producto_id) {
-      await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);
-    }
-  }
+  if (!cancelado) throw new AppError('Error al cancelar el pedido', 500, 'CANCELACION_FALLIDA');
 
   return cancelado;
 }

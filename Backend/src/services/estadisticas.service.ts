@@ -6,7 +6,7 @@ export async function obtenerEstadisticas() {
 
   if (error) {
     console.error('[estadisticas] Error en RPC obtener_estadisticas_inventario:', error);
-    throw new AppError('Error al obtener estadísticas', 500);
+    throw new AppError('Error al obtener estadísticas', 500, 'ESTADISTICAS_ERROR');
   }
 
   const raw = data as {

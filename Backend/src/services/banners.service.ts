@@ -9,10 +9,10 @@ export async function listar(soloActivos: boolean): Promise<Banner[]> {
 
 export async function crear(dto: CrearBannerDTO): Promise<Banner> {
   if (!dto.imagen_url?.trim()) {
-    throw new AppError('La imagen del banner es obligatoria', 400);
+    throw new AppError('La imagen del banner es obligatoria', 400, 'BANNER_IMAGEN_REQUERIDA');
   }
   if (!dto.alt_texto?.trim()) {
-    throw new AppError('El texto alternativo del banner es obligatorio', 400);
+    throw new AppError('El texto alternativo del banner es obligatorio', 400, 'BANNER_ALT_TEXTO_REQUERIDO');
   }
 
   return bannersRepo.crear({
@@ -34,12 +34,12 @@ export async function actualizar(id: string, dto: ActualizarBannerDTO): Promise<
   if (dto.activo !== undefined) cambios.activo = dto.activo;
 
   if (Object.keys(cambios).length === 0) {
-    throw new AppError('Se debe enviar al menos un campo para actualizar', 400);
+    throw new AppError('Se debe enviar al menos un campo para actualizar', 400, 'SIN_CAMBIOS');
   }
 
   const banner = await bannersRepo.actualizar(id, cambios);
   if (!banner) {
-    throw new AppError('Banner no encontrado', 404);
+    throw new AppError('Banner no encontrado', 404, 'BANNER_NOT_FOUND');
   }
   return banner;
 }
@@ -48,7 +48,7 @@ export async function eliminar(id: string): Promise<void> {
   validarUUID(id, 'banner');
   const existe = await bannersRepo.encontrarPorId(id);
   if (!existe) {
-    throw new AppError('Banner no encontrado', 404);
+    throw new AppError('Banner no encontrado', 404, 'BANNER_NOT_FOUND');
   }
   await bannersRepo.eliminar(id);
 }

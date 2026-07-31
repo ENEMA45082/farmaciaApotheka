@@ -8,7 +8,7 @@ export function asegurarPropietario<T extends { user_id: string }>(
   userId: string,
   nombreRecurso = 'Recurso',
 ): T {
-  if (!recurso) throw new AppError(`${nombreRecurso} no encontrado`, 404);
-  if (recurso.user_id !== userId) throw new AppError('Acceso denegado', 403);
+  if (!recurso) throw new AppError(`${nombreRecurso} no encontrado`, 404, 'NOT_FOUND');
+  if (recurso.user_id !== userId) throw new AppError('Acceso denegado', 403, 'FORBIDDEN');
   return recurso;
 }

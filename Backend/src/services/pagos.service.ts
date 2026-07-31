@@ -22,7 +22,6 @@ const sdkPayway = require('sdk-node-payway') as {
 
 import axios from 'axios';
 import * as pedidosRepo   from '../repositories/pedidos.repository';
-import * as productosRepo from '../repositories/productos.repository';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import type { Pedido, FraudData } from '../types';
@@ -117,12 +116,10 @@ export async function aplicarResultadoPago(
     });
   } else if (status === 'rejected' || status === 'cancelled') {
     const motivo = status === 'rejected' ? 'pago_rechazado' : 'solicitado_por_cliente';
-    await pedidosRepo.actualizarEstado(pedido.id, 'Cancelado', { motivo_cancelacion: motivo });
-    for (const detalle of pedido.detalles ?? []) {
-      if (detalle.producto_id) {
-        await productosRepo.restaurarStock(detalle.producto_id, detalle.cantidad);
-      }
-    }
+    // cancelarSinRestricciones cambia el estado y restaura el stock de todos
+    // los detalles en una sola transacción (ver supabase_migrations.sql,
+    // sección 14) — antes era un update + un loop de restaurarStock() aparte.
+    await pedidosRepo.cancelarSinRestricciones(pedido.id, motivo);
   }
 }
 
@@ -159,6 +156,7 @@ export async function procesarPago(
           return reject(new AppError(
             'No pudimos procesar el pago con tarjeta en este momento. Probá de nuevo en unos minutos o con otro medio de pago.',
             502,
+            'PAYWAY_PAGO_FALLIDO',
           ));
         }
         resolve({ status: String(result.status), pw_payment_id: String(result.id) });
@@ -273,6 +271,7 @@ export async function generarCheckoutHosted(
     throw new AppError(
       'No pudimos iniciar el pago con tarjeta en este momento. Probá de nuevo en unos minutos o con otro medio de pago.',
       502,
+      'PAYWAY_CHECKOUT_RECHAZADO',
     );
   }
 
@@ -289,6 +288,7 @@ export async function generarCheckoutHosted(
     throw new AppError(
       'No pudimos iniciar el pago con tarjeta en este momento. Probá de nuevo en unos minutos o con otro medio de pago.',
       502,
+      'PAYWAY_CHECKOUT_SIN_URL',
     );
   }
 
@@ -412,7 +412,7 @@ export async function verificarEstadoPago(pedido: Pedido): Promise<Pedido> {
   const status    = String(pago.status ?? '');
   const paymentId = String(pago.id ?? '');
   if (!status) {
-    throw new AppError('No se pudo obtener el estado del pago desde Payway', 502);
+    throw new AppError('No se pudo obtener el estado del pago desde Payway', 502, 'PAYWAY_ESTADO_DESCONOCIDO');
   }
 
   await aplicarResultadoPago(pedido, status, paymentId, String(pago.site_transaction_id ?? ''));

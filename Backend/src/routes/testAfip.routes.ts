@@ -1,5 +1,5 @@
 import { Router, type Response } from 'express';
-import { requireAdmin } from '../middlewares/auth.middleware';
+import { requiereAdmin } from '../middlewares/autenticacion.middleware';
 import { AppError } from '../errors/AppError';
 import { obtenerUltimoComprobanteAutorizado, solicitarComprobantePrueba } from '../services/facturacion.service';
 
@@ -40,7 +40,7 @@ function responderError(res: Response, err: unknown): void {
   });
 }
 
-router.get('/', requireAdmin, async (req, res) => {
+router.get('/', requiereAdmin, async (req, res) => {
   try {
     const puntoVenta = req.query.puntoVenta !== undefined ? Number(req.query.puntoVenta) : undefined;
     const tipoComprobante = req.query.tipoComprobante !== undefined ? Number(req.query.tipoComprobante) : undefined;
@@ -58,7 +58,7 @@ router.get('/', requireAdmin, async (req, res) => {
   }
 });
 
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requiereAdmin, async (req, res) => {
   try {
     const { puntoVenta, tipoComprobante, importeTotal, docTipo, docNro } = req.body ?? {};
 

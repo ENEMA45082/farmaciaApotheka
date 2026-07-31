@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import * as estadosRepo from './estados.repository';
+import { AppError } from '../errors/AppError';
 import type { Pedido, DetallePedido, CrearPedidoDTO, ItemPedidoConfirmado } from '../types';
 
 function mapearDetalle(row: Record<string, unknown>): DetallePedido {
@@ -83,7 +84,21 @@ export async function crear(
     p_destinatario_telefono:    dto.destinatario_telefono ?? null,
   });
 
-  if (error || !pedidoData) throw error ?? new Error('Error al crear pedido');
+  if (error || !pedidoData) {
+    // crear_pedido_completo descuenta stock atómicamente adentro de la misma
+    // transacción (ver supabase_migrations.sql, sección 14) — si algún item
+    // se quedó sin stock justo en el medio (carrera con otro pedido), Postgres
+    // aborta todo y devuelve este mensaje. Se traduce a un AppError legible
+    // en vez de dejarlo caer como error interno genérico.
+    if (error?.message?.includes('stock_insuficiente')) {
+      throw new AppError(
+        'El stock de algún producto cambió mientras se procesaba el pedido. Volvé a intentarlo.',
+        409,
+        'STOCK_INSUFICIENTE',
+      );
+    }
+    throw error ?? new Error('Error al crear pedido');
+  }
 
   // Obtener el pedido completo con detalles
   const pedido = await encontrarPorId((pedidoData as Record<string, unknown>).id as string);
@@ -171,23 +186,36 @@ export async function guardarPwPaymentId(id: string, pwPaymentId: string): Promi
   await supabase.from('pedidos').update({ pw_payment_id: pwPaymentId }).eq('id', id);
 }
 
+// Cancelación iniciada por el propio cliente: exige que el pedido sea suyo y
+// que esté en PendienteDePago. Restaura el stock de sus detalles en la misma
+// transacción (ver cancelar_pedido_completo en supabase_migrations.sql,
+// sección 14) — antes esto era un update + un loop de restaurarStock() aparte
+// desde Node, no atómico entre sí.
 export async function cancelar(
   id: string,
   userId: string,
   motivo?: string,
 ): Promise<Pedido | null> {
-  const { data, error } = await supabase
-    .from('pedidos')
-    .update({
-      estado_id: estadosRepo.getIdByNombre('Cancelado'),
-      fecha_cancelacion: new Date().toISOString(),
-      motivo_cancelacion: motivo ?? null,
-    })
-    .eq('id', id)
-    .eq('user_id', userId)
-    .eq('estado_id', estadosRepo.getIdByNombre('PendienteDePago'))
-    .select('id');
+  const { data, error } = await supabase.rpc('cancelar_pedido_completo', {
+    p_pedido_id: id,
+    p_motivo: motivo ?? null,
+    p_user_id: userId,
+    p_estado_id_requerido: estadosRepo.getIdByNombre('PendienteDePago'),
+  });
 
-  if (error || !data || data.length === 0) return null;
-  return encontrarPorId(id);
+  if (error || !data) return null;
+  return encontrarPorId((data as Record<string, unknown>).id as string);
+}
+
+// Cancelación sin restricción de dueño/estado — para flujos donde esa regla
+// ya la validó quien llama: el admin (cualquier estado no final) o el webhook
+// de Payway cuando un pago queda rechazado/cancelado.
+export async function cancelarSinRestricciones(id: string, motivo: string): Promise<Pedido | null> {
+  const { data, error } = await supabase.rpc('cancelar_pedido_completo', {
+    p_pedido_id: id,
+    p_motivo: motivo,
+  });
+
+  if (error || !data) return null;
+  return encontrarPorId((data as Record<string, unknown>).id as string);
 }

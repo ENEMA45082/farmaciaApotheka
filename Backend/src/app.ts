@@ -3,10 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import swaggerUi from 'swagger-ui-express';
 import { supabase } from './config/supabase';
-import { swaggerSpec } from './config/swagger';
-import { generalLimiter, pagosLimiter, pedidosLimiter } from './middlewares/rateLimiter';
+import { limitadorGeneral, limitadorPedidos } from './middlewares/limitadorSolicitudes';
 import * as estadosRepo from './repositories/estados.repository';
 import productosRoutes     from './routes/productos.routes';
 import categoriasRoutes    from './routes/categorias.routes';
@@ -23,7 +21,7 @@ import pagosRoutes         from './routes/pagos.routes';
 import facturasRoutes      from './routes/facturas.routes';
 import testAfipRoutes      from './routes/testAfip.routes'; // TEMPORAL: ver TEST_AFIP.md, eliminar antes de producción
 import testAfipProduccionRoutes from './routes/testAfipProduccion.routes'; // TEMPORAL: ver TEST_AFIP_PRODUCCION.md — pega contra ARCA PRODUCCIÓN real
-import { errorHandler }    from './middlewares/errorHandler';
+import { manejadorErrores } from './middlewares/manejadorErrores';
 
 dotenv.config();
 
@@ -39,7 +37,7 @@ const origenesPermitidos = (process.env.FRONTEND_URL || 'http://localhost:5173')
 
 app.use(helmet());
 app.use(morgan('combined'));
-app.use(generalLimiter);
+app.use(limitadorGeneral);
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -64,8 +62,6 @@ app.get('/health', async (_req, res) => {
   }
 });
 
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
 // Precarga el catálogo de estados en memoria antes de las rutas de API. En
 // Vercel no hay un "boot" único (serverless): esto corre en el primer
 // request de cada cold start y es un no-op rápido en los siguientes
@@ -87,15 +83,17 @@ app.use('/api/banners',     bannersRoutes);
 app.use('/api/uploads',     uploadsRoutes);
 app.use('/api/estadisticas', estadisticasRoutes);
 app.use('/api/perfil',      perfilRoutes);
-app.use('/api/pedidos',     pedidosLimiter, pedidosRoutes);
+app.use('/api/pedidos',     limitadorPedidos, pedidosRoutes);
 app.use('/api/direcciones', direccionesRoutes);
 app.use('/api/favoritos',   favoritosRoutes);
 app.use('/api/envio',       envioRoutes);
-app.use('/api/pagos',       pagosLimiter, pagosRoutes);
+// limitadorPagos/limitadorPagosCallback se aplican por ruta adentro de pagos.routes.ts
+// (distintos endpoints necesitan distinto presupuesto — ver ese archivo).
+app.use('/api/pagos',       pagosRoutes);
 app.use('/api/facturas',    facturasRoutes);
 app.use('/api/test-afip',   testAfipRoutes); // TEMPORAL: eliminar antes de producción
 app.use('/api/test-afip-produccion', testAfipProduccionRoutes); // TEMPORAL: pega contra ARCA PRODUCCIÓN real, ver TEST_AFIP_PRODUCCION.md
 
-app.use(errorHandler);
+app.use(manejadorErrores);
 
 export default app;

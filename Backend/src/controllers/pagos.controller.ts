@@ -22,7 +22,7 @@ export async function pagar(req: Request, res: Response, next: NextFunction) {
     const pedido = await pedidosService.obtenerPorId(pedidoId, user.id);
 
     if (pedido.estado !== 'PendienteDePago') {
-      throw new AppError('El pedido no está en estado pendiente de pago', 400);
+      throw new AppError('El pedido no está en estado pendiente de pago', 400, 'PEDIDO_NO_PENDIENTE');
     }
 
     const [perfil, direccion] = await Promise.all([
@@ -69,7 +69,7 @@ export async function checkout(req: Request, res: Response, next: NextFunction) 
     const pedido = await pedidosService.obtenerPorId(pedidoId, user.id);
 
     if (pedido.estado !== 'PendienteDePago') {
-      throw new AppError('El pedido no está en estado pendiente de pago', 400);
+      throw new AppError('El pedido no está en estado pendiente de pago', 400, 'PEDIDO_NO_PENDIENTE');
     }
 
     const items = (pedido.detalles ?? []).map(d => ({

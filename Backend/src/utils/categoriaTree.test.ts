@@ -40,4 +40,14 @@ describe('recopilarDescendientes', () => {
     const todas = [{ id: 'a', id_padre: null }];
     expect(recopilarDescendientes('no-existe', todas)).toEqual(['no-existe']);
   });
+
+  it('no entra en recursión infinita si los datos tienen un ciclo', () => {
+    // Dato corrupto/inconsistente: a es padre de b, y b es padre de a.
+    const todas = [
+      { id: 'a', id_padre: 'b' },
+      { id: 'b', id_padre: 'a' },
+    ];
+    expect(() => recopilarDescendientes('a', todas)).not.toThrow();
+    expect(recopilarDescendientes('a', todas).sort()).toEqual(['a', 'b']);
+  });
 });

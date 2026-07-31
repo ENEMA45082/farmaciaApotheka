@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import * as productosService from '../services/productos.service';
+import { AppError } from '../errors/AppError';
 import type { CrearProductoDTO, ActualizarProductoDTO, FiltrosProducto, ItemConfirmarPrecio, AuthRequest } from '../types';
 
 export async function listar(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -22,7 +23,8 @@ export async function listar(req: Request, res: Response, next: NextFunction): P
 
 export async function obtenerPorId(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const producto = await productosService.obtenerPorId(req.params.id);
+    const modoAdmin = (req as AuthRequest).user?.app_metadata?.role === 'admin';
+    const producto = await productosService.obtenerPorId(req.params.id, modoAdmin);
     res.json(producto);
   } catch (err) {
     next(err);
@@ -60,7 +62,7 @@ export async function eliminar(req: Request, res: Response, next: NextFunction):
 
 // --- Importación de precios por CSV ---
 
-export const csvUploadMiddleware = multer({
+const uploadCsv = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, archivo, cb) => {
@@ -69,9 +71,25 @@ export const csvUploadMiddleware = multer({
       archivo.mimetype === 'text/plain' ||
       archivo.mimetype === 'application/octet-stream';
     if (esValido) cb(null, true);
-    else cb(new Error('Solo se permiten archivos CSV'));
+    else cb(new AppError('Solo se permiten archivos CSV', 400, 'ARCHIVO_TIPO_INVALIDO'));
   },
 }).single('archivo');
+
+// multer no tira AppError por su cuenta (fileFilter/límite de tamaño devuelven un
+// Error/MulterError genérico) — sin este wrapper, subir un archivo inválido o muy
+// grande caía en la rama genérica de manejadorErrores como "Error interno del
+// servidor" en vez de un mensaje claro.
+export function csvUploadMiddleware(req: Request, res: Response, next: NextFunction): void {
+  uploadCsv(req, res, (error: unknown) => {
+    if (!error) { next(); return; }
+    if (error instanceof AppError) { next(error); return; }
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      next(new AppError('El archivo supera el tamaño máximo permitido (10MB)', 400, 'ARCHIVO_DEMASIADO_GRANDE'));
+      return;
+    }
+    next(error);
+  });
+}
 
 export async function previewImportarPrecios(
   req: Request,

@@ -45,6 +45,7 @@ export async function verificarConexionProduccion() {
       'ARCA producción no está configurado: falta ARCA_ENVIRONMENT=produccion o alguna de '
         + 'ARCA_PROD_CUIT / ARCA_ACCESS_TOKEN / ARCA_PROD_CERT(_PATH) / ARCA_PROD_KEY(_PATH)',
       503,
+      'ARCA_PRODUCCION_NO_CONFIGURADO',
     );
   }
 
@@ -69,6 +70,7 @@ export async function obtenerUltimoComprobanteProduccion(puntoVenta: number, tip
       'ARCA producción no está configurado: falta ARCA_ENVIRONMENT=produccion o alguna de '
         + 'ARCA_PROD_CUIT / ARCA_ACCESS_TOKEN / ARCA_PROD_CERT(_PATH) / ARCA_PROD_KEY(_PATH)',
       503,
+      'ARCA_PRODUCCION_NO_CONFIGURADO',
     );
   }
 
@@ -97,6 +99,7 @@ export async function solicitarComprobanteProduccion(datos: DatosComprobanteProd
       'ARCA producción no está configurado: falta ARCA_ENVIRONMENT=produccion o alguna de '
         + 'ARCA_PROD_CUIT / ARCA_ACCESS_TOKEN / ARCA_PROD_CERT(_PATH) / ARCA_PROD_KEY(_PATH)',
       503,
+      'ARCA_PRODUCCION_NO_CONFIGURADO',
     );
   }
 
@@ -175,6 +178,7 @@ export async function generarPdfFacturaProduccion(datos: DatosPdfFacturaProducci
       'ARCA producción no está configurado: falta ARCA_ENVIRONMENT=produccion o alguna de '
         + 'ARCA_PROD_CUIT / ARCA_ACCESS_TOKEN / ARCA_PROD_CERT(_PATH) / ARCA_PROD_KEY(_PATH)',
       503,
+      'ARCA_PRODUCCION_NO_CONFIGURADO',
     );
   }
 

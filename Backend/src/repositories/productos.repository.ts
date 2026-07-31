@@ -205,22 +205,6 @@ export async function contarPorCategorias(categoriaIds: string[]): Promise<numbe
   return count ?? 0;
 }
 
-export async function descontarStock(productoId: string, cantidad: number): Promise<void> {
-  const { error } = await supabase.rpc('descontar_stock', {
-    p_producto_id: productoId,
-    p_cantidad: cantidad,
-  });
-  if (error) throw error;
-}
-
-export async function restaurarStock(productoId: string, cantidad: number): Promise<void> {
-  const { error } = await supabase.rpc('restaurar_stock', {
-    p_producto_id: productoId,
-    p_cantidad: cantidad,
-  });
-  if (error) throw error;
-}
-
 const BATCH_SIZE = 100;
 
 export async function encontrarPorCodigosBarras(

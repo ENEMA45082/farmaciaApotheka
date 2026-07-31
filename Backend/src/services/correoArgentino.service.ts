@@ -162,7 +162,7 @@ export async function cotizar(params: {
   });
 
   const rate = data.rates?.find(r => r.deliveredType === params.deliveredType) ?? data.rates?.[0];
-  if (!rate) throw new AppError('No se pudo cotizar el envío para este destino', 502);
+  if (!rate) throw new AppError('No se pudo cotizar el envío para este destino', 502, 'COTIZACION_ENVIO_FALLIDA');
 
   return {
     precio: rate.price,

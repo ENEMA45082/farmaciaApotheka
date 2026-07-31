@@ -13,14 +13,24 @@ import type {
   ResultadoConfirmarPrecios,
 } from '../types';
 
+// stock y fecha_vencimiento son información interna de inventario — el catálogo
+// público (sin token de administrador) no debe poder ver stock exacto ni
+// vencimientos de un competidor scrapeando /api/productos.
+function ocultarCamposAdmin(producto: Producto, modoAdmin: boolean): Producto {
+  if (modoAdmin) return producto;
+  const { stock: _stock, fecha_vencimiento: _fechaVencimiento, ...resto } = producto;
+  return resto as Producto;
+}
+
 export async function listar(filtros: FiltrosProducto): Promise<ProductosPaginados> {
   const pagina = Math.max(1, filtros.pagina ?? 1);
   const limite = Math.min(50, Math.max(1, filtros.limite ?? 12));
 
   const { datos, total } = await productosRepo.encontrarTodos({ ...filtros, pagina, limite });
+  const modoAdmin = filtros.adminMode ?? false;
 
   return {
-    datos,
+    datos: datos.map(p => ocultarCamposAdmin(p, modoAdmin)),
     total,
     pagina,
     limite,
@@ -28,13 +38,13 @@ export async function listar(filtros: FiltrosProducto): Promise<ProductosPaginad
   };
 }
 
-export async function obtenerPorId(id: string): Promise<Producto> {
+export async function obtenerPorId(id: string, modoAdmin = false): Promise<Producto> {
   validarUUID(id, 'producto');
   const producto = await productosRepo.encontrarPorId(id);
   if (!producto) {
-    throw new AppError('Producto no encontrado', 404);
+    throw new AppError('Producto no encontrado', 404, 'PRODUCTO_NOT_FOUND');
   }
-  return producto;
+  return ocultarCamposAdmin(producto, modoAdmin);
 }
 
 export async function crear(dto: CrearProductoDTO): Promise<Producto> {
@@ -45,18 +55,18 @@ export async function crear(dto: CrearProductoDTO): Promise<Producto> {
 export async function actualizar(id: string, dto: ActualizarProductoDTO): Promise<Producto> {
   validarUUID(id, 'producto');
   if (Object.keys(dto).length === 0) {
-    throw new AppError('Se debe enviar al menos un campo para actualizar', 400);
+    throw new AppError('Se debe enviar al menos un campo para actualizar', 400, 'SIN_CAMBIOS');
   }
   if (dto.precio !== undefined && dto.precio < 0) {
-    throw new AppError('El precio no puede ser negativo', 400);
+    throw new AppError('El precio no puede ser negativo', 400, 'PRODUCTO_PRECIO_NEGATIVO');
   }
   if (dto.stock !== undefined && dto.stock < 0) {
-    throw new AppError('El stock no puede ser negativo', 400);
+    throw new AppError('El stock no puede ser negativo', 400, 'PRODUCTO_STOCK_NEGATIVO');
   }
 
   const producto = await productosRepo.actualizar(id, dto);
   if (!producto) {
-    throw new AppError('Producto no encontrado', 404);
+    throw new AppError('Producto no encontrado', 404, 'PRODUCTO_NOT_FOUND');
   }
   return producto;
 }
@@ -65,7 +75,7 @@ export async function eliminar(id: string): Promise<void> {
   validarUUID(id, 'producto');
   const existe = await productosRepo.encontrarPorId(id);
   if (!existe) {
-    throw new AppError('Producto no encontrado', 404);
+    throw new AppError('Producto no encontrado', 404, 'PRODUCTO_NOT_FOUND');
   }
   await productosRepo.eliminar(id);
 }
@@ -116,7 +126,8 @@ export async function confirmarImportarPrecios(
     if (item.precio_nuevo < 0) {
       throw new AppError(
         `Precio inválido para ${item.codigo_barras}: ${item.precio_nuevo}`,
-        400
+        400,
+        'PRODUCTO_PRECIO_NEGATIVO',
       );
     }
   }
@@ -170,15 +181,15 @@ export async function confirmarImportarPrecios(
 
 function validarDatosCreacion(dto: CrearProductoDTO): void {
   if (!dto.nombre?.trim()) {
-    throw new AppError('El nombre del producto es obligatorio', 400);
+    throw new AppError('El nombre del producto es obligatorio', 400, 'PRODUCTO_NOMBRE_REQUERIDO');
   }
   if (dto.precio === undefined || dto.precio === null) {
-    throw new AppError('El precio del producto es obligatorio', 400);
+    throw new AppError('El precio del producto es obligatorio', 400, 'PRODUCTO_PRECIO_REQUERIDO');
   }
   if (dto.precio < 0) {
-    throw new AppError('El precio no puede ser negativo', 400);
+    throw new AppError('El precio no puede ser negativo', 400, 'PRODUCTO_PRECIO_NEGATIVO');
   }
   if (dto.stock !== undefined && dto.stock < 0) {
-    throw new AppError('El stock no puede ser negativo', 400);
+    throw new AppError('El stock no puede ser negativo', 400, 'PRODUCTO_STOCK_NEGATIVO');
   }
 }

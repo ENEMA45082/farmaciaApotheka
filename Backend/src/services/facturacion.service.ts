@@ -81,6 +81,7 @@ export async function obtenerUltimoComprobanteAutorizado(
     throw new AppError(
       'ARCA/AfipSDK no está configurado: faltan ARCA_CUIT o ARCA_ACCESS_TOKEN en las variables de entorno',
       503,
+      'ARCA_NO_CONFIGURADO',
     );
   }
 
@@ -105,6 +106,7 @@ export async function solicitarComprobantePrueba(opciones: DatosComprobantePrueb
     throw new AppError(
       'ARCA/AfipSDK no está configurado: faltan ARCA_CUIT o ARCA_ACCESS_TOKEN en las variables de entorno',
       503,
+      'ARCA_NO_CONFIGURADO',
     );
   }
 

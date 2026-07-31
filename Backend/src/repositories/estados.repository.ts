@@ -14,8 +14,8 @@ async function cargar(): Promise<Estado[]> {
     .select('*')
     .order('orden', { ascending: true });
 
-  if (error) throw new AppError(`No se pudo cargar el catálogo de estados: ${error.message}`, 500);
-  if (!data || data.length === 0) throw new AppError('El catálogo de estados está vacío', 500);
+  if (error) throw new AppError(`No se pudo cargar el catálogo de estados: ${error.message}`, 500, 'ESTADOS_CATALOGO_ERROR');
+  if (!data || data.length === 0) throw new AppError('El catálogo de estados está vacío', 500, 'ESTADOS_CATALOGO_VACIO');
 
   const filas = data as Estado[];
   catalogo = filas;
@@ -50,6 +50,7 @@ function requireCatalogo(): void {
     throw new AppError(
       'Catálogo de estados no inicializado en memoria (falta llamar a precargarCache() antes de usar el cache)',
       500,
+      'ESTADOS_CATALOGO_NO_INICIALIZADO',
     );
   }
 }
@@ -57,14 +58,14 @@ function requireCatalogo(): void {
 export function getIdByNombre(nombre: EstadoPedido): number {
   requireCatalogo();
   const estado = porNombre.get(nombre);
-  if (!estado) throw new AppError(`Estado desconocido en el catálogo: '${nombre}'`, 500);
+  if (!estado) throw new AppError(`Estado desconocido en el catálogo: '${nombre}'`, 500, 'ESTADO_DESCONOCIDO');
   return estado.id;
 }
 
 export function getNombreById(id: number): EstadoPedido {
   requireCatalogo();
   const estado = porId.get(id);
-  if (!estado) throw new AppError(`estado_id desconocido en el catálogo: ${id}`, 500);
+  if (!estado) throw new AppError(`estado_id desconocido en el catálogo: ${id}`, 500, 'ESTADO_DESCONOCIDO');
   return estado.nombre;
 }
 
