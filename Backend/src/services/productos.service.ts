@@ -13,27 +13,14 @@ import type {
   ResultadoConfirmarPrecios,
 } from '../types';
 
-// stock y fecha_vencimiento son información interna de inventario — el catálogo
-// público (sin token de administrador) no debe poder ver stock exacto ni
-// vencimientos de un competidor scrapeando /api/productos. En su lugar se manda
-// en_stock (booleano) para que el frontend pueda mostrar disponibilidad y
-// calcular cantidades sin depender del número real.
-function ocultarCamposAdmin(producto: Producto, modoAdmin: boolean): Producto {
-  const conEnStock = { ...producto, en_stock: producto.stock > 0 };
-  if (modoAdmin) return conEnStock;
-  const { stock: _stock, fecha_vencimiento: _fechaVencimiento, ...resto } = conEnStock;
-  return resto as Producto;
-}
-
 export async function listar(filtros: FiltrosProducto): Promise<ProductosPaginados> {
   const pagina = Math.max(1, filtros.pagina ?? 1);
   const limite = Math.min(50, Math.max(1, filtros.limite ?? 12));
 
   const { datos, total } = await productosRepo.encontrarTodos({ ...filtros, pagina, limite });
-  const modoAdmin = filtros.adminMode ?? false;
 
   return {
-    datos: datos.map(p => ocultarCamposAdmin(p, modoAdmin)),
+    datos,
     total,
     pagina,
     limite,
@@ -41,13 +28,13 @@ export async function listar(filtros: FiltrosProducto): Promise<ProductosPaginad
   };
 }
 
-export async function obtenerPorId(id: string, modoAdmin = false): Promise<Producto> {
+export async function obtenerPorId(id: string): Promise<Producto> {
   validarUUID(id, 'producto');
   const producto = await productosRepo.encontrarPorId(id);
   if (!producto) {
     throw new AppError('Producto no encontrado', 404, 'PRODUCTO_NOT_FOUND');
   }
-  return ocultarCamposAdmin(producto, modoAdmin);
+  return producto;
 }
 
 export async function crear(dto: CrearProductoDTO): Promise<Producto> {

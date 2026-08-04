@@ -246,7 +246,7 @@ export function HomePage() {
   return (
     <>
       <div className="home-hero-wrap"><HeroCarousel /></div>
-      <BeneficiosBar />
+      <div className="home-hero-wrap"><BeneficiosBar /></div>
       <div className="page">
         {mostrarFiltros ? (
           <div className="catalog-layout">

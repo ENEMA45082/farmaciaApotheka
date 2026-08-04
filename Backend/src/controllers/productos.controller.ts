@@ -23,8 +23,7 @@ export async function listar(req: Request, res: Response, next: NextFunction): P
 
 export async function obtenerPorId(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const modoAdmin = (req as AuthRequest).user?.app_metadata?.role === 'admin';
-    const producto = await productosService.obtenerPorId(req.params.id, modoAdmin);
+    const producto = await productosService.obtenerPorId(req.params.id);
     res.json(producto);
   } catch (err) {
     next(err);

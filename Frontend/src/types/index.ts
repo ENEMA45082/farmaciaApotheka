@@ -16,9 +16,7 @@ export interface Producto {
   porcentaje_oferta: number | null;
   imagen_url: string | null;
   categoria_id: string | null;
-  // Sólo viene en la respuesta de la API cuando el usuario es admin — el
-  // catálogo público no expone el número exacto, sólo en_stock.
-  stock?: number;
+  stock: number;
   codigo_barras: string | null;
   fecha_vencimiento: string | null;
   imagenes: string[];
@@ -27,7 +25,6 @@ export interface Producto {
   peso_gramos: number;
   alicuota_iva: number;
   categoria?: Categoria;
-  en_stock: boolean;
 }
 
 export function precioEfectivo(p: Producto): number {

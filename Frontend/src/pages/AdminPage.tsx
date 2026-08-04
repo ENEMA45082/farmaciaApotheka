@@ -262,7 +262,7 @@ export function AdminPage() {
       nombre: p.nombre,
       precio: String(p.precio),
       descripcion: p.descripcion ?? '',
-      stock: String(p.stock ?? 0),
+      stock: String(p.stock),
       codigo_barras: p.codigo_barras ?? '',
       categoria_id: p.categoria_id ?? '',
       fecha_vencimiento: p.fecha_vencimiento ?? '',
@@ -1252,7 +1252,7 @@ export function AdminPage() {
                             ? <span className="tabla-oferta-precio">${p.precio_oferta.toFixed(2)}{p.porcentaje_oferta != null && <span className="tabla-oferta-badge"> -{p.porcentaje_oferta}%</span>}</span>
                             : '—'}
                         </td>
-                        <td>{p.stock ?? 0}</td>
+                        <td>{p.stock}</td>
                         <td>{p.categoria?.nombre ?? '—'}</td>
                         <td>{p.codigo_barras ?? '—'}</td>
                         <td>{p.fecha_vencimiento ?? '—'}</td>

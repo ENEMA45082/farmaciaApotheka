@@ -102,8 +102,12 @@ img { max-width: 100%; display: block; }
 }
 
 /* ===== Beneficios (home) ===== */
+/* Sin max-width/margin propios a propósito: vive dentro de .home-hero-wrap
+   (mismo wrapper que el carrusel) para quedar siempre alineada con su
+   ancho y su gutter lateral en cada breakpoint, en vez de mantener dos
+   reglas de tamaño por separado que se pueden desincronizar. */
 .beneficios-bar {
-  max-width: 1200px; margin: 1.25rem auto 0; padding: 1.1rem 1.5rem;
+  margin-top: 1.25rem; padding: 1.1rem 1.5rem;
   display: flex; align-items: center; justify-content: space-between;
   background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow);
 }

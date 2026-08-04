@@ -113,17 +113,17 @@ export function ProductDetailPage() {
             )}
           </motion.div>
           <motion.p className="product-detail__stock" variants={staggerItem}>
-            {producto.en_stock ? 'En stock' : 'Sin stock'}
+            {producto.stock > 0 ? `Stock disponible: ${producto.stock}` : 'Sin stock'}
           </motion.p>
           <motion.div className="product-detail__actions" variants={staggerItem}>
             <motion.button
               className="btn btn--primary"
               onClick={handleAgregar}
-              disabled={!producto.en_stock}
-              whileHover={producto.en_stock ? { y: -2 } : {}}
-              whileTap={producto.en_stock ? { scale: 0.97 } : {}}
+              disabled={producto.stock === 0}
+              whileHover={producto.stock > 0 ? { y: -2 } : {}}
+              whileTap={producto.stock > 0 ? { scale: 0.97 } : {}}
             >
-              {!producto.en_stock ? 'Sin stock' : 'Agregar al carrito'}
+              {producto.stock === 0 ? 'Sin stock' : 'Agregar al carrito'}
             </motion.button>
             <BotonCompartir nombre={producto.nombre} />
           </motion.div>
