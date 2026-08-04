@@ -31,6 +31,7 @@ export const NEGOCIO = {
   whatsapp: {
     numero: '5493518354942',
     url: 'https://wa.me/5493518354942',
+    mensaje: '¡Hola! Vengo de la página web de Farmacia Apotheka y quisiera hacer una consulta.',
   },
 
   email: 'farmaciaapotheka.srl@gmail.com',
@@ -53,4 +54,8 @@ export const NEGOCIO = {
 
 export function getGoogleMapsEmbedUrl(): string {
   return `https://www.google.com/maps?q=${encodeURIComponent(NEGOCIO.direccion.completa)}&output=embed`;
+}
+
+export function getWhatsappUrl(mensaje: string = NEGOCIO.whatsapp.mensaje): string {
+  return `${NEGOCIO.whatsapp.url}?text=${encodeURIComponent(mensaje)}`;
 }

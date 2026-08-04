@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import { NEGOCIO } from '../../config/negocio';
+import { getWhatsappUrl } from '../../config/negocio';
 
 const RUTAS_SIN_FAB = ['/envio', '/pagar'];
 
@@ -10,7 +10,7 @@ export function WhatsAppButton() {
   return (
     <a
       className="whatsapp-fab"
-      href={NEGOCIO.whatsapp.url}
+      href={getWhatsappUrl()}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chatear con Farmacia Apotheka por WhatsApp"

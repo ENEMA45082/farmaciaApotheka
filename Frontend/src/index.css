@@ -43,6 +43,15 @@ body {
   flex-direction: column;
 }
 
+/* React monta todo dentro de #root, que es el único hijo directo de body:
+   el flex-direction:column de arriba no llega a .main-content (nieto, no
+   hijo) sin este rule — por eso el footer no quedaba pegado abajo. */
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; border: none; background: none; font-family: inherit; }
 img { max-width: 100%; display: block; }
@@ -54,7 +63,10 @@ img { max-width: 100%; display: block; }
 .ofertas-titulo { display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem; font-weight: 800; color: var(--navy); }
 
 /* ===== Hero Carousel ===== */
-.hero-carousel { position: relative; width: 100%; aspect-ratio: 8 / 3; max-height: 340px; overflow: hidden; background: #f0f0f0; }
+.home-hero-wrap { max-width: 1200px; margin: 0 auto; padding: 0 1rem; }
+.home-hero-wrap:has(.hero-carousel) { padding-top: 1.5rem; }
+
+.hero-carousel { position: relative; width: 100%; aspect-ratio: 8 / 3; max-height: 340px; overflow: hidden; background: #f0f0f0; border-radius: 16px; }
 .hero-carousel__slide { position: absolute; inset: 0; }
 .hero-carousel__slide a { display: block; width: 100%; height: 100%; }
 .hero-carousel__img { width: 100%; height: 100%; display: block; object-fit: cover; }
@@ -83,8 +95,29 @@ img { max-width: 100%; display: block; }
 .hero-carousel__dot--activo { background: #fff; transform: scale(1.25); }
 
 @media (max-width: 640px) {
-  .hero-carousel { max-height: 220px; }
+  .hero-carousel { max-height: 220px; border-radius: 10px; }
   .hero-carousel__arrow { width: 30px; height: 30px; font-size: 1.15rem; }
+  .home-hero-wrap { padding: 0 0.75rem; }
+  .home-hero-wrap:has(.hero-carousel) { padding-top: 0.75rem; }
+}
+
+/* ===== Beneficios (home) ===== */
+.beneficios-bar {
+  max-width: 1200px; margin: 1.25rem auto 0; padding: 1.1rem 1.5rem;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.beneficios-bar__item { display: flex; align-items: center; gap: 0.75rem; flex: 1; padding: 0 1rem; }
+.beneficios-bar__item + .beneficios-bar__item { border-left: 1px solid var(--border); }
+.beneficios-bar__icon { color: var(--verde-dark); flex-shrink: 0; }
+.beneficios-bar__text { display: flex; flex-direction: column; line-height: 1.3; }
+.beneficios-bar__text strong { font-size: 0.875rem; font-weight: 700; color: var(--text); }
+.beneficios-bar__text span { font-size: 0.78rem; color: var(--text-light); }
+
+@media (max-width: 768px) {
+  .beneficios-bar { flex-wrap: wrap; gap: 1rem 0.5rem; padding: 1rem; margin-top: 1rem; }
+  .beneficios-bar__item { flex: 1 1 45%; padding: 0; }
+  .beneficios-bar__item + .beneficios-bar__item { border-left: none; }
 }
 
 /* ===== Buttons ===== */
@@ -631,6 +664,7 @@ img { max-width: 100%; display: block; }
   gap: 1.25rem;
 }
 .filtros-sidebar__header { display: flex; flex-direction: column; gap: 0.35rem; }
+.filtros-sidebar__header-acciones { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.15rem; }
 .filtros-sidebar__titulo { font-size: 1.05rem; font-weight: 800; color: var(--navy); }
 .filtros-sidebar__total { font-size: 0.82rem; color: var(--text-light); }
 .filtros-sidebar__seccion { border-top: 1px solid var(--border); padding-top: 1rem; }
@@ -720,6 +754,31 @@ img { max-width: 100%; display: block; }
 .product-card__name { font-size: 0.95rem; font-weight: 600; color: var(--text); line-height: 1.3; }
 .product-card__price { font-size: 1.1rem; font-weight: 700; color: var(--navy); }
 .product-card__body .btn { margin-top: auto; width: 100%; text-align: center; }
+
+/* En mobile las tarjetas ocupaban casi toda la pantalla (1 columna, imagen
+   de 180px) y sólo se veía 1-2 productos por pantalla — se achican para que
+   entren 2 columnas y al menos 4 tarjetas completas por pantalla. */
+@media (max-width: 640px) {
+  .product-grid { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; padding: 0.5rem 0; }
+  .product-card__image { height: 110px; padding: 0.4rem; }
+  .product-card__fav { width: 26px; height: 26px; top: 0.35rem; right: 0.35rem; }
+  .product-card__fav svg { width: 14px; height: 14px; }
+  .product-card__body { padding: 0.55rem; gap: 0.3rem; }
+  .product-card__category { font-size: 0.65rem; }
+  .product-card__name {
+    font-size: 0.8rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .product-card__price { font-size: 0.95rem; }
+  .product-card__body .btn { padding: 0.55rem 0.5rem; font-size: 0.78rem; }
+  .precio--oferta { font-size: 0.95rem; }
+  .precio--lista { font-size: 0.75rem; }
+  .oferta-badge { font-size: 0.62rem; padding: 0.1rem 0.35rem; }
+  .oferta-badge--imagen { top: 0.35rem; left: 0.35rem; font-size: 0.62rem; padding: 0.2rem 0.45rem; }
+}
 
 /* ===== Ofertas / Descuentos ===== */
 .product-card__precios { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
@@ -813,15 +872,30 @@ img { max-width: 100%; display: block; }
 .empty-state { text-align: center; padding: 3rem; color: var(--text-light); font-size: 1rem; }
 
 /* ===== Footer ===== */
-.footer { background: #1a1a2e; color: #ccc; padding: 2rem 1rem 1.5rem; }
-.footer__inner { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.25rem; }
+.footer { background: #0d1b2e; color: #ccc; padding: 0 0 1.5rem; }
+.footer__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 0;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  align-items: start;
+  gap: 2.5rem 1.5rem;
+}
 
-.footer__brand { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+.footer__col { display: flex; flex-direction: column; gap: 0.4rem; }
+.footer__brand { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; }
 .footer__logo-name { font-size: 1.6rem; font-weight: 800; color: #fff; letter-spacing: 1px; }
 .footer__logo-sub { font-size: 0.6rem; letter-spacing: 3px; color: var(--azul-claro); text-transform: uppercase; }
 .footer__brand-desc { font-size: 0.85rem; color: #888; margin-top: 0.25rem; line-height: 1.5; }
 
-.footer__contact { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 0 2rem; }
+.footer__heading {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--verde); margin-bottom: 0.3rem;
+}
+.footer__heading svg { width: 14px; height: 14px; flex-shrink: 0; stroke: var(--verde); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
 .footer__contact-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; font-size: 0.875rem; line-height: 1.4; }
 .footer__contact-item svg { width: 16px; height: 16px; flex-shrink: 0; stroke: var(--verde); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* Padding en el <a> (no en el div) para que el área táctil real sea del
@@ -829,7 +903,21 @@ img { max-width: 100%; display: block; }
 .footer__contact-item a { display: inline-block; padding: 0.6rem 0; color: #ccc; text-decoration: none; }
 .footer__contact-item a:hover { color: #fff; }
 
-.footer__copy { text-align: center; font-size: 0.75rem; color: #555; margin-top: 1rem; }
+.footer__horarios { list-style: none; display: flex; flex-direction: column; gap: 0.35rem; }
+.footer__horarios li { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.85rem; color: #ccc; }
+
+.footer__divider { grid-column: 1 / -1; border: none; border-top: 1px solid rgba(255,255,255,0.14); margin: 2.5rem 0 1.25rem; }
+.footer__copy { grid-column: 1 / -1; text-align: left; font-size: 0.75rem; color: #7c8aa3; margin-bottom: 0.75rem; }
+.footer__trust {
+  grid-column: 1 / -1; display: none; align-items: center; justify-content: center; gap: 0.4rem;
+  font-size: 0.8rem; color: var(--azul-claro); margin-bottom: 1rem; text-align: center;
+}
+
+@media (max-width: 768px) {
+  .footer__inner { grid-template-columns: 1fr; padding: 2rem 1.25rem 0; gap: 1.75rem; }
+  .footer__trust { display: flex; }
+  .footer__copy { text-align: center; }
+}
 
 /* ===== Contacto Page ===== */
 .contacto-titulo { font-size: 1.6rem; font-weight: 800; color: var(--navy); }

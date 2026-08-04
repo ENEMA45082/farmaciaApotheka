@@ -30,16 +30,17 @@ export function useCarrito() {
   }, [items]);
 
   const agregarItem = useCallback((producto: Producto, cantidad = 1) => {
+    if (!producto.en_stock) return;
     setItems(prev => {
       const existente = prev.find(i => i.producto.id === producto.id);
       if (existente) {
         return prev.map(i =>
           i.producto.id === producto.id
-            ? { ...i, cantidad: Math.min(i.cantidad + cantidad, producto.stock) }
+            ? { ...i, cantidad: i.cantidad + cantidad }
             : i
         );
       }
-      return [...prev, { producto, cantidad: Math.min(cantidad, producto.stock) }];
+      return [...prev, { producto, cantidad }];
     });
   }, []);
 
@@ -54,7 +55,7 @@ export function useCarrito() {
       setItems(prev =>
         prev.map(i =>
           i.producto.id === productoId
-            ? { ...i, cantidad: Math.min(cantidad, i.producto.stock) }
+            ? { ...i, cantidad }
             : i
         )
       );

@@ -78,9 +78,9 @@ export function ProductCard({ producto }: Props) {
         <button
           className="btn btn--primary"
           onClick={handleAgregar}
-          disabled={producto.stock === 0}
+          disabled={!producto.en_stock}
         >
-          {producto.stock === 0 ? 'Sin stock' : 'Agregar al carrito'}
+          {!producto.en_stock ? 'Sin stock' : 'Agregar al carrito'}
         </button>
       </div>
     </motion.div>

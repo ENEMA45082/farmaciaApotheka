@@ -41,9 +41,9 @@ export function EliminarProductoModal({ producto, onClose, onEliminado }: Props)
           Eliminar "{producto.nombre}"
         </h2>
 
-        {producto.stock > 0 && (
+        {(producto.stock ?? 0) > 0 && (
           <div className="admin-error">
-            ⚠ Este producto tiene {producto.stock} unidad{producto.stock === 1 ? '' : 'es'} en stock — se van a perder junto con el producto.
+            ⚠ Este producto tiene {producto.stock ?? 0} unidad{producto.stock === 1 ? '' : 'es'} en stock — se van a perder junto con el producto.
           </div>
         )}
 

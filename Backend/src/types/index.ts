@@ -29,6 +29,9 @@ export interface Producto {
   peso_gramos: number;
   alicuota_iva: number;
   categoria?: Categoria;
+  // Sólo lo agrega ocultarCamposAdmin() en productos.service.ts para la respuesta
+  // pública — no viene del repositorio ni de la DB directamente.
+  en_stock?: boolean;
 }
 
 export interface ProductosPaginados {

@@ -18,6 +18,8 @@ interface Props {
   onToggleCategoria: (id: string) => void;
   enOferta: boolean;
   onToggleEnOferta: () => void;
+  filtrosActivos: number;
+  onLimpiarFiltros: () => void;
 }
 
 export function FiltrosSidebar({
@@ -34,6 +36,8 @@ export function FiltrosSidebar({
   onToggleCategoria,
   enOferta,
   onToggleEnOferta,
+  filtrosActivos,
+  onLimpiarFiltros,
 }: Props) {
   // Estado local para que el arrastre del slider se sienta fluido
   // sin disparar un refiltrado en cada pixel de movimiento.
@@ -50,11 +54,18 @@ export function FiltrosSidebar({
       <div className="filtros-sidebar__header">
         <h2 className="filtros-sidebar__titulo">{titulo}</h2>
         <p className="filtros-sidebar__total">{total} resultados encontrados</p>
-        {esBusqueda && onLimpiarBusqueda && (
-          <button type="button" className="search-result-clear" onClick={onLimpiarBusqueda}>
-            ✕ Limpiar búsqueda
-          </button>
-        )}
+        <div className="filtros-sidebar__header-acciones">
+          {esBusqueda && onLimpiarBusqueda && (
+            <button type="button" className="search-result-clear" onClick={onLimpiarBusqueda}>
+              ✕ Limpiar búsqueda
+            </button>
+          )}
+          {filtrosActivos > 0 && (
+            <button type="button" className="search-result-clear" onClick={onLimpiarFiltros}>
+              ✕ Limpiar filtros ({filtrosActivos})
+            </button>
+          )}
+        </div>
       </div>
 
       {precioMin < precioMax && (

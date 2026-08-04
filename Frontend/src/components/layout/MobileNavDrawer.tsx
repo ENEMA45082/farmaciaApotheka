@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { Categoria } from '../../types';
 import { slugify } from '../../utils/slug';
 import { overlayVariants, drawerVariantsLeft } from '../ui/motion';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface Props {
   abierto: boolean;
@@ -14,6 +15,7 @@ interface Props {
 
 export function MobileNavDrawer({ abierto, onCerrar, arbol, onNavegar, esAdmin }: Props) {
   const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
+  useBodyScrollLock(abierto);
 
   function toggleExpandida(id: string) {
     setExpandidas(prev => {

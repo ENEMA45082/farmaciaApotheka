@@ -3,9 +3,11 @@ import { useCarritoContext } from '../../context/CartContext';
 import { CartItem } from './CartItem';
 import { CartSummary } from './CartSummary';
 import { overlayVariants, drawerVariants, staggerContainer } from '../ui/motion';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 export function CartDrawer() {
   const { abierto, cerrarCarrito, items } = useCarritoContext();
+  useBodyScrollLock(abierto);
 
   return (
     <>

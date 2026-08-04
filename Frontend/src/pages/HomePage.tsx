@@ -6,10 +6,12 @@ import { fetchProductos, fetchCategorias, fetchCategoriasArbol } from '../api/pr
 import type { Categoria } from '../types';
 import { ProductGrid } from '../components/products/ProductGrid';
 import { HeroCarousel } from '../components/home/HeroCarousel';
+import { BeneficiosBar } from '../components/home/BeneficiosBar';
 import { SortSelect } from '../components/ui/SortSelect';
 import { Spinner } from '../components/ui/Spinner';
 import { slugify } from '../utils/slug';
 import { overlayVariants } from '../components/ui/motion';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 // FiltrosSidebar carga rc-slider (+ su CSS): solo se usa acá, se saca del
 // bundle inicial de la home vía import dinámico.
@@ -47,6 +49,7 @@ export function HomePage() {
   const [precioBounds, setPrecioBounds] = useState<{ min: number; max: number } | null>(null);
   const [precioSeleccionado, setPrecioSeleccionado] = useState<[number, number]>([0, 0]);
   const [filtrosMovilAbierto, setFiltrosMovilAbierto] = useState(false);
+  useBodyScrollLock(filtrosMovilAbierto);
 
   // Categoría activa: por slug (ruta /categoria/:slug) o, para compatibilidad
   // con links viejos, por uuid en ?categoria= (query param que se usaba antes
@@ -183,6 +186,15 @@ export function HomePage() {
     setSearchParams(construirParams({ en_oferta: enOferta ? undefined : 'true' }));
   }
 
+  function handleLimpiarFiltros() {
+    setSearchParams(construirParams({
+      categorias: undefined,
+      en_oferta: undefined,
+      precio_min: undefined,
+      precio_max: undefined,
+    }));
+  }
+
   const titulo = useMemo(() => {
     if (busqueda) return `Resultados para "${busqueda}"`;
     if (categoriaActiva) return categoriaActiva.nombre;
@@ -233,7 +245,8 @@ export function HomePage() {
 
   return (
     <>
-      <HeroCarousel />
+      <div className="home-hero-wrap"><HeroCarousel /></div>
+      <BeneficiosBar />
       <div className="page">
         {mostrarFiltros ? (
           <div className="catalog-layout">
@@ -272,6 +285,8 @@ export function HomePage() {
                   onToggleCategoria={handleToggleCategoriaFacet}
                   enOferta={enOferta}
                   onToggleEnOferta={handleToggleEnOferta}
+                  filtrosActivos={cantidadFiltrosActivos}
+                  onLimpiarFiltros={handleLimpiarFiltros}
                 />
               </Suspense>
             </aside>

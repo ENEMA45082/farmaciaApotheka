@@ -1,4 +1,4 @@
-import { NEGOCIO, getGoogleMapsEmbedUrl } from '../config/negocio';
+import { NEGOCIO, getGoogleMapsEmbedUrl, getWhatsappUrl } from '../config/negocio';
 
 export function ContactoPage() {
   return (
@@ -47,7 +47,7 @@ export function ContactoPage() {
 
           <a
             className="btn btn--whatsapp"
-            href={NEGOCIO.whatsapp.url}
+            href={getWhatsappUrl()}
             target="_blank"
             rel="noopener noreferrer"
           >

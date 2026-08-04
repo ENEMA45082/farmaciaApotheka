@@ -15,10 +15,13 @@ import type {
 
 // stock y fecha_vencimiento son información interna de inventario — el catálogo
 // público (sin token de administrador) no debe poder ver stock exacto ni
-// vencimientos de un competidor scrapeando /api/productos.
+// vencimientos de un competidor scrapeando /api/productos. En su lugar se manda
+// en_stock (booleano) para que el frontend pueda mostrar disponibilidad y
+// calcular cantidades sin depender del número real.
 function ocultarCamposAdmin(producto: Producto, modoAdmin: boolean): Producto {
-  if (modoAdmin) return producto;
-  const { stock: _stock, fecha_vencimiento: _fechaVencimiento, ...resto } = producto;
+  const conEnStock = { ...producto, en_stock: producto.stock > 0 };
+  if (modoAdmin) return conEnStock;
+  const { stock: _stock, fecha_vencimiento: _fechaVencimiento, ...resto } = conEnStock;
   return resto as Producto;
 }
 
