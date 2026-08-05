@@ -23,7 +23,13 @@ import './index.css';
 // (ruta de entrada más común, se mantiene eager para no meter un round-trip
 // de Suspense en el primer paint).
 const ProductDetailPage  = lazy(() => import('./pages/ProductDetailPage').then(m => ({ default: m.ProductDetailPage })));
-const AdminPage          = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const AdminPage               = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const AdminProductosPage      = lazy(() => import('./pages/AdminProductosPage').then(m => ({ default: m.AdminProductosPage })));
+const AdminCategoriasPage     = lazy(() => import('./pages/AdminCategoriasPage').then(m => ({ default: m.AdminCategoriasPage })));
+const AdminCarteleriaPage     = lazy(() => import('./pages/AdminCarteleriaPage').then(m => ({ default: m.AdminCarteleriaPage })));
+const AdminPedidosPage        = lazy(() => import('./pages/AdminPedidosPage').then(m => ({ default: m.AdminPedidosPage })));
+const AdminImportarPreciosPage = lazy(() => import('./pages/AdminImportarPreciosPage').then(m => ({ default: m.AdminImportarPreciosPage })));
+const AdminFacturasPage       = lazy(() => import('./pages/AdminFacturasPage').then(m => ({ default: m.AdminFacturasPage })));
 const LoginPage          = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const EstadisticasPage   = lazy(() => import('./pages/EstadisticasPage').then(m => ({ default: m.EstadisticasPage })));
 const PerfilPage         = lazy(() => import('./pages/PerfilPage').then(m => ({ default: m.PerfilPage })));
@@ -70,6 +76,54 @@ function AnimatedRoutes() {
               element={
                 <AdminRoute>
                   <AdminPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/productos"
+              element={
+                <AdminRoute>
+                  <AdminProductosPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/categorias"
+              element={
+                <AdminRoute>
+                  <AdminCategoriasPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/carteleria"
+              element={
+                <AdminRoute>
+                  <AdminCarteleriaPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/pedidos"
+              element={
+                <AdminRoute>
+                  <AdminPedidosPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/importar-precios"
+              element={
+                <AdminRoute>
+                  <AdminImportarPreciosPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/facturas"
+              element={
+                <AdminRoute>
+                  <AdminFacturasPage />
                 </AdminRoute>
               }
             />
