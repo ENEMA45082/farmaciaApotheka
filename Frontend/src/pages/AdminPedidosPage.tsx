@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { fetchPedidosAdmin, fetchPedidoAdminPorId, cambiarEstadoPedido, reintentarFactura } from '../api/pedidos.api';
 import type { Pedido, PedidoDetalleAdmin } from '../types';
 import { formatPrecio } from '../types';
@@ -199,6 +200,15 @@ export function AdminPedidosPage() {
       setCargandoDetalle(false);
     }
   }
+
+  // Permite deep-linkear a un pedido puntual (ej: botón "Ver pedido" del
+  // WhatsApp de notificación) con /admin/pedidos?id=<uuid>.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) handleAbrirDetallePedido(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [reintentandoFactura, setReintentandoFactura] = useState(false);
 

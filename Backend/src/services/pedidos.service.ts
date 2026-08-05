@@ -6,6 +6,7 @@ import * as pedidoHistorialRepo from '../repositories/pedidoHistorial.repository
 import * as facturasRepo from '../repositories/facturas.repository';
 import * as correoArgentino from './correoArgentino.service';
 import * as facturacionPedidosService from './facturacionPedidos.service';
+import * as whatsappService from './whatsapp.service';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import { validarDocumento } from '../utils/validarDocumento';
@@ -71,7 +72,11 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
   // sección 14). El chequeo de stock del loop de arriba sigue sirviendo como
   // camino feliz con mensaje claro; la RPC es la garantía real ante una carrera
   // con otro pedido consumiendo el mismo stock justo en el medio.
-  return pedidosRepo.crear(userId, dto, itemsConfirmados, total, subtotalLista);
+  const pedido = await pedidosRepo.crear(userId, dto, itemsConfirmados, total, subtotalLista);
+
+  whatsappService.notificarNuevoPedido(pedido).catch(err => console.error('[whatsapp]', err));
+
+  return pedido;
 }
 
 export async function listar(userId: string): Promise<Pedido[]> {
