@@ -959,21 +959,6 @@ img { max-width: 100%; display: block; }
 .admin-header h1 { font-size: 1.6rem; font-weight: 800; color: var(--navy); }
 .admin-subtitle { color: var(--text-light); font-size: 0.9rem; margin-top: 0.25rem; }
 
-.admin-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); padding-bottom: 0; }
-.admin-tab {
-  padding: 0.6rem 1.4rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-light);
-  border-radius: var(--radius) var(--radius) 0 0;
-  border: 1px solid transparent;
-  border-bottom: none;
-  margin-bottom: -2px;
-  transition: color 0.15s, background 0.15s;
-}
-.admin-tab:hover { color: var(--navy); background: var(--bg); }
-.admin-tab--activa { color: var(--navy); background: var(--white); border-color: var(--border); border-bottom-color: var(--white); }
-
 .admin-section { display: flex; flex-direction: column; gap: 1.5rem; }
 
 .admin-form-card,
