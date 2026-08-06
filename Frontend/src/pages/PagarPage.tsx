@@ -36,8 +36,12 @@ export function PagarPage() {
 
   useEffect(() => {
     if (!authLoading && !user) return;
+    // "confirmando" se pone en true al arrancar handleConfirmar y solo vuelve a
+    // false si falla — mientras esté en true, el carrito ya se vació como parte
+    // de un pedido exitoso, no hay que mandar al home por "carrito vacío".
+    if (confirmando) return;
     if (!authLoading && items.length === 0) navigate('/');
-  }, [authLoading, user, items, navigate]);
+  }, [authLoading, user, items, navigate, confirmando]);
 
   // Si cambian al retiro en farmacia y tenían tarjeta seleccionada, no hay problema.
   // Si cambian a otro método de envío y tenían efectivo seleccionado, resetear.

@@ -44,34 +44,44 @@ export async function notificarNuevoPedido(pedido: Pedido): Promise<void> {
   const templateName  = process.env.WHATSAPP_TEMPLATE_NAME ?? 'nuevo_pedido_admin';
   const templateLang  = process.env.WHATSAPP_TEMPLATE_LANG ?? 'es_AR';
 
-  await axios.post(
-    `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-    {
-      messaging_product: 'whatsapp',
-      to: numeroDestino,
-      type: 'template',
-      template: {
-        name: templateName,
-        language: { code: templateLang },
-        components: [
-          {
-            type: 'body',
-            parameters: [
-              { type: 'text', parameter_name: 'numero_pedido', text: nroPedido },
-              { type: 'text', parameter_name: 'total_pedido',  text: total },
-            ],
-          },
-          {
-            type: 'button',
-            sub_type: 'url',
-            index: '0',
-            parameters: [
-              { type: 'text', text: pedido.id },
-            ],
-          },
-        ],
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        to: numeroDestino,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: templateLang },
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', parameter_name: 'numero_pedido', text: nroPedido },
+                { type: 'text', parameter_name: 'total_pedido',  text: total },
+              ],
+            },
+            {
+              type: 'button',
+              sub_type: 'url',
+              index: '0',
+              parameters: [
+                { type: 'text', text: pedido.id },
+              ],
+            },
+          ],
+        },
       },
-    },
-    { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } },
-  );
+      { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } },
+    );
+  } catch (err) {
+    // No relanzar el AxiosError tal cual: trae la request completa (headers
+    // incluido el Bearer token) colgando de err.config/err.request, y si algo
+    // más arriba lo loguea con console.error se filtra el token a los logs.
+    if (axios.isAxiosError(err)) {
+      throw new Error(`WhatsApp API error ${err.response?.status ?? '?'}: ${JSON.stringify(err.response?.data)}`);
+    }
+    throw err;
+  }
 }
