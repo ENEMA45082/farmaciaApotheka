@@ -1,33 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useProductos } from '../../hooks/useProductos';
+import { useCarruselScroll } from '../../hooks/useCarruselScroll';
 import { ProductCard } from '../products/ProductCard';
 import { staggerContainer } from '../ui/motion';
 
 export function ProductosDestacadosCarousel() {
   const { productos, cargando, error } = useProductos({ en_oferta: true, limite: 10 });
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [puedeIzq, setPuedeIzq] = useState(false);
-  const [puedeDer, setPuedeDer] = useState(true);
-
-  const actualizarFlechas = useCallback(() => {
-    const track = trackRef.current;
-    if (!track) return;
-    setPuedeIzq(track.scrollLeft > 4);
-    setPuedeDer(track.scrollLeft + track.clientWidth < track.scrollWidth - 4);
-  }, []);
-
-  useEffect(() => { actualizarFlechas(); }, [productos, actualizarFlechas]);
-
-  useEffect(() => {
-    window.addEventListener('resize', actualizarFlechas);
-    return () => window.removeEventListener('resize', actualizarFlechas);
-  }, [actualizarFlechas]);
-
-  function desplazar(direccion: 1 | -1) {
-    trackRef.current?.scrollBy({ left: direccion * trackRef.current.clientWidth * 0.85, behavior: 'smooth' });
-  }
+  const { trackRef, puedeIzq, puedeDer, actualizarFlechas, desplazar } = useCarruselScroll(productos);
 
   if (cargando || error || productos.length === 0) return null;
 
