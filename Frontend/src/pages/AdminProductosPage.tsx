@@ -20,6 +20,7 @@ const FORM_PRODUCTO_VACIO = {
   en_oferta: false,
   precio_oferta: '',
   porcentaje_oferta: '',
+  es_2x1: false,
   es_venta_libre: true,
   peso_gramos: '',
   alicuota_iva: '21',
@@ -138,6 +139,7 @@ export function AdminProductosPage() {
       en_oferta: p.en_oferta,
       precio_oferta: p.precio_oferta != null ? String(p.precio_oferta) : '',
       porcentaje_oferta: p.porcentaje_oferta != null ? String(p.porcentaje_oferta) : '',
+      es_2x1: p.es_2x1,
       es_venta_libre: p.es_venta_libre,
       peso_gramos: p.peso_gramos ? String(p.peso_gramos) : '',
       alicuota_iva: String(p.alicuota_iva ?? 21),
@@ -184,8 +186,9 @@ export function AdminProductosPage() {
         nombre: formProducto.nombre.trim(),
         precio,
         en_oferta:         formProducto.en_oferta,
-        precio_oferta:     formProducto.en_oferta ? precioOferta : null,
-        porcentaje_oferta: formProducto.en_oferta ? pctOferta    : null,
+        precio_oferta:     formProducto.en_oferta && !formProducto.es_2x1 ? precioOferta : null,
+        porcentaje_oferta: formProducto.en_oferta && !formProducto.es_2x1 ? pctOferta    : null,
+        es_2x1:            formProducto.en_oferta && formProducto.es_2x1,
         descripcion: formProducto.descripcion.trim() || undefined,
         stock: formProducto.stock !== '' ? parseInt(formProducto.stock) : 0,
         categoria_id: formProducto.categoria_id || undefined,
@@ -363,6 +366,7 @@ export function AdminProductosPage() {
                   onChange={e => setFormProducto(f => ({
                     ...f,
                     en_oferta: e.target.checked,
+                    es_2x1: e.target.checked ? f.es_2x1 : false,
                     precio_oferta: e.target.checked ? f.precio_oferta : '',
                     porcentaje_oferta: e.target.checked ? f.porcentaje_oferta : '',
                   }))}
@@ -371,53 +375,83 @@ export function AdminProductosPage() {
               </label>
 
               {formProducto.en_oferta && (
-                <div className="oferta-fields">
-                  <div className="form-group">
-                    <label htmlFor="p-precio-oferta">Precio de oferta ($)</label>
-                    <input
-                      id="p-precio-oferta"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formProducto.precio_oferta}
-                      onChange={e => {
-                        const oferta = e.target.value;
-                        setFormProducto(f => {
-                          const listaNum = parseFloat(f.precio);
-                          const ofertaNum = parseFloat(oferta);
-                          const pct = !isNaN(listaNum) && !isNaN(ofertaNum) && listaNum > 0
-                            ? String(Math.round((1 - ofertaNum / listaNum) * 100))
-                            : f.porcentaje_oferta;
-                          return { ...f, precio_oferta: oferta, porcentaje_oferta: pct };
-                        });
-                      }}
-                      placeholder="0.00"
-                    />
+                <>
+                  <div className="oferta-tipo-selector">
+                    <label className="oferta-tipo-opcion">
+                      <input
+                        type="radio"
+                        name="tipo-oferta"
+                        checked={!formProducto.es_2x1}
+                        onChange={() => setFormProducto(f => ({ ...f, es_2x1: false }))}
+                      />
+                      % de descuento
+                    </label>
+                    <label className="oferta-tipo-opcion">
+                      <input
+                        type="radio"
+                        name="tipo-oferta"
+                        checked={formProducto.es_2x1}
+                        onChange={() => setFormProducto(f => ({ ...f, es_2x1: true, precio_oferta: '', porcentaje_oferta: '' }))}
+                      />
+                      2x1
+                    </label>
                   </div>
-                  <div className="form-group">
-                    <label htmlFor="p-pct-oferta">% descuento</label>
-                    <input
-                      id="p-pct-oferta"
-                      type="number"
-                      min="1"
-                      max="99"
-                      step="1"
-                      value={formProducto.porcentaje_oferta}
-                      onChange={e => {
-                        const pct = e.target.value;
-                        setFormProducto(f => {
-                          const listaNum = parseFloat(f.precio);
-                          const pctNum = parseFloat(pct);
-                          const oferta = !isNaN(listaNum) && !isNaN(pctNum)
-                            ? String((listaNum * (1 - pctNum / 100)).toFixed(2))
-                            : f.precio_oferta;
-                          return { ...f, porcentaje_oferta: pct, precio_oferta: oferta };
-                        });
-                      }}
-                      placeholder="10"
-                    />
-                  </div>
-                </div>
+
+                  {formProducto.es_2x1 ? (
+                    <p className="oferta-2x1-nota">
+                      Al llevar 2 unidades se cobra 1 sola (la unidad suelta de una cantidad impar se cobra completa).
+                      El descuento se calcula solo según la cantidad en el carrito — no hace falta cargar un precio acá.
+                    </p>
+                  ) : (
+                    <div className="oferta-fields">
+                      <div className="form-group">
+                        <label htmlFor="p-precio-oferta">Precio de oferta ($)</label>
+                        <input
+                          id="p-precio-oferta"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formProducto.precio_oferta}
+                          onChange={e => {
+                            const oferta = e.target.value;
+                            setFormProducto(f => {
+                              const listaNum = parseFloat(f.precio);
+                              const ofertaNum = parseFloat(oferta);
+                              const pct = !isNaN(listaNum) && !isNaN(ofertaNum) && listaNum > 0
+                                ? String(Math.round((1 - ofertaNum / listaNum) * 100))
+                                : f.porcentaje_oferta;
+                              return { ...f, precio_oferta: oferta, porcentaje_oferta: pct };
+                            });
+                          }}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="p-pct-oferta">% descuento</label>
+                        <input
+                          id="p-pct-oferta"
+                          type="number"
+                          min="1"
+                          max="99"
+                          step="1"
+                          value={formProducto.porcentaje_oferta}
+                          onChange={e => {
+                            const pct = e.target.value;
+                            setFormProducto(f => {
+                              const listaNum = parseFloat(f.precio);
+                              const pctNum = parseFloat(pct);
+                              const oferta = !isNaN(listaNum) && !isNaN(pctNum)
+                                ? String((listaNum * (1 - pctNum / 100)).toFixed(2))
+                                : f.precio_oferta;
+                              return { ...f, porcentaje_oferta: pct, precio_oferta: oferta };
+                            });
+                          }}
+                          placeholder="10"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -646,7 +680,9 @@ export function AdminProductosPage() {
                       <td>
                         {p.en_oferta && p.precio_oferta != null
                           ? <span className="tabla-oferta-precio">${p.precio_oferta.toFixed(2)}{p.porcentaje_oferta != null && <span className="tabla-oferta-badge"> -{p.porcentaje_oferta}%</span>}</span>
-                          : '—'}
+                          : p.es_2x1
+                            ? <span className="tabla-oferta-badge">2x1</span>
+                            : '—'}
                       </td>
                       <td>{p.stock}</td>
                       <td>{p.categoria?.nombre ?? '—'}</td>

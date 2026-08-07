@@ -51,16 +51,26 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
         'STOCK_INSUFICIENTE',
       );
     }
+    // Promo 2x1: mutuamente excluyente con la oferta por % (ver es_2x1 en
+    // AdminProductosPage.tsx, un producto 2x1 nunca tiene precio_oferta). Por
+    // cada par de unidades, 1 sale gratis — la unidad suelta de una cantidad
+    // impar se cobra completa. precio_unitario queda igual al de catálogo;
+    // el descuento se resta aparte en el subtotal (ver supabase_migrations.sql,
+    // sección 15).
+    const pares     = producto.es_2x1 ? Math.floor(item.cantidad / 2) : 0;
+    const descuento = pares * producto.precio;
+
     itemsConfirmados.push({
       producto_id:     producto.id,
       nombre_producto: producto.nombre,
       cantidad:        item.cantidad,
       precio_unitario: producto.en_oferta && producto.precio_oferta != null ? producto.precio_oferta : producto.precio,
       precio_lista:    producto.precio,
+      descuento,
     });
   }
 
-  const total         = itemsConfirmados.reduce((s, i) => s + i.precio_unitario * i.cantidad, 0);
+  const total         = itemsConfirmados.reduce((s, i) => s + i.precio_unitario * i.cantidad - i.descuento, 0);
   const subtotalLista = itemsConfirmados.reduce((s, i) => s + i.precio_lista    * i.cantidad, 0);
 
   // 'transferencia' y 'efectivo' son flujos manuales: el admin confirma el pago

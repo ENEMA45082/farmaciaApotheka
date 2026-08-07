@@ -17,6 +17,7 @@ function detalle(overrides: Partial<DetallePedido>): DetallePedido {
     cantidad: 1,
     precio_unitario: 121,
     precio_lista: 121,
+    descuento: 0,
     subtotal: 121,
     ...overrides,
   };
@@ -63,6 +64,7 @@ function producto(alicuota_iva: number): Producto {
     en_oferta: false,
     precio_oferta: null,
     porcentaje_oferta: null,
+    es_2x1: false,
     imagen_url: null,
     categoria_id: null,
     stock: 10,

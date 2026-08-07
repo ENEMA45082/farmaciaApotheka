@@ -927,3 +927,86 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pw_site_transaction_id text;
     RETURN row_to_json(pedido_actualizado)::jsonb;
   END;
   $$;
+
+
+-- --------------------------------------------------------
+-- 15. Promoción 2x1: nuevo flag es_2x1 en products, y columna descuento en
+--     detalles_pedido para guardar el monto descontado por la promo en cada
+--     línea del pedido. precio_unitario se mantiene igual al de catálogo (no
+--     se "promedia" con el descuento) — el descuento se resta aparte al
+--     calcular subtotal, así el detalle siempre muestra el precio real de
+--     lista más una línea de descuento explícita.
+--
+--     Regla de la promo: por cada PAR de unidades del mismo producto, 1 sale
+--     gratis. cantidad=1 → 0 pares → sin descuento. cantidad=2 → 1 par →
+--     descuento = 1 x precio. cantidad=3 → 1 par (la 3ra queda suelta, a
+--     precio completo). Se calcula en pedidos.service.ts::crear, nunca acá.
+--
+--     Mutuamente excluyente con la oferta por %: si es_2x1=true, precio_oferta
+--     y porcentaje_oferta se guardan en NULL (ver AdminProductosPage.tsx).
+-- --------------------------------------------------------
+ALTER TABLE products        ADD COLUMN IF NOT EXISTS es_2x1    boolean NOT NULL DEFAULT false;
+ALTER TABLE detalles_pedido ADD COLUMN IF NOT EXISTS descuento numeric NOT NULL DEFAULT 0;
+
+-- 15a. crear_pedido_completo: mismo contrato de siempre, con un campo nuevo
+--      "descuento" por item (ya viene calculado desde pedidos.service.ts,
+--      acá solo se persiste tal cual, igual que el resto de los campos).
+CREATE OR REPLACE FUNCTION crear_pedido_completo(
+  p_user_id                    uuid,
+  p_total                      numeric,
+  p_subtotal_lista             numeric,
+  p_notas                      text,
+  p_metodo_envio               text,
+  p_costo_envio                numeric,
+  p_sucursal_correo_argentino  text,
+  p_codigo_postal_envio        text,
+  p_metodo_pago                text,
+  p_items                      jsonb,
+  p_destinatario_nombre        text DEFAULT NULL,
+  p_destinatario_dni           text DEFAULT NULL,
+  p_destinatario_cod_area      text DEFAULT NULL,
+  p_destinatario_telefono      text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  nuevo_pedido pedidos%ROWTYPE;
+  v_item jsonb;
+BEGIN
+  INSERT INTO pedidos (
+    user_id, total, subtotal_lista, notas,
+    metodo_envio, costo_envio, sucursal_correo_argentino,
+    codigo_postal_envio, metodo_pago,
+    destinatario_nombre, destinatario_dni, destinatario_cod_area, destinatario_telefono
+  ) VALUES (
+    p_user_id, p_total, p_subtotal_lista, p_notas,
+    p_metodo_envio, p_costo_envio, p_sucursal_correo_argentino,
+    p_codigo_postal_envio, p_metodo_pago,
+    p_destinatario_nombre, p_destinatario_dni, p_destinatario_cod_area, p_destinatario_telefono
+  )
+  RETURNING * INTO nuevo_pedido;
+
+  INSERT INTO detalles_pedido (
+    pedido_id, producto_id, nombre_producto,
+    cantidad, precio_unitario, precio_lista, descuento, subtotal
+  )
+  SELECT
+    nuevo_pedido.id,
+    (item->>'producto_id')::uuid,
+    item->>'nombre_producto',
+    (item->>'cantidad')::int,
+    (item->>'precio_unitario')::numeric,
+    (item->>'precio_lista')::numeric,
+    COALESCE((item->>'descuento')::numeric, 0),
+    (item->>'subtotal')::numeric
+  FROM jsonb_array_elements(p_items) AS item;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    PERFORM descontar_stock((v_item->>'producto_id')::uuid, (v_item->>'cantidad')::int);
+  END LOOP;
+
+  RETURN row_to_json(nuevo_pedido)::jsonb;
+END;
+$$;

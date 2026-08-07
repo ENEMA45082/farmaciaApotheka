@@ -142,7 +142,12 @@ export function PagoResultadoPage() {
                     <td>{d.nombre_producto}</td>
                     <td className="pedido-receipt__col-num">{d.cantidad}</td>
                     <td className="pedido-receipt__col-num">${formatPrecio(d.precio_unitario)}</td>
-                    <td className="pedido-receipt__col-num">${formatPrecio(d.subtotal)}</td>
+                    <td className="pedido-receipt__col-num">
+                      ${formatPrecio(d.subtotal)}
+                      {d.descuento > 0 && (
+                        <span className="pedido-tabla__descuento-2x1"> (2x1: -${formatPrecio(d.descuento)})</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

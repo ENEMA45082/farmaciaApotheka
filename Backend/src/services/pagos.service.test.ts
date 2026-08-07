@@ -31,6 +31,7 @@ function detalle(overrides: Partial<DetallePedido>): DetallePedido {
     cantidad: 2,
     precio_unitario: 100,
     precio_lista: 100,
+    descuento: 0,
     subtotal: 200,
     ...overrides,
   };

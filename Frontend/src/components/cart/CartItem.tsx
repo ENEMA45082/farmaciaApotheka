@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import type { ItemCarrito } from '../../types';
-import { precioEfectivo, formatPrecio } from '../../types';
+import { precioEfectivo, descuento2x1, subtotalLinea, formatPrecio } from '../../types';
 import { useCarritoContext } from '../../context/CartContext';
 import { staggerItem } from '../ui/motion';
 
@@ -12,6 +12,7 @@ export function CartItem({ item }: Props) {
   const { actualizarCantidad, quitarItem } = useCarritoContext();
   const { producto, cantidad } = item;
   const efectivo = precioEfectivo(producto);
+  const descuento = descuento2x1(producto, cantidad);
 
   return (
     <motion.div
@@ -36,6 +37,9 @@ export function CartItem({ item }: Props) {
             <span className="cart-item__precio-lista">${formatPrecio(producto.precio)}</span>
           )}
         </p>
+        {descuento > 0 && (
+          <p className="cart-item__descuento-2x1">2x1: -${formatPrecio(descuento)}</p>
+        )}
         <div className="cart-item__qty">
           <button onClick={() => actualizarCantidad(producto.id, cantidad - 1)}>-</button>
           <motion.span
@@ -50,7 +54,7 @@ export function CartItem({ item }: Props) {
         </div>
       </div>
       <div className="cart-item__right">
-        <p className="cart-item__subtotal">${formatPrecio(efectivo * cantidad)}</p>
+        <p className="cart-item__subtotal">${formatPrecio(subtotalLinea(producto, cantidad))}</p>
         <motion.button
           className="cart-item__remove"
           onClick={() => quitarItem(producto.id)}

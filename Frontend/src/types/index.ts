@@ -14,6 +14,7 @@ export interface Producto {
   en_oferta: boolean;
   precio_oferta: number | null;
   porcentaje_oferta: number | null;
+  es_2x1: boolean;
   imagen_url: string | null;
   categoria_id: string | null;
   stock: number;
@@ -29,6 +30,19 @@ export interface Producto {
 
 export function precioEfectivo(p: Producto): number {
   return p.en_oferta && p.precio_oferta != null ? p.precio_oferta : p.precio;
+}
+
+// Promo 2x1: por cada par de unidades, 1 sale gratis (la unidad suelta de una
+// cantidad impar se cobra completa). Mutuamente excluyente con precio_oferta
+// — ver AdminProductosPage.tsx — así que precioEfectivo() ya devuelve el
+// precio de lista para un producto 2x1, sin necesidad de tocar esa función.
+export function descuento2x1(p: Producto, cantidad: number): number {
+  if (!p.es_2x1) return 0;
+  return Math.floor(cantidad / 2) * p.precio;
+}
+
+export function subtotalLinea(p: Producto, cantidad: number): number {
+  return precioEfectivo(p) * cantidad - descuento2x1(p, cantidad);
 }
 
 export function formatPrecio(n: number): string {
@@ -61,6 +75,7 @@ export interface CrearProductoDTO {
   en_oferta?: boolean;
   precio_oferta?: number | null;
   porcentaje_oferta?: number | null;
+  es_2x1?: boolean;
   descripcion?: string;
   stock?: number;
   categoria_id?: string;
@@ -79,6 +94,7 @@ export interface ActualizarProductoDTO {
   en_oferta?: boolean;
   precio_oferta?: number | null;
   porcentaje_oferta?: number | null;
+  es_2x1?: boolean;
   descripcion?: string;
   stock?: number;
   categoria_id?: string;
@@ -126,6 +142,7 @@ export interface DetallePedido {
   cantidad: number;
   precio_unitario: number;
   precio_lista: number;
+  descuento: number;
   subtotal: number;
 }
 

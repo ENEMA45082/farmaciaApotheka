@@ -18,6 +18,7 @@ export interface Producto {
   en_oferta: boolean;
   precio_oferta: number | null;
   porcentaje_oferta: number | null;
+  es_2x1: boolean;
   imagen_url: string | null;
   categoria_id: string | null;
   stock: number;
@@ -46,6 +47,7 @@ export interface CrearProductoDTO {
   en_oferta?: boolean;
   precio_oferta?: number | null;
   porcentaje_oferta?: number | null;
+  es_2x1?: boolean;
   imagen_url?: string;
   categoria_id?: string;
   stock?: number;
@@ -64,6 +66,7 @@ export interface ActualizarProductoDTO {
   en_oferta?: boolean;
   precio_oferta?: number | null;
   porcentaje_oferta?: number | null;
+  es_2x1?: boolean;
   imagen_url?: string;
   categoria_id?: string;
   stock?: number;
@@ -83,6 +86,7 @@ export interface DetallePedido {
   cantidad: number;
   precio_unitario: number;
   precio_lista: number;
+  descuento: number;
   subtotal: number;
 }
 
@@ -175,6 +179,7 @@ export interface ItemPedidoConfirmado {
   cantidad: number;
   precio_unitario: number;
   precio_lista: number;
+  descuento: number;
 }
 
 export interface CrearPedidoDTO {

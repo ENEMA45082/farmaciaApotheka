@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { ItemCarrito, EstadoCarrito, Producto } from '../types';
-import { precioEfectivo } from '../types';
+import { subtotalLinea } from '../types';
 
 const CLAVE_CARRITO = 'apotheka_carrito';
 
@@ -17,7 +17,7 @@ function calcularEstado(items: ItemCarrito[]): EstadoCarrito {
   return {
     items,
     totalItems:    items.reduce((sum, i) => sum + i.cantidad, 0),
-    totalPrecio:   items.reduce((sum, i) => sum + precioEfectivo(i.producto) * i.cantidad, 0),
+    totalPrecio:   items.reduce((sum, i) => sum + subtotalLinea(i.producto, i.cantidad), 0),
     subtotalLista: items.reduce((sum, i) => sum + i.producto.precio * i.cantidad, 0),
   };
 }

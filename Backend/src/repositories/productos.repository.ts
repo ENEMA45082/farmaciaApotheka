@@ -16,6 +16,7 @@ function mapearProducto(row: Record<string, unknown>): Producto {
     en_oferta:         Boolean(row.en_oferta),
     precio_oferta:     row.precio_oferta != null ? Number(row.precio_oferta) : null,
     porcentaje_oferta: row.porcentaje_oferta != null ? Number(row.porcentaje_oferta) : null,
+    es_2x1:            Boolean(row.es_2x1),
     imagen_url:        row.imagen_url as string | null,
     categoria_id:      row.categoria_id as string | null,
     stock:             Number(row.stock),
@@ -138,6 +139,7 @@ export async function crear(dto: CrearProductoDTO): Promise<Producto> {
       en_oferta:         dto.en_oferta         ?? false,
       precio_oferta:     dto.precio_oferta      ?? null,
       porcentaje_oferta: dto.porcentaje_oferta  ?? null,
+      es_2x1:            dto.es_2x1             ?? false,
       imagen_url:        dto.imagen_url         ?? null,
       categoria_id:      dto.categoria_id       ?? null,
       stock:             dto.stock              ?? 0,
@@ -163,6 +165,7 @@ export async function actualizar(id: string, dto: ActualizarProductoDTO): Promis
   if (dto.en_oferta         !== undefined) cambios.en_oferta         = dto.en_oferta;
   if (dto.precio_oferta     !== undefined) cambios.precio_oferta     = dto.precio_oferta;
   if (dto.porcentaje_oferta !== undefined) cambios.porcentaje_oferta = dto.porcentaje_oferta;
+  if (dto.es_2x1            !== undefined) cambios.es_2x1            = dto.es_2x1;
   if (dto.imagen_url        !== undefined) cambios.imagen_url        = dto.imagen_url;
   if (dto.categoria_id      !== undefined) cambios.categoria_id      = dto.categoria_id;
   if (dto.stock             !== undefined) cambios.stock             = dto.stock;

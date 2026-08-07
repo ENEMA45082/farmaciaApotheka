@@ -5,7 +5,7 @@ import { useCarritoContext } from '../context/CartContext';
 import { useCheckout } from '../context/CheckoutContext';
 import { crearPedido } from '../api/pedidos.api';
 import { iniciarCheckoutHosted } from '../api/pagos.api';
-import { precioEfectivo, formatPrecio } from '../types';
+import { precioEfectivo, subtotalLinea, formatPrecio } from '../types';
 import type { MetodoPago } from '../types';
 
 const CBU_FARMACIA   = '0720066320000001483022';
@@ -217,7 +217,7 @@ export function PagarPage() {
                     <span className="checkout-item__nombre">{i.producto.nombre}</span>
                     <span className="checkout-item__cant">x{i.cantidad}</span>
                   </div>
-                  <span className="checkout-item__subtotal">${formatPrecio(precioEfectivo(i.producto) * i.cantidad)}</span>
+                  <span className="checkout-item__subtotal">${formatPrecio(subtotalLinea(i.producto, i.cantidad))}</span>
                 </li>
               ))}
             </ul>

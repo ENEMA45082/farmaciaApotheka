@@ -32,6 +32,9 @@ export function ProductCard({ producto }: Props) {
         {producto.en_oferta && producto.porcentaje_oferta != null && (
           <span className="oferta-badge oferta-badge--imagen">-{producto.porcentaje_oferta}%</span>
         )}
+        {producto.es_2x1 && (
+          <span className="oferta-badge oferta-badge--imagen">2x1</span>
+        )}
         <img
           src={producto.imagen_url ?? '/placeholder.png'}
           alt={producto.nombre}
@@ -70,6 +73,11 @@ export function ProductCard({ producto }: Props) {
             {producto.porcentaje_oferta != null && (
               <span className="oferta-badge">-{producto.porcentaje_oferta}%</span>
             )}
+          </div>
+        ) : producto.es_2x1 ? (
+          <div className="product-card__precios">
+            <p className="product-card__price">${formatPrecio(producto.precio)}</p>
+            <span className="oferta-badge">2x1</span>
           </div>
         ) : (
           <p className="product-card__price">${formatPrecio(producto.precio)}</p>

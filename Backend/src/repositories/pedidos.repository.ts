@@ -12,6 +12,7 @@ function mapearDetalle(row: Record<string, unknown>): DetallePedido {
     cantidad:        Number(row.cantidad),
     precio_unitario: Number(row.precio_unitario),
     precio_lista:    Number(row.precio_lista),
+    descuento:       Number(row.descuento ?? 0),
     subtotal:        Number(row.subtotal),
   };
 }
@@ -63,7 +64,8 @@ export async function crear(
     cantidad:        i.cantidad,
     precio_unitario: i.precio_unitario,
     precio_lista:    i.precio_lista,
-    subtotal:        i.precio_unitario * i.cantidad,
+    descuento:       i.descuento,
+    subtotal:        i.precio_unitario * i.cantidad - i.descuento,
   }));
 
   // RPC atómica: si falla la inserción de detalles, el pedido se revierte

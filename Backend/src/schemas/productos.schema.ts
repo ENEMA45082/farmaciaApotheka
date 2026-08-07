@@ -7,6 +7,7 @@ const camposProducto = {
   en_oferta:         z.boolean().optional(),
   precio_oferta:     z.number().nonnegative().nullable().optional(),
   porcentaje_oferta: z.number().min(0).max(100).nullable().optional(),
+  es_2x1:            z.boolean().optional(),
   imagen_url:        z.string().max(2000).optional(),
   categoria_id:      z.string().uuid().optional(),
   stock:             z.number().int().nonnegative().optional(),

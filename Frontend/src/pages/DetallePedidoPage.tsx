@@ -170,7 +170,12 @@ export function DetallePedidoPage() {
                   )}
                 </td>
                 <td>{d.cantidad}</td>
-                <td>${formatPrecio(d.subtotal)}</td>
+                <td>
+                  ${formatPrecio(d.subtotal)}
+                  {d.descuento > 0 && (
+                    <span className="pedido-tabla__descuento-2x1"> (2x1: -${formatPrecio(d.descuento)})</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -108,6 +108,11 @@ export function ProductDetailPage() {
                   <span className="oferta-badge">-{producto.porcentaje_oferta}%</span>
                 )}
               </div>
+            ) : producto.es_2x1 ? (
+              <div className="product-card__precios product-detail__precios">
+                <p className="product-detail__price">${formatPrecio(producto.precio)}</p>
+                <span className="oferta-badge">2x1</span>
+              </div>
             ) : (
               <p className="product-detail__price">${formatPrecio(producto.precio)}</p>
             )}

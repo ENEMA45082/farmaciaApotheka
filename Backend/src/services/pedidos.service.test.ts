@@ -33,6 +33,7 @@ function producto(overrides: Partial<Producto> = {}): Producto {
     en_oferta: false,
     precio_oferta: null,
     porcentaje_oferta: null,
+    es_2x1: false,
     imagen_url: null,
     categoria_id: null,
     stock: 10,
@@ -120,6 +121,7 @@ describe('crear', () => {
         cantidad:        2,
         precio_unitario: 500,
         precio_lista:    500,
+        descuento:       0,
       }],
       1000, // total: 500 * 2, no 1 * 2 como mandó el cliente
       1000, // subtotal_lista
@@ -137,6 +139,34 @@ describe('crear', () => {
       [expect.objectContaining({ precio_unitario: 400, precio_lista: 500 })],
       800,
       1000,
+    );
+  });
+
+  it('2x1: con cantidad par, descuenta el precio de una unidad por cada par', async () => {
+    encontrarPorId.mockResolvedValue(producto({ precio: 500, es_2x1: true }));
+
+    await crear('user-1', dto({ items: [{ producto_id: 'prod-1', nombre_producto: 'x', cantidad: 2, precio_unitario: 1, precio_lista: 1 }] }));
+
+    expect(crearPedido).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      [expect.objectContaining({ precio_unitario: 500, precio_lista: 500, descuento: 500 })],
+      500, // total: 2 unidades, 1 par, se paga 1 sola
+      1000,
+    );
+  });
+
+  it('2x1: con cantidad impar, la unidad suelta se cobra completa', async () => {
+    encontrarPorId.mockResolvedValue(producto({ precio: 500, es_2x1: true }));
+
+    await crear('user-1', dto({ items: [{ producto_id: 'prod-1', nombre_producto: 'x', cantidad: 3, precio_unitario: 1, precio_lista: 1 }] }));
+
+    expect(crearPedido).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      [expect.objectContaining({ descuento: 500 })],
+      1000, // total: 3 unidades = 1500, 1 par de descuento (500) = 1000
+      1500,
     );
   });
 
