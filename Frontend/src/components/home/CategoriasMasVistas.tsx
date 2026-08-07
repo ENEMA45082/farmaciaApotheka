@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
-  Baby, Bone, FlaskConical, HeartPulse, Package, Pill, Sparkles, SprayCan, Stethoscope,
+  Baby, Bone, Eye, FlaskConical, HeartPulse, Package, Pill, Sparkles, SprayCan, Stethoscope,
   type LucideIcon,
 } from 'lucide-react';
 import { useCategoriasArbol } from '../../hooks/useCategoriasArbol';
@@ -12,7 +12,8 @@ import { slugify } from '../../utils/slug';
 // categorías nuevas que no matcheen ninguna.
 const ICONOS_POR_PALABRA_CLAVE: [RegExp, LucideIcon][] = [
   [/perfum|fragan/i, SprayCan],
-  [/maquilla/i, Sparkles],
+  [/maquilla/i, Eye],
+  [/personal|higiene/i, Sparkles],
   [/beb[eé]|matern/i, Baby],
   [/ortoped/i, Bone],
   [/suplement/i, Pill],
