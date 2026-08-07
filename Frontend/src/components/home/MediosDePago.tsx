@@ -1,27 +1,16 @@
-const MEDIOS_PAGO = [
-  { id: 'visa', render: () => <span className="medios-pago__visa">VISA</span> },
-  { id: 'mastercard', render: () => <span className="medios-pago__mastercard">Mastercard</span> },
-  { id: 'amex', render: () => <span className="medios-pago__amex">AMEX</span> },
-  { id: 'mercadopago', render: () => <span className="medios-pago__mercadopago">Mercado Pago</span> },
-  {
-    id: 'paypal',
-    render: () => (
-      <span className="medios-pago__paypal">
-        <span className="medios-pago__paypal-pay">Pay</span>
-        <span className="medios-pago__paypal-pal">Pal</span>
-      </span>
-    ),
-  },
-  { id: 'naranjax', render: () => <span className="medios-pago__naranjax">NaranjaX</span> },
+const PROMOS_PAGO = [
+  { id: 'visa', archivo: '/pagos/visa-promo.png', alt: 'Visa: miércoles y sábados, 3 cuotas sin interés' },
+  { id: 'mastercard', archivo: '/pagos/mastercard-promo.png', alt: 'Mastercard: miércoles y sábados, 3 cuotas sin interés' },
+  { id: 'mercadopago', archivo: '/pagos/mercadopago-promo.png', alt: 'Mercado Pago: pagos con QR, rápido y seguro' },
+  { id: 'modo', archivo: '/pagos/modo-promo.png', alt: 'MODO: conectá tus bancos' },
 ];
 
-// 4 copias (no 2): con la lista contenida a ~1200px, una sola copia de estos
-// 6 logos es más angosta que el contenedor, así que con solo 2 copias se ve
-// un hueco en blanco antes de que la segunda copia complete la pantalla.
-// El track anima de 0% a -25% (un cuarto del ancho total = una copia),
-// dando el loop infinito sin salto ni hueco.
-const REPETICIONES = 4;
-const ITEMS = Array.from({ length: REPETICIONES }, () => MEDIOS_PAGO).flat();
+// 8 copias: solo 4 imágenes, cada una bastante ancha (tarjetas promocionales,
+// no íconos chicos), así que una sola copia de la lista no alcanza a cubrir
+// el contenedor. Con 8 copias sobra margen para cualquier ancho de pantalla
+// razonable. El track anima de 0% a -12.5% (1/8 del ancho total = una copia).
+const REPETICIONES = 8;
+const ITEMS = Array.from({ length: REPETICIONES }, () => PROMOS_PAGO).flat();
 
 export function MediosDePago() {
   return (
@@ -29,9 +18,9 @@ export function MediosDePago() {
       <p className="medios-pago__titulo">medios de pago</p>
       <div className="medios-pago__mascara">
         <div className="medios-pago__track">
-          {ITEMS.map((medio, i) => (
-            <div className="medios-pago__item" key={`${medio.id}-${i}`}>
-              {medio.render()}
+          {ITEMS.map((promo, i) => (
+            <div className="medios-pago__item" key={`${promo.id}-${i}`}>
+              <img src={promo.archivo} alt={promo.alt} className="medios-pago__img" />
             </div>
           ))}
         </div>

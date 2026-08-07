@@ -184,9 +184,9 @@ img { max-width: 100%; display: block; }
 /* ===== Medios de Pago (home) ===== */
 /* Sin max-width/margin propios: vive dentro de .home-hero-wrap, igual que
    .beneficios-bar y .destacados-carousel (ver comentario arriba) - mismo
-   ancho que el resto de los bloques del home, no borde a borde. Los "logos"
-   son wordmarks tipográficos (texto + CSS), no imágenes de marca: reemplazar
-   por <img> reales en public/pagos/ cuando estén. */
+   ancho que el resto de los bloques del home, no borde a borde. Las
+   imágenes son tarjetas promocionales reales (public/pagos/*.png), no
+   simples logos: se muestran a color completo, sin filtro grayscale. */
 .medios-pago { width: 100%; background: #F8F9FA; border-radius: 16px; padding: 1.75rem 0 2rem; margin-top: 1.5rem; }
 
 .medios-pago__titulo {
@@ -210,51 +210,40 @@ img { max-width: 100%; display: block; }
 .medios-pago__track {
   display: flex;
   align-items: center;
-  gap: 3.5rem;
+  gap: 2rem;
   width: max-content;
-  animation: medios-pago-scroll 22s linear infinite;
+  animation: medios-pago-scroll 24s linear infinite;
 }
 .medios-pago__track:hover { animation-play-state: paused; }
 
 .medios-pago__item {
   flex: 0 0 auto;
-  min-width: 60px;
+  height: 150px;
   display: flex;
   align-items: center;
   justify-content: center;
-  filter: grayscale(1);
-  opacity: 0.65;
-  transition: filter 0.2s, opacity 0.2s;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s;
 }
-.medios-pago__item:hover { filter: grayscale(0); opacity: 1; }
+.medios-pago__item:hover { transform: translateY(-3px); }
 
-/* -25%: el track tiene 4 copias de la lista (ver MediosDePago.tsx), un
-   cuarto del ancho total es exactamente una copia. */
+.medios-pago__img { height: 100%; width: auto; display: block; object-fit: contain; }
+
+/* -12.5%: el track tiene 8 copias de la lista (ver MediosDePago.tsx), un
+   octavo del ancho total es exactamente una copia. */
 @keyframes medios-pago-scroll {
   0% { transform: translateX(0); }
-  100% { transform: translateX(-25%); }
+  100% { transform: translateX(-12.5%); }
 }
-
-/* Wordmarks por marca (placeholder tipográfico, ver comentario arriba) */
-.medios-pago__visa { font-size: 1.15rem; font-weight: 800; font-style: italic; letter-spacing: -0.03em; color: #1A1F71; }
-.medios-pago__mastercard {
-  font-size: 1.05rem; font-weight: 800; white-space: nowrap;
-  background: linear-gradient(90deg, #EB001B, #F79E1B);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.medios-pago__amex {
-  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: #fff; background: #016FD0; padding: 0.32rem 0.55rem; border-radius: 3px;
-}
-.medios-pago__mercadopago { font-size: 0.95rem; font-weight: 700; color: #009EE3; white-space: nowrap; }
-.medios-pago__paypal { font-size: 1.1rem; font-weight: 700; font-style: italic; font-family: Georgia, 'Times New Roman', serif; white-space: nowrap; }
-.medios-pago__paypal-pay { color: #003087; }
-.medios-pago__paypal-pal { color: #009CDE; }
-.medios-pago__naranjax { font-size: 1rem; font-weight: 800; color: #FF6600; white-space: nowrap; }
 
 @media (max-width: 640px) {
   .medios-pago { padding: 1.4rem 0 1.6rem; margin-top: 1rem; }
-  .medios-pago__track { gap: 2.25rem; animation-duration: 20s; }
+  .medios-pago__track { gap: 1.1rem; animation-duration: 20s; }
+  .medios-pago__item { height: 100px; border-radius: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
