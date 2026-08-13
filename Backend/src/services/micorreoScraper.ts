@@ -63,14 +63,26 @@ export interface OpcionScrapeada {
 
 let browserWarm: Browser | null = null;
 
+// @sparticuz/chromium se publica como ES Module puro. tsconfig.json compila
+// este proyecto a CommonJS, y con "module": "commonjs" TypeScript reescribe
+// un `import()` dinámico literal en un `require()` común al emitir JS — lo
+// cual rompe en runtime contra un paquete ESM ("require() of ES Module ...
+// not supported"). Verificado en producción (2026-08-13). El truco estándar
+// para esto es esconder el import() dentro de un `new Function(...)`: así el
+// compilador no puede verlo como un `import()` estático y no lo reescribe,
+// preservando el import() dinámico real en el JS emitido.
+const importDinamico = new Function('specifier', 'return import(specifier)') as (
+  specifier: string,
+) => Promise<any>;
+
 async function obtenerBrowser(): Promise<Browser> {
   if (browserWarm && browserWarm.connected) return browserWarm;
 
   if (ES_ENTORNO_SERVERLESS) {
     // Producción (Vercel): Chromium empaquetado para serverless. El binario
     // de @sparticuz/chromium es Linux-only, no corre en desarrollo local (Windows).
-    const chromium = (await import('@sparticuz/chromium')).default;
-    const puppeteer = await import('puppeteer-core');
+    const chromium = (await importDinamico('@sparticuz/chromium')).default;
+    const puppeteer = await importDinamico('puppeteer-core');
     browserWarm = await puppeteer.launch({
       args: await puppeteer.defaultArgs({ args: chromium.args, headless: 'shell' }),
       executablePath: await chromium.executablePath(),
@@ -87,6 +99,12 @@ async function obtenerBrowser(): Promise<Browser> {
     })) as unknown as Browser;
   }
 
+  // (chromium/puppeteer via importDinamico son `any`, así que TS ya no puede
+  // probar por control flow que browserWarm quedó no-nulo en ambas ramas —
+  // se valida explícito acá, que de paso es una comprobación real en runtime.
+  if (!browserWarm) {
+    throw new MiCorreoQuoteError('No se pudo inicializar el browser de Puppeteer', 'BROWSER_LAUNCH_FAILED');
+  }
   return browserWarm;
 }
 
