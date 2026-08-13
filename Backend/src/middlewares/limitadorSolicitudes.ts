@@ -69,3 +69,16 @@ export const limitadorPedidos = rateLimit({
   keyGenerator: generarClavePorUsuarioOIP,
   message: { error: 'Demasiadas solicitudes de pedidos. Intentá en unos minutos.', statusCode: 429 },
 });
+
+// Límite estricto para cotizar envío: a diferencia del cotizador anterior
+// (un POST a una API), cada cotización ahora es un scrape completo del
+// portal de MiCorreo (browser + login), mucho más caro — acotar abuso más
+// de cerca que con limitadorGeneral.
+export const limitadorCotizacionEnvio = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: generarClavePorUsuarioOIP,
+  message: { error: 'Demasiadas solicitudes de cotización. Intentá en unos minutos.', statusCode: 429 },
+});

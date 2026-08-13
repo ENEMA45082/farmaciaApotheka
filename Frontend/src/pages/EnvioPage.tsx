@@ -5,11 +5,19 @@ import { useCarritoContext } from '../context/CartContext';
 import { useCheckout } from '../context/CheckoutContext';
 import { fetchDireccion } from '../api/direcciones.api';
 import { fetchPerfil } from '../api/perfil.api';
+import { cotizarEnvio } from '../api/envio.api';
 import { formatPrecio } from '../types';
-import type { Perfil } from '../types';
+import type { Perfil, OpcionCotizacionEnvio } from '../types';
 
 const COSTO_ENVIO_ANILLO = 5000;
 const WHATSAPP_ENVIOS = '5493518354942';
+
+// 'domicilio' cubre dos zonas con costo muy distinto: dentro del anillo lo
+// reparte la propia farmacia a precio fijo; fuera del anillo se cotiza con
+// Correo Argentino (ver Backend/src/services/micorreoCotizacion.service.ts).
+// Ambas mandan metodo_envio: 'domicilio' al backend — la zona es un detalle
+// solo del front.
+type ZonaDomicilio = 'anillo' | 'fuera_anillo';
 
 export function EnvioPage() {
   const { user, loading: authLoading } = useAuth();
@@ -17,18 +25,23 @@ export function EnvioPage() {
   const navigate = useNavigate();
 
   const {
-    metodo, costoEnvio, direccion,
+    metodo, costoEnvio, diasEstimados, tipoServicioEnvio, direccion,
     destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono,
-    setMetodo, setCostoEnvio, setDiasEstimados, setSucursalSeleccionada, setDireccion,
+    setMetodo, setCostoEnvio, setDiasEstimados, setTipoServicioEnvio, setSucursalSeleccionada, setDireccion,
     setDestinatarioNombre, setDestinatarioDni, setDestinatarioCodArea, setDestinatarioTelefono,
   } = useCheckout();
 
   const [error, setError] = useState<string | null>(null);
+  const [opciones, setOpciones] = useState<OpcionCotizacionEnvio[]>([]);
 
   // Sub-paso sólo para domicilio
   const [subpaso,       setSubpaso]       = useState<'seleccion' | 'detalle_domicilio'>('seleccion');
   const [perfil,        setPerfil]        = useState<Perfil | null>(null);
   const [destiEsYo,     setDestiEsYo]     = useState(false);
+
+  const [zonaDomicilio,    setZonaDomicilio]    = useState<ZonaDomicilio | null>(null);
+  const [cotizando,        setCotizando]        = useState(false);
+  const [cotizacionError,  setCotizacionError]  = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/login?next=envio');
@@ -40,14 +53,55 @@ export function EnvioPage() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (metodo === 'domicilio') {
-      setCostoEnvio(COSTO_ENVIO_ANILLO);
-      setDiasEstimados('');
-    } else {
+    if (metodo !== 'domicilio') {
       setCostoEnvio(0);
       setDiasEstimados('');
+      setTipoServicioEnvio(null);
+      setOpciones([]);
+      return;
     }
-  }, [metodo]);
+
+    if (zonaDomicilio === 'anillo') {
+      setCostoEnvio(COSTO_ENVIO_ANILLO);
+      setDiasEstimados('');
+      setTipoServicioEnvio(null);
+      setOpciones([]);
+      return;
+    }
+
+    if (zonaDomicilio === 'fuera_anillo') {
+      setCostoEnvio(0);
+      setDiasEstimados('');
+      setTipoServicioEnvio(null);
+      setOpciones([]);
+      if (!direccion?.codigo_postal || !direccion?.provincia_codigo) return;
+
+      let cancelado = false;
+      setCotizando(true);
+      cotizarEnvio(items, direccion.codigo_postal, direccion.provincia_codigo, 'domicilio')
+        .then(({ opciones: opcionesRecibidas }) => {
+          if (cancelado) return;
+          setOpciones(opcionesRecibidas);
+          setCotizacionError(
+            opcionesRecibidas.length === 0
+              ? 'No hay opciones de envío disponibles para tu domicilio.'
+              : null,
+          );
+        })
+        .catch(() => {
+          if (cancelado) return;
+          setCotizacionError('No pudimos cotizar el envío a tu domicilio en este momento.');
+        })
+        .finally(() => { if (!cancelado) setCotizando(false); });
+      return () => { cancelado = true; };
+    }
+  }, [metodo, zonaDomicilio, direccion, items]);
+
+  function elegirOpcionEnvio(opcion: OpcionCotizacionEnvio) {
+    setCostoEnvio(opcion.precio);
+    setDiasEstimados(opcion.plazoEstimado);
+    setTipoServicioEnvio(opcion.tipoServicio);
+  }
 
   // Cargar perfil al entrar al detalle de domicilio para el auto-fill
   useEffect(() => {
@@ -56,9 +110,20 @@ export function EnvioPage() {
     }
   }, [subpaso]);
 
-  function cambiarMetodo(m: typeof metodo) {
-    setMetodo(m);
+  function elegirRetiroFarmacia() {
+    setMetodo('retiro_farmacia');
+    setZonaDomicilio(null);
     setSucursalSeleccionada(null);
+    setCotizacionError(null);
+    setError(null);
+    setSubpaso('seleccion');
+  }
+
+  function elegirDomicilio(zona: ZonaDomicilio) {
+    setMetodo('domicilio');
+    setZonaDomicilio(zona);
+    setSucursalSeleccionada(null);
+    setCotizacionError(null);
     setError(null);
     setSubpaso('seleccion');
   }
@@ -116,7 +181,7 @@ export function EnvioPage() {
 
               <div className="metodo-envio-opciones">
                 <label className={`metodo-envio-card${metodo === 'retiro_farmacia' ? ' metodo-envio-card--activo' : ''}`}>
-                  <input type="radio" name="metodo" value="retiro_farmacia" checked={metodo === 'retiro_farmacia'} onChange={() => cambiarMetodo('retiro_farmacia')} />
+                  <input type="radio" name="metodo" value="retiro_farmacia" checked={metodo === 'retiro_farmacia'} onChange={elegirRetiroFarmacia} />
                   <div className="metodo-envio-card__icono">
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
@@ -129,8 +194,8 @@ export function EnvioPage() {
                   <span className="metodo-envio-card__precio metodo-envio-card__precio--gratis">GRATIS</span>
                 </label>
 
-                <label className={`metodo-envio-card${metodo === 'domicilio' ? ' metodo-envio-card--activo' : ''}`}>
-                  <input type="radio" name="metodo" value="domicilio" checked={metodo === 'domicilio'} onChange={() => cambiarMetodo('domicilio')} />
+                <label className={`metodo-envio-card${metodo === 'domicilio' && zonaDomicilio === 'anillo' ? ' metodo-envio-card--activo' : ''}`}>
+                  <input type="radio" name="metodo" value="anillo" checked={metodo === 'domicilio' && zonaDomicilio === 'anillo'} onChange={() => elegirDomicilio('anillo')} />
                   <div className="metodo-envio-card__icono">
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
@@ -143,7 +208,8 @@ export function EnvioPage() {
                   <span className="metodo-envio-card__precio">${formatPrecio(COSTO_ENVIO_ANILLO)}</span>
                 </label>
 
-                <div className="metodo-envio-card metodo-envio-card--disabled">
+                <label className={`metodo-envio-card${metodo === 'domicilio' && zonaDomicilio === 'fuera_anillo' ? ' metodo-envio-card--activo' : ''}`}>
+                  <input type="radio" name="metodo" value="fuera_anillo" checked={metodo === 'domicilio' && zonaDomicilio === 'fuera_anillo'} onChange={() => elegirDomicilio('fuera_anillo')} />
                   <div className="metodo-envio-card__icono">
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
@@ -151,22 +217,30 @@ export function EnvioPage() {
                   </div>
                   <div className="metodo-envio-card__info">
                     <span className="metodo-envio-card__nombre">Envío a domicilio (fuera del anillo)</span>
-                    <span className="metodo-envio-card__desc">
-                      Consultá directamente por{' '}
-                      <a
-                        href={`https://wa.me/${WHATSAPP_ENVIOS}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="metodo-envio-card__whatsapp"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        WhatsApp: 351 835-4942
-                      </a>
-                    </span>
+                    <span className="metodo-envio-card__desc">Resto de Córdoba y el país · cotizado con Correo Argentino</span>
                   </div>
-                  <span className="metodo-envio-card__badge">No disponible</span>
-                </div>
+                  {zonaDomicilio === 'fuera_anillo' && cotizando ? (
+                    <span className="metodo-envio-card__precio">Cotizando…</span>
+                  ) : zonaDomicilio === 'fuera_anillo' && cotizacionError ? (
+                    <span className="metodo-envio-card__badge">No disponible</span>
+                  ) : zonaDomicilio === 'fuera_anillo' && costoEnvio > 0 ? (
+                    <span className="metodo-envio-card__precio">${formatPrecio(costoEnvio)}</span>
+                  ) : zonaDomicilio === 'fuera_anillo' && opciones.length > 0 ? (
+                    <span className="metodo-envio-card__badge">Elegí una opción</span>
+                  ) : (
+                    <span className="metodo-envio-card__precio">A cotizar</span>
+                  )}
+                </label>
               </div>
+
+              {zonaDomicilio === 'fuera_anillo' && cotizacionError && (
+                <p className="checkout-aviso">
+                  {cotizacionError} Consultá directamente por{' '}
+                  <a href={`https://wa.me/${WHATSAPP_ENVIOS}`} target="_blank" rel="noopener noreferrer">
+                    WhatsApp: 351 835-4942
+                  </a>.
+                </p>
+              )}
 
               {/* Detalle inline sólo para domicilio (dirección) */}
               {metodo === 'domicilio' && (
@@ -188,6 +262,33 @@ export function EnvioPage() {
                   {!direccion?.codigo_postal && direccion && (
                     <p className="checkout-aviso">Tu dirección no tiene código postal. Agregalo para cotizar el envío.</p>
                   )}
+                  {direccion?.codigo_postal && !direccion?.provincia_codigo && (
+                    <p className="checkout-aviso">Tu dirección no tiene provincia cargada. Agregala para cotizar el envío.</p>
+                  )}
+
+                  {zonaDomicilio === 'fuera_anillo' && opciones.length > 0 && (
+                    <div className="envio-tarifas-opciones">
+                      {opciones.map(opcion => (
+                        <label
+                          key={opcion.tipoServicio}
+                          className={`envio-tarifa-card${tipoServicioEnvio === opcion.tipoServicio ? ' envio-tarifa-card--activo' : ''}`}
+                        >
+                          <input
+                            type="radio"
+                            name="tipoServicioEnvio"
+                            checked={tipoServicioEnvio === opcion.tipoServicio}
+                            onChange={() => elegirOpcionEnvio(opcion)}
+                          />
+                          <div className="envio-tarifa-card__info">
+                            <span className="envio-tarifa-card__nombre">{opcion.nombre}</span>
+                            <span className="envio-tarifa-card__plazo">{opcion.plazoEstimado}</span>
+                          </div>
+                          <span className="envio-tarifa-card__precio">${formatPrecio(opcion.precio)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
                   {puedeVerDetalle && (
                     <button
                       className="btn btn--primary btn--full"
@@ -239,7 +340,11 @@ export function EnvioPage() {
                   </svg>
                 </div>
                 <div className="envio-delivery-card__info">
-                  <p className="envio-delivery-card__dias">Envío gestionado directamente por la farmacia</p>
+                  <p className="envio-delivery-card__dias">
+                    {zonaDomicilio === 'fuera_anillo'
+                      ? `Envío por Correo Argentino${diasEstimados ? ` · ${diasEstimados}` : ''}`
+                      : 'Envío gestionado directamente por la farmacia'}
+                  </p>
                   <p className="envio-delivery-card__costo">
                     Costo de envío: <strong>${formatPrecio(costoEnvio)}</strong>
                   </p>

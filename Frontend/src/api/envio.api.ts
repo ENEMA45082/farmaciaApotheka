@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
-import type { CotizacionEnvio, SucursalCorreoArgentino, ItemCarrito } from '../types';
+import type { CotizacionEnvio, SucursalCorreoArgentino, ItemCarrito, ProvinciaCodigo } from '../types';
 import { addErrorInterceptor } from './apiClient';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? '/api' });
@@ -18,6 +18,7 @@ addErrorInterceptor(api);
 export async function cotizarEnvio(
   items: ItemCarrito[],
   codigoPostal: string,
+  provinciaCodigo: ProvinciaCodigo,
   metodo: 'domicilio' | 'retiro_sucursal',
 ): Promise<CotizacionEnvio> {
   const payload = {
@@ -26,6 +27,7 @@ export async function cotizarEnvio(
       cantidad: i.cantidad,
     })),
     codigoPostal,
+    provinciaCodigo,
     metodo,
   };
   const { data } = await api.post<CotizacionEnvio>('/envio/cotizar', payload);

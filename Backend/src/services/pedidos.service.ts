@@ -12,7 +12,6 @@ import { validarUUID } from '../utils/validarUUID';
 import { validarDocumento } from '../utils/validarDocumento';
 import { asegurarPropietario } from '../utils/ownership';
 import { supabase } from '../config/supabase';
-import { PESO_DEFAULT_GRAMOS } from '../config/envioConfig';
 import {
   ESTADOS_PEDIDO,
   ESTADOS_FINALES,
@@ -177,23 +176,15 @@ export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserI
     throw new AppError('Solo los pedidos con retiro en farmacia pueden marcarse como "Listo para retirar"', 400, 'ENVIO_METODO_INCOMPATIBLE');
   }
 
-  if (estado === 'Enviado' && !pedidoActual.shipping_tracking_number) {
-    const resultado = await crearEnvioReal(pedidoActual);
-    if (!resultado.ok) {
-      // No bloquea la transición de estado: el admin puede querer marcar
-      // "enviado" igual aunque Correo Argentino rechace el alta. El error
-      // queda registrado para revisión.
-      await pedidosRepo.actualizarEstado(id, estado, { shipping_error: resultado.errorMessage });
-    } else {
-      await pedidosRepo.actualizarEstado(id, estado, {
-        shipping_tracking_number: pedidoActual.id,
-        shipping_fecha_envio: new Date().toISOString(),
-        shipping_creado_en_correo: resultado.createdAt,
-      });
-    }
-  } else {
-    await pedidosRepo.actualizarEstado(id, estado);
-  }
+  // La creación automática del envío real (vía la API oficial de Correo
+  // Argentino) sigue desactivada mientras esa API está demorada. Ahora se
+  // cotiza automatizando el portal web de MiCorreo (ver
+  // micorreoCotizacion.service.ts), pero generar la guía real desde ahí
+  // sería una automatización bastante más riesgosa (mueve plata/genera un
+  // envío real) que no se hizo acá a propósito. Modo manual: el admin crea
+  // el envío a mano en el courier que corresponda y carga
+  // shipping_tracking_number directamente.
+  await pedidosRepo.actualizarEstado(id, estado);
 
   await pedidoHistorialRepo.registrar({
     pedido_id: id,
@@ -252,43 +243,6 @@ export async function cancelarPedido(id: string, motivo: string, adminUserId: st
   });
 
   return actualizado;
-}
-
-async function crearEnvioReal(pedido: Pedido) {
-  const direccion = pedido.metodo_envio === 'domicilio'
-    ? await direccionesRepo.obtener(pedido.user_id)
-    : null;
-
-  const { data: userData } = await supabase.auth.admin.getUserById(pedido.user_id);
-  const email = userData?.user?.email ?? '';
-
-  const pesoTotalGramos = (pedido.detalles ?? []).reduce(
-    (s, d) => s + PESO_DEFAULT_GRAMOS * d.cantidad,
-    0,
-  ) || PESO_DEFAULT_GRAMOS;
-
-  return correoArgentino.crearEnvio({
-    extOrderId: pedido.id,
-    orderNumber: String(pedido.nro_pedido),
-    recipient: {
-      name: pedido.destinatario_nombre ?? '',
-      cellPhone: `${pedido.destinatario_cod_area ?? ''}${pedido.destinatario_telefono ?? ''}`,
-      email,
-    },
-    deliveryType: pedido.metodo_envio === 'retiro_sucursal' ? 'S' : 'D',
-    agency: pedido.metodo_envio === 'retiro_sucursal' ? (pedido.sucursal_correo_argentino ?? undefined) : undefined,
-    address: pedido.metodo_envio === 'domicilio' && direccion ? {
-      streetName: direccion.calle,
-      streetNumber: direccion.altura,
-      floor: direccion.piso ?? undefined,
-      apartment: direccion.depto ?? undefined,
-      city: direccion.ciudad,
-      provinceCode: direccion.provincia_codigo!,
-      postalCode: direccion.codigo_postal ?? '',
-    } : undefined,
-    weightGramos: pesoTotalGramos,
-    declaredValue: Math.round(pedido.total),
-  });
 }
 
 export async function obtenerTracking(id: string, userId: string): Promise<ResultadoTracking> {

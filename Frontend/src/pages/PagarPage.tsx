@@ -18,7 +18,7 @@ export function PagarPage() {
   const { items, totalPrecio, subtotalLista, vaciarCarrito } = useCarritoContext();
   const navigate = useNavigate();
   const {
-    metodo, costoEnvio, sucursalSeleccionada, direccion, resetCheckout,
+    metodo, costoEnvio, tipoServicioEnvio, sucursalSeleccionada, direccion, resetCheckout,
     destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono,
   } = useCheckout();
 
@@ -62,6 +62,7 @@ export function PagarPage() {
       })),
       metodo_envio:        metodo,
       costo_envio:         costoEnvio,
+      tipo_servicio_envio: metodo === 'domicilio' ? tipoServicioEnvio ?? undefined : undefined,
       sucursal_correo_argentino: sucursalSeleccionada?.code,
       codigo_postal_envio: metodo === 'domicilio'
         ? (direccion?.codigo_postal ?? undefined)

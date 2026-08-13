@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { MetodoEnvio, SucursalCorreoArgentino, Direccion } from '../types';
+import type { MetodoEnvio, TipoServicioEnvio, SucursalCorreoArgentino, Direccion } from '../types';
 
 interface CheckoutContextType {
   metodo:               MetodoEnvio;
   costoEnvio:           number;
   diasEstimados:        string;
+  tipoServicioEnvio:    TipoServicioEnvio | null;
   sucursalSeleccionada: SucursalCorreoArgentino | null;
   provinciaCodigo:      string;
   direccion:            Direccion | null;
@@ -15,6 +16,7 @@ interface CheckoutContextType {
   setMetodo:               (m: MetodoEnvio) => void;
   setCostoEnvio:           (c: number) => void;
   setDiasEstimados:        (d: string) => void;
+  setTipoServicioEnvio:    (t: TipoServicioEnvio | null) => void;
   setSucursalSeleccionada: (s: SucursalCorreoArgentino | null) => void;
   setProvinciaCodigo:      (p: string) => void;
   setDireccion:            (d: Direccion | null) => void;
@@ -31,6 +33,7 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
   const [metodo,               setMetodo]               = useState<MetodoEnvio>('retiro_farmacia');
   const [costoEnvio,           setCostoEnvio]           = useState(0);
   const [diasEstimados,        setDiasEstimados]        = useState('');
+  const [tipoServicioEnvio,    setTipoServicioEnvio]    = useState<TipoServicioEnvio | null>(null);
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState<SucursalCorreoArgentino | null>(null);
   const [provinciaCodigo,      setProvinciaCodigo]      = useState('');
   const [direccion,            setDireccion]            = useState<Direccion | null>(null);
@@ -43,6 +46,7 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
     setMetodo('retiro_farmacia');
     setCostoEnvio(0);
     setDiasEstimados('');
+    setTipoServicioEnvio(null);
     setSucursalSeleccionada(null);
     setProvinciaCodigo('');
     setDestinatarioNombre('');
@@ -53,9 +57,9 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
 
   return (
     <CheckoutContext.Provider value={{
-      metodo, costoEnvio, diasEstimados, sucursalSeleccionada, provinciaCodigo, direccion,
+      metodo, costoEnvio, diasEstimados, tipoServicioEnvio, sucursalSeleccionada, provinciaCodigo, direccion,
       destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono,
-      setMetodo, setCostoEnvio, setDiasEstimados, setSucursalSeleccionada, setProvinciaCodigo,
+      setMetodo, setCostoEnvio, setDiasEstimados, setTipoServicioEnvio, setSucursalSeleccionada, setProvinciaCodigo,
       setDireccion, setDestinatarioNombre, setDestinatarioDni, setDestinatarioCodArea,
       setDestinatarioTelefono, resetCheckout,
     }}>

@@ -188,9 +188,17 @@ export interface SucursalCorreoArgentino {
   postalCode: string | null;
 }
 
-export interface CotizacionEnvio {
+export type TipoServicioEnvio = 'PAQ_AR_HOY' | 'PAQ_AR_EXPRESO' | 'PAQ_AR_CLASICO';
+
+export interface OpcionCotizacionEnvio {
+  tipoServicio: TipoServicioEnvio;
+  nombre: string;
   precio: number;
-  diasEstimados: string;
+  plazoEstimado: string;
+}
+
+export interface CotizacionEnvio {
+  opciones: OpcionCotizacionEnvio[];
 }
 
 export interface EventoTracking {
@@ -217,6 +225,7 @@ export interface Pedido {
   notas: string | null;
   metodo_envio: MetodoEnvio;
   costo_envio: number;
+  tipo_servicio_envio: TipoServicioEnvio | null;
   sucursal_correo_argentino: string | null;
   codigo_postal_envio: string | null;
   metodo_pago: MetodoPago | null;
@@ -286,6 +295,7 @@ export interface CrearPedidoDTO {
   notas?: string;
   metodo_envio: MetodoEnvio;
   costo_envio: number;
+  tipo_servicio_envio?: TipoServicioEnvio;
   sucursal_correo_argentino?: string;
   codigo_postal_envio?: string;
   metodo_pago: MetodoPago;

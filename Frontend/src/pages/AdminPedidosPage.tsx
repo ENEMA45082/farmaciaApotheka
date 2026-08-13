@@ -98,7 +98,7 @@ function EstadoDropdown({
 const METODO_ENVIO_LABEL: Record<string, string> = {
   retiro_farmacia: 'Retiro farmacia',
   domicilio:       'Domicilio',
-  retiro_sucursal: 'Sucursal Andreani',
+  retiro_sucursal: 'Sucursal Correo Argentino',
 };
 
 const METODO_PAGO_LABEL: Record<string, string> = {

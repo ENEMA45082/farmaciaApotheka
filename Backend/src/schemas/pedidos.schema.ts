@@ -16,8 +16,11 @@ export const crearPedidoSchema = z.object({
   // de consultas secuenciales a la base en pedidos.service.ts::crear.
   items:        z.array(itemPedidoSchema).min(1, 'El pedido debe tener al menos un producto').max(100),
   notas:        z.string().max(500).optional(),
-  metodo_envio: z.enum(['retiro_farmacia', 'domicilio', 'retiro_sucursal']),
+  // 'retiro_sucursal' deshabilitado temporalmente (ver envio.schema.ts):
+  // el scraping de cotización solo cubre "Entrega en Domicilio".
+  metodo_envio: z.enum(['retiro_farmacia', 'domicilio']),
   costo_envio:  z.number().nonnegative(),
+  tipo_servicio_envio: z.enum(['PAQ_AR_HOY', 'PAQ_AR_EXPRESO', 'PAQ_AR_CLASICO']).optional(),
   sucursal_correo_argentino: z.string().max(100).optional(),
   codigo_postal_envio:       z.string().max(20).optional(),
   metodo_pago:               z.enum(['tarjeta', 'transferencia', 'efectivo']),

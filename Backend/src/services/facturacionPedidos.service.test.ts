@@ -36,6 +36,7 @@ function pedido(overrides: Partial<Pedido> = {}): Pedido {
     notas: null,
     metodo_envio: 'retiro_farmacia',
     costo_envio: 0,
+    tipo_servicio_envio: null,
     sucursal_correo_argentino: null,
     codigo_postal_envio: null,
     metodo_pago: 'tarjeta',

@@ -1010,3 +1010,86 @@ BEGIN
   RETURN row_to_json(nuevo_pedido)::jsonb;
 END;
 $$;
+
+-- --------------------------------------------------------
+-- 16. Eliminar columna legacy calle_numero de direcciones
+--     Reemplazada por calle + altura desde la migracion 5c/5d.
+--     Quedo NOT NULL sin que el backend la siga escribiendo,
+--     rompiendo cualquier INSERT/UPDATE nuevo (ver PUT /api/direcciones).
+--     No hay referencias a calle_numero fuera de este archivo.
+-- --------------------------------------------------------
+ALTER TABLE direcciones DROP COLUMN IF EXISTS calle_numero;
+
+-- --------------------------------------------------------
+-- 17. Cotización de envío vía MiCorreo (scraping) en vez de Andreani:
+--     el cliente ahora elige entre 3 niveles de servicio (PAQ.AR Hoy /
+--     Expreso / Clásico) en el checkout. Se guarda cuál eligió para
+--     cuando se cree el envío real más adelante (todavía manual, ver
+--     micorreoCotizacion.service.ts / correoArgentino.service.ts).
+-- --------------------------------------------------------
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS tipo_servicio_envio text;
+
+-- 17a. crear_pedido_completo: mismo contrato de siempre, con el parámetro
+--      nuevo al final con DEFAULT NULL (no rompe llamadas existentes).
+CREATE OR REPLACE FUNCTION crear_pedido_completo(
+  p_user_id                    uuid,
+  p_total                      numeric,
+  p_subtotal_lista             numeric,
+  p_notas                      text,
+  p_metodo_envio               text,
+  p_costo_envio                numeric,
+  p_sucursal_correo_argentino  text,
+  p_codigo_postal_envio        text,
+  p_metodo_pago                text,
+  p_items                      jsonb,
+  p_destinatario_nombre        text DEFAULT NULL,
+  p_destinatario_dni           text DEFAULT NULL,
+  p_destinatario_cod_area      text DEFAULT NULL,
+  p_destinatario_telefono      text DEFAULT NULL,
+  p_tipo_servicio_envio        text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  nuevo_pedido pedidos%ROWTYPE;
+  v_item jsonb;
+BEGIN
+  INSERT INTO pedidos (
+    user_id, total, subtotal_lista, notas,
+    metodo_envio, costo_envio, sucursal_correo_argentino,
+    codigo_postal_envio, metodo_pago,
+    destinatario_nombre, destinatario_dni, destinatario_cod_area, destinatario_telefono,
+    tipo_servicio_envio
+  ) VALUES (
+    p_user_id, p_total, p_subtotal_lista, p_notas,
+    p_metodo_envio, p_costo_envio, p_sucursal_correo_argentino,
+    p_codigo_postal_envio, p_metodo_pago,
+    p_destinatario_nombre, p_destinatario_dni, p_destinatario_cod_area, p_destinatario_telefono,
+    p_tipo_servicio_envio
+  )
+  RETURNING * INTO nuevo_pedido;
+
+  INSERT INTO detalles_pedido (
+    pedido_id, producto_id, nombre_producto,
+    cantidad, precio_unitario, precio_lista, descuento, subtotal
+  )
+  SELECT
+    nuevo_pedido.id,
+    (item->>'producto_id')::uuid,
+    item->>'nombre_producto',
+    (item->>'cantidad')::int,
+    (item->>'precio_unitario')::numeric,
+    (item->>'precio_lista')::numeric,
+    COALESCE((item->>'descuento')::numeric, 0),
+    (item->>'subtotal')::numeric
+  FROM jsonb_array_elements(p_items) AS item;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    PERFORM descontar_stock((v_item->>'producto_id')::uuid, (v_item->>'cantidad')::int);
+  END LOOP;
+
+  RETURN row_to_json(nuevo_pedido)::jsonb;
+END;
+$$;
