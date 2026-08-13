@@ -265,11 +265,19 @@ export async function completarPaquete(
   pesoKg: number,
   valorDeclarado: number,
 ): Promise<void> {
-  // TODO(verificar en vivo): confirmar el mapeo real Largo/Ancho/Alto → cm.
+  // Verificado en vivo (2026-08-13): mapeo Largo/Ancho/Alto → cm correcto
+  // (medidas 27x21x13 confirmadas en el resumen del formulario real).
   await llenarCampoPorLabel(page, 'Largo', String(dimensiones.largoCm));
   await llenarCampoPorLabel(page, 'Ancho', String(dimensiones.anchoCm));
   await llenarCampoPorLabel(page, 'Alto', String(dimensiones.altoCm));
-  await llenarCampoPorLabel(page, 'Peso (kg)', String(pesoKg));
+  // El sitio usa formato numérico argentino (coma decimal — se ve en los
+  // precios, ej. "$ 10.253,06"). Con un peso entero (ej. "1") no se notaba,
+  // pero un peso con decimales tipeado con PUNTO ("1.5") parece
+  // interpretarse mal en el campo (probablemente lo descarta y lo lee como
+  // "15" en vez de "1.5" — precios ~3x más altos de lo esperado en pruebas
+  // reales con peso 1.5kg). Se tipea con COMA para que coincida con lo que
+  // el formulario espera.
+  await llenarCampoPorLabel(page, 'Peso (kg)', String(pesoKg).replace('.', ','));
   await llenarCampoPorLabel(page, 'Valor del contenido', String(Math.round(valorDeclarado)));
 
   await clickPorTexto(page, 'button', 'Siguiente');
