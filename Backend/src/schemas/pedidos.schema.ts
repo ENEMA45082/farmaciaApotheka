@@ -11,6 +11,11 @@ const itemPedidoSchema = z.object({
   precio_lista:    z.number().nonnegative(),
 });
 
+// Subconjunto de itemPedidoSchema con lo único que realmente se usa para
+// resolver precios (producto_id + cantidad) — lo reutiliza cupones.schema.ts
+// para no repetir el shape.
+export const itemCarritoInputSchema = itemPedidoSchema.pick({ producto_id: true, cantidad: true });
+
 export const crearPedidoSchema = z.object({
   // Tope para que un pedido con miles de items no dispare la misma cantidad
   // de consultas secuenciales a la base en pedidos.service.ts::crear.
@@ -28,6 +33,7 @@ export const crearPedidoSchema = z.object({
   destinatario_dni:          z.string().max(20).optional(),
   destinatario_cod_area:     z.string().max(10).optional(),
   destinatario_telefono:     z.string().max(30).optional(),
+  codigo_cupon:              z.string().min(1).max(50).optional(),
 });
 
 export const cambiarEstadoSchema = z.object({

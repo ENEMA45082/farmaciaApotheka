@@ -3,6 +3,7 @@ import type {
   ProductosPaginados,
   Producto,
   Categoria,
+  CategoriasPaginadas,
   CrearProductoDTO,
   ActualizarProductoDTO,
   CrearCategoriaDTO,
@@ -71,6 +72,19 @@ export async function fetchCategorias(): Promise<Categoria[]> {
   return data;
 }
 
+export interface FiltrosCategoria {
+  busqueda?: string;
+  pagina?: number;
+  limite?: number;
+}
+
+// Mismo endpoint que fetchCategorias — el paginado es opt-in en el backend:
+// solo se activa si se manda alguno de estos filtros (ver categorias.controller.ts).
+export async function fetchCategoriasPaginadas(filtros: FiltrosCategoria): Promise<CategoriasPaginadas> {
+  const { data } = await api.get<CategoriasPaginadas>('/categorias', { params: filtros });
+  return data;
+}
+
 let categoriasArbolCache: Promise<Categoria[]> | null = null;
 
 export function fetchCategoriasArbol(): Promise<Categoria[]> {
@@ -96,7 +110,9 @@ export async function actualizarCategoria(id: string, dto: ActualizarCategoriaDT
 }
 
 export async function eliminarCategoria(id: string): Promise<void> {
-  await api.delete(`/categorias/${id}`);
+  // suppressGlobalError: EliminarCategoriaModal ya muestra el 409
+  // ("tiene productos asociados") en su propio modal.
+  await api.delete(`/categorias/${id}`, { suppressGlobalError: true });
 }
 
 export async function subirImagenes(archivos: File[]): Promise<string[]> {

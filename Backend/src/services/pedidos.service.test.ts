@@ -93,6 +93,10 @@ function pedidoFixture(): Pedido {
     destinatario_dni: null,
     destinatario_cod_area: null,
     destinatario_telefono: null,
+    cupon_id: null,
+    cupon_codigo: null,
+    descuento_cupon: 0,
+    puntos_ganados: 0,
     detalles: [],
   };
 }
@@ -126,6 +130,8 @@ describe('crear', () => {
       }],
       1000, // total: 500 * 2, no 1 * 2 como mandó el cliente
       1000, // subtotal_lista
+      undefined, // sin cupón
+      0,
     );
   });
 
@@ -140,6 +146,8 @@ describe('crear', () => {
       [expect.objectContaining({ precio_unitario: 400, precio_lista: 500 })],
       800,
       1000,
+      undefined,
+      0,
     );
   });
 
@@ -154,6 +162,8 @@ describe('crear', () => {
       [expect.objectContaining({ precio_unitario: 500, precio_lista: 500, descuento: 500 })],
       500, // total: 2 unidades, 1 par, se paga 1 sola
       1000,
+      undefined,
+      0,
     );
   });
 
@@ -168,6 +178,8 @@ describe('crear', () => {
       [expect.objectContaining({ descuento: 500 })],
       1000, // total: 3 unidades = 1500, 1 par de descuento (500) = 1000
       1500,
+      undefined,
+      0,
     );
   });
 
@@ -222,6 +234,8 @@ describe('crear', () => {
       [expect.objectContaining({ producto_id: 'prod-1', cantidad: 2 })],
       expect.any(Number),
       expect.any(Number),
+      undefined,
+      0,
     );
   });
 });

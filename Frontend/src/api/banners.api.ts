@@ -20,6 +20,14 @@ export async function fetchBanners(): Promise<Banner[]> {
   return data;
 }
 
+// Solo para el panel de admin: incluye banners inactivos. El carrusel
+// público (HeroCarousel) usa fetchBanners(), que siempre filtra por activo
+// en el backend sin importar si quien mira tiene sesión de admin abierta.
+export async function fetchBannersAdmin(): Promise<Banner[]> {
+  const { data } = await api.get<Banner[]>('/banners/admin');
+  return data;
+}
+
 export async function crearBanner(dto: CrearBannerDTO): Promise<Banner> {
   const { data } = await api.post<Banner>('/banners', dto);
   return data;

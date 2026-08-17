@@ -9,6 +9,31 @@ import { EliminarProductoModal } from '../components/admin/EliminarProductoModal
 
 const MAX_IMAGENES = 5;
 
+// Umbral para el aviso (no bloqueante) de "vencimiento próximo" — ajustable
+// según la política de la farmacia para recibir/vender mercadería.
+const DIAS_AVISO_VENCIMIENTO_PROXIMO = 30;
+
+function fechaHoyISO(): string {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+}
+
+// Diferencia en días calendario entre fechaISO ('YYYY-MM-DD') y hoy.
+// Negativo = ya venció, 0 = vence hoy, positivo = vence en N días.
+function diasHastaVencimiento(fechaISO: string): number {
+  const hoy = new Date(fechaHoyISO() + 'T00:00:00');
+  const vencimiento = new Date(fechaISO + 'T00:00:00');
+  return Math.round((vencimiento.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function avisoVencimiento(fechaISO: string): string | null {
+  if (!fechaISO) return null;
+  const dias = diasHastaVencimiento(fechaISO);
+  if (dias < 0) return `Este producto ya venció (hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? '' : 's'}).`;
+  if (dias <= DIAS_AVISO_VENCIMIENTO_PROXIMO) return `Vence en ${dias} día${dias === 1 ? '' : 's'}.`;
+  return null;
+}
+
 const FORM_PRODUCTO_VACIO = {
   nombre: '',
   precio: '',
@@ -173,6 +198,38 @@ export function AdminProductosPage() {
       setErrorProductoForm('El precio debe ser un número válido mayor o igual a 0.');
       return;
     }
+    // Solo en el alta: un producto no puede arrancar gratis. En edición se
+    // sigue permitiendo $0 (no lo pidieron restringir ahí).
+    if (!productoEditando && precio <= 0) {
+      setErrorProductoForm('El precio debe ser mayor a $0.');
+      return;
+    }
+
+    const stock = formProducto.stock !== '' ? parseInt(formProducto.stock) : 0;
+
+    // Solo en el alta: no tiene sentido cargar un producto ya vencido. En
+    // edición no se restringe, por si hay que corregir una fecha mal cargada.
+    if (!productoEditando && formProducto.fecha_vencimiento && formProducto.fecha_vencimiento < fechaHoyISO()) {
+      setErrorProductoForm('La fecha de vencimiento no puede ser anterior a hoy.');
+      return;
+    }
+
+    // En oferta (y no 2x1) sin precio/porcentaje de oferta cargados dejaría
+    // el producto marcado como oferta pero cobrando el precio de lista
+    // normal. Se valida en alta y en edición, no es un estado válido nunca.
+    if (formProducto.en_oferta && !formProducto.es_2x1 &&
+        (formProducto.precio_oferta === '' || formProducto.porcentaje_oferta === '')) {
+      setErrorProductoForm('Si el producto está en oferta hay que cargar el precio de oferta y el porcentaje de descuento.');
+      return;
+    }
+    // Una "oferta" más cara (o igual) que el precio de lista no es un descuento real.
+    if (formProducto.en_oferta && !formProducto.es_2x1) {
+      const ofertaNum = parseFloat(formProducto.precio_oferta);
+      if (!isNaN(ofertaNum) && ofertaNum >= precio) {
+        setErrorProductoForm('El precio de oferta debe ser menor al precio de lista.');
+        return;
+      }
+    }
 
     setGuardandoProducto(true);
     try {
@@ -190,7 +247,7 @@ export function AdminProductosPage() {
         porcentaje_oferta: formProducto.en_oferta && !formProducto.es_2x1 ? pctOferta    : null,
         es_2x1:            formProducto.en_oferta && formProducto.es_2x1,
         descripcion: formProducto.descripcion.trim() || undefined,
-        stock: formProducto.stock !== '' ? parseInt(formProducto.stock) : 0,
+        stock,
         categoria_id: formProducto.categoria_id || undefined,
         imagen_url: todasLasImagenes[0] ?? undefined,
         imagenes: todasLasImagenes,
@@ -224,14 +281,14 @@ export function AdminProductosPage() {
   }
 
   return (
-    <AdminLayout>
+    <AdminLayout subtitle="Alta, edición y stock de productos">
       <div className="admin-section">
         <div className="admin-form-card">
           <h2>{productoEditando ? `Editando: ${productoEditando.nombre}` : 'Agregar producto'}</h2>
 
           {errorProductoForm && <div className="admin-error">{errorProductoForm}</div>}
 
-          <form onSubmit={handleSubmitProducto} className="admin-form">
+          <form onSubmit={handleSubmitProducto} className="admin-form" noValidate>
             <div className="admin-form-grid">
               <div className="form-group">
                 <label htmlFor="p-nombre">Nombre *</label>
@@ -250,7 +307,7 @@ export function AdminProductosPage() {
                 <input
                   id="p-precio"
                   type="number"
-                  min="0"
+                  min={productoEditando ? '0' : '0.01'}
                   step="0.01"
                   value={formProducto.precio}
                   onChange={e => {
@@ -311,9 +368,13 @@ export function AdminProductosPage() {
                 <input
                   id="p-vencimiento"
                   type="date"
+                  min={productoEditando ? undefined : fechaHoyISO()}
                   value={formProducto.fecha_vencimiento}
                   onChange={e => setFormProducto(f => ({ ...f, fecha_vencimiento: e.target.value }))}
                 />
+                {avisoVencimiento(formProducto.fecha_vencimiento) && (
+                  <p className="admin-aviso">{avisoVencimiento(formProducto.fecha_vencimiento)}</p>
+                )}
               </div>
 
               <div className="form-group">

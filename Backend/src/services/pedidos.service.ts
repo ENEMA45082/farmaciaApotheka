@@ -1,5 +1,4 @@
 import * as pedidosRepo from '../repositories/pedidos.repository';
-import * as productosRepo from '../repositories/productos.repository';
 import * as direccionesRepo from '../repositories/direcciones.repository';
 import * as perfilRepo from '../repositories/perfil.repository';
 import * as pedidoHistorialRepo from '../repositories/pedidoHistorial.repository';
@@ -7,6 +6,9 @@ import * as facturasRepo from '../repositories/facturas.repository';
 import * as correoArgentino from './correoArgentino.service';
 import * as facturacionPedidosService from './facturacionPedidos.service';
 import * as whatsappService from './whatsapp.service';
+import * as productosService from './productos.service';
+import * as cuponesService from './cupones.service';
+import * as puntosService from './puntos.service';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import { validarDocumento } from '../utils/validarDocumento';
@@ -19,7 +21,7 @@ import {
   esMotivoCancelacionValido,
   type EstadoPedido,
 } from '../config/estadosPedido';
-import type { Pedido, CrearPedidoDTO, PedidoDetalleAdmin, ItemPedidoConfirmado } from '../types';
+import type { Pedido, CrearPedidoDTO, PedidoDetalleAdmin } from '../types';
 import type { ResultadoTracking } from './correoArgentino.service';
 
 export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido> {
@@ -37,12 +39,10 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
   // precio_unitario/precio_lista del DTO se ignoran por completo acá. pedido.total
   // termina siendo el monto real cobrado por tarjeta (pagos.service.ts) y la base
   // imponible de la factura AFIP — no puede depender de un valor client-controlled.
-  const itemsConfirmados: ItemPedidoConfirmado[] = [];
+  const { itemsConfirmados, total, subtotalLista, productos } = await productosService.resolverItemsCarrito(dto.items);
+
   for (const item of dto.items) {
-    const producto = await productosRepo.encontrarPorId(item.producto_id);
-    if (!producto) {
-      throw new AppError(`Producto no encontrado: ${item.nombre_producto}`, 404, 'PRODUCTO_NOT_FOUND');
-    }
+    const producto = productos.get(item.producto_id)!;
     if (producto.stock < item.cantidad) {
       throw new AppError(
         `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stock}`,
@@ -50,38 +50,45 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
         'STOCK_INSUFICIENTE',
       );
     }
-    // Promo 2x1: mutuamente excluyente con la oferta por % (ver es_2x1 en
-    // AdminProductosPage.tsx, un producto 2x1 nunca tiene precio_oferta). Por
-    // cada par de unidades, 1 sale gratis — la unidad suelta de una cantidad
-    // impar se cobra completa. precio_unitario queda igual al de catálogo;
-    // el descuento se resta aparte en el subtotal (ver supabase_migrations.sql,
-    // sección 15).
-    const pares     = producto.es_2x1 ? Math.floor(item.cantidad / 2) : 0;
-    const descuento = pares * producto.precio;
-
-    itemsConfirmados.push({
-      producto_id:     producto.id,
-      nombre_producto: producto.nombre,
-      cantidad:        item.cantidad,
-      precio_unitario: producto.en_oferta && producto.precio_oferta != null ? producto.precio_oferta : producto.precio,
-      precio_lista:    producto.precio,
-      descuento,
-    });
   }
 
-  const total         = itemsConfirmados.reduce((s, i) => s + i.precio_unitario * i.cantidad - i.descuento, 0);
-  const subtotalLista = itemsConfirmados.reduce((s, i) => s + i.precio_lista    * i.cantidad, 0);
+  // Cupón (opcional, uno solo por pedido): esta es la revalidación que
+  // "manda" al confirmar — corre de nuevo acá aunque ya haya pasado por
+  // POST /api/cupones/validar en el preview del checkout, porque el carrito
+  // pudo cambiar entre medio. Si ya no es válido (se agotó, venció, el
+  // carrito bajó de la compra mínima), se rechaza el pedido entero.
+  let cuponId: string | undefined;
+  let descuentoCupon = 0;
+  if (dto.codigo_cupon) {
+    const resultado = await cuponesService.validarCupon({
+      codigo: dto.codigo_cupon,
+      clienteId: userId,
+      itemsCarrito: dto.items.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad })),
+    });
+    if (!resultado.valido) {
+      throw new AppError(
+        resultado.mensaje ?? `El cupón no es válido (${resultado.motivo})`,
+        400,
+        `CUPON_${resultado.motivo}`,
+      );
+    }
+    cuponId = resultado.cuponId;
+    descuentoCupon = resultado.descuento;
+  }
 
   // 'transferencia' y 'efectivo' son flujos manuales: el admin confirma el pago
   // cambiando el estado a 'Confirmado' via PATCH /api/pedidos/:id/estado
   //
   // El descuento de stock ya NO se hace acá con un loop aparte — pedidosRepo.crear
-  // llama a la RPC crear_pedido_completo, que inserta el pedido y descuenta el
-  // stock de cada item en la MISMA transacción de Postgres (ver supabase_migrations.sql,
-  // sección 14). El chequeo de stock del loop de arriba sigue sirviendo como
-  // camino feliz con mensaje claro; la RPC es la garantía real ante una carrera
-  // con otro pedido consumiendo el mismo stock justo en el medio.
-  const pedido = await pedidosRepo.crear(userId, dto, itemsConfirmados, total, subtotalLista);
+  // llama a la RPC crear_pedido_completo, que inserta el pedido, descuenta el
+  // stock de cada item y registra el canje del cupón (si hay) en la MISMA
+  // transacción de Postgres (ver supabase_migrations.sql, secciones 14 y 18).
+  // El chequeo de stock del loop de arriba sigue sirviendo como camino feliz
+  // con mensaje claro; la RPC es la garantía real ante una carrera con otro
+  // pedido consumiendo el mismo stock o el mismo cupón justo en el medio.
+  const pedido = await pedidosRepo.crear(
+    userId, dto, itemsConfirmados, total - descuentoCupon, subtotalLista, cuponId, descuentoCupon,
+  );
 
   whatsappService.notificarNuevoPedido(pedido).catch(err => console.error('[whatsapp]', err));
 
@@ -199,8 +206,14 @@ export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserI
 
   // La factura se emite recién al entregar el pedido (nunca antes: ni al
   // confirmar el pago, ni en preparación) — regla de negocio explícita.
+  // Los puntos de fidelización se acreditan con el mismo criterio: 'Entregado'
+  // es estado terminal sin cancelación posible, así que nunca hay que
+  // revertirlos (ver acreditar_puntos_pedido en supabase_migrations.sql,
+  // sección 19). Igual que la factura, un error acá no rompe la transición
+  // de estado ya confirmada.
   if (estado === 'Entregado') {
     await facturacionPedidosService.emitirFactura(pedido).catch(err => console.error('[facturacion]', err));
+    await puntosService.acreditarPorPedido(pedido).catch(err => console.error('[puntos]', err));
   }
 
   return pedido;

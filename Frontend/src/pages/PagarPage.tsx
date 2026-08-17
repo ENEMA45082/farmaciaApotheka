@@ -5,6 +5,7 @@ import { useCarritoContext } from '../context/CartContext';
 import { useCheckout } from '../context/CheckoutContext';
 import { crearPedido } from '../api/pedidos.api';
 import { iniciarCheckoutHosted } from '../api/pagos.api';
+import { validarCupon } from '../api/cupones.api';
 import { precioEfectivo, subtotalLinea, formatPrecio } from '../types';
 import type { MetodoPago } from '../types';
 
@@ -20,6 +21,7 @@ export function PagarPage() {
   const {
     metodo, costoEnvio, tipoServicioEnvio, sucursalSeleccionada, direccion, resetCheckout,
     destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono,
+    cuponAplicado, setCuponAplicado,
   } = useCheckout();
 
   const [metodoPago,         setMetodoPago]         = useState<MetodoPago>('tarjeta');
@@ -27,8 +29,38 @@ export function PagarPage() {
   const [error,              setError]               = useState<string | null>(null);
   const [modalTransferencia, setModalTransferencia]  = useState(false);
 
-  const hayAhorro  = subtotalLista > totalPrecio;
-  const totalFinal = totalPrecio + costoEnvio;
+  const [codigoCuponInput, setCodigoCuponInput] = useState('');
+  const [aplicandoCupon,   setAplicandoCupon]   = useState(false);
+  const [errorCupon,       setErrorCupon]       = useState<string | null>(null);
+
+  const hayAhorro     = subtotalLista > totalPrecio;
+  const descuentoCupon = cuponAplicado?.descuento ?? 0;
+  const totalFinal    = totalPrecio + costoEnvio - descuentoCupon;
+
+  async function handleAplicarCupon() {
+    const codigo = codigoCuponInput.trim();
+    if (!codigo) return;
+    setAplicandoCupon(true);
+    setErrorCupon(null);
+    try {
+      const resultado = await validarCupon(codigo, items.map(i => ({ producto_id: i.producto.id, cantidad: i.cantidad })));
+      if (resultado.valido) {
+        setCuponAplicado({ codigo: codigo.toUpperCase(), descuento: resultado.descuento });
+        setCodigoCuponInput('');
+      } else {
+        setErrorCupon(resultado.mensaje ?? 'El cupón no es válido.');
+      }
+    } catch {
+      setErrorCupon('No se pudo validar el cupón. Intentá de nuevo.');
+    } finally {
+      setAplicandoCupon(false);
+    }
+  }
+
+  function handleQuitarCupon() {
+    setCuponAplicado(null);
+    setErrorCupon(null);
+  }
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/login?next=pagar');
@@ -72,6 +104,7 @@ export function PagarPage() {
       destinatario_dni:      metodo === 'domicilio' ? destinatarioDni.trim() || undefined : undefined,
       destinatario_cod_area: metodo === 'domicilio' ? destinatarioCodArea.trim() || undefined : undefined,
       destinatario_telefono: metodo === 'domicilio' ? destinatarioTelefono.trim() || undefined : undefined,
+      codigo_cupon: cuponAplicado?.codigo,
     };
   }
 
@@ -223,6 +256,37 @@ export function PagarPage() {
               ))}
             </ul>
 
+            <div className="checkout-cupon">
+              {cuponAplicado ? (
+                <div className="checkout-cupon-aplicado">
+                  <span>Cupón <strong>{cuponAplicado.codigo}</strong> aplicado</span>
+                  <button type="button" className="checkout-cupon-aplicado__quitar" onClick={handleQuitarCupon}>
+                    Quitar
+                  </button>
+                </div>
+              ) : (
+                <div className="checkout-cupon-form">
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Código de descuento"
+                    value={codigoCuponInput}
+                    onChange={e => setCodigoCuponInput(e.target.value)}
+                    disabled={aplicandoCupon}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={handleAplicarCupon}
+                    disabled={aplicandoCupon || !codigoCuponInput.trim()}
+                  >
+                    {aplicandoCupon ? 'Aplicando...' : 'Aplicar'}
+                  </button>
+                </div>
+              )}
+              {errorCupon && <p className="checkout-error" style={{ marginTop: '0.5rem' }}>{errorCupon}</p>}
+            </div>
+
             <div className="checkout-totales">
               {hayAhorro && (
                 <>
@@ -240,6 +304,12 @@ export function PagarPage() {
                 <span>Subtotal productos</span>
                 <span>${formatPrecio(totalPrecio)}</span>
               </div>
+              {cuponAplicado && (
+                <div className="checkout-totales__fila checkout-totales__fila--ahorro">
+                  <span>Cupón {cuponAplicado.codigo}</span>
+                  <span>-${formatPrecio(descuentoCupon)}</span>
+                </div>
+              )}
               <div className="checkout-totales__fila">
                 <span>Envío ({metodo === 'retiro_farmacia' ? 'retiro en farmacia' : metodo === 'domicilio' ? 'a domicilio' : 'retiro en sucursal'})</span>
                 <span>{metodo === 'retiro_farmacia' ? <strong className="checkout-totales__gratis">GRATIS</strong> : `$${formatPrecio(costoEnvio)}`}</span>

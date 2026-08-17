@@ -257,7 +257,7 @@ export function AdminPedidosPage() {
   );
 
   return (
-    <AdminLayout>
+    <AdminLayout subtitle="Seguimiento y cambio de estado de pedidos">
       <div className="admin-section">
         <div className="admin-table-card">
           <div className="admin-filtros-header">

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchBanners } from '../api/banners.api';
+import { fetchBannersAdmin } from '../api/banners.api';
 import type { Banner } from '../types';
 
+// Usado solo por AdminCarteleriaPage: trae también los banners inactivos
+// para poder listarlos/reactivarlos. El carrusel público no usa este hook.
 export function useBanners() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -10,7 +12,7 @@ export function useBanners() {
   const cargar = useCallback(async () => {
     setCargando(true);
     setError(null);
-    fetchBanners()
+    fetchBannersAdmin()
       .then(setBanners)
       .catch(() => setError('Error al cargar los banners'))
       .finally(() => setCargando(false));

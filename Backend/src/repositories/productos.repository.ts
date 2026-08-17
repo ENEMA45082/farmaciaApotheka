@@ -118,6 +118,17 @@ export async function encontrarTodos(filtros: FiltrosProducto): Promise<{ datos:
   };
 }
 
+export async function encontrarPorCodigoBarras(codigoBarras: string): Promise<Producto | null> {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, categoria:categories(*)')
+    .eq('codigo_barras', codigoBarras)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapearProducto(data);
+}
+
 export async function encontrarPorId(id: string): Promise<Producto | null> {
   const { data, error } = await supabase
     .from('products')

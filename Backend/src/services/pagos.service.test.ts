@@ -66,6 +66,10 @@ function pedido(detalles: DetallePedido[] = [], overrides: Partial<Pedido> = {})
     destinatario_dni: null,
     destinatario_cod_area: null,
     destinatario_telefono: null,
+    cupon_id: null,
+    cupon_codigo: null,
+    descuento_cupon: 0,
+    puntos_ganados: 0,
     detalles,
     ...overrides,
   };

@@ -1,13 +1,11 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
-const TABS: { label: string; path: string | null }[] = [
-  { label: 'Perfil',               path: '/perfil'      },
-  { label: 'Direcciones',          path: '/direcciones'  },
-  { label: 'Pedidos',              path: '/pedidos'      },
-  { label: 'Tarjetas de crédito',  path: null            },
-  { label: 'Autenticación',        path: null            },
-  { label: 'Suscripciones',        path: null            },
+const TABS: { label: string; path: string }[] = [
+  { label: 'Perfil',      path: '/perfil'      },
+  { label: 'Direcciones', path: '/direcciones' },
+  { label: 'Pedidos',     path: '/pedidos'     },
+  { label: 'Mis Puntos',  path: '/puntos'      },
 ];
 
 export function PerfilLayout({ children }: { children: React.ReactNode }) {
@@ -44,8 +42,7 @@ export function PerfilLayout({ children }: { children: React.ReactNode }) {
             <button
               key={tab.label}
               className={`perfil-nav__item ${location.pathname === tab.path ? 'perfil-nav__item--active' : ''}`}
-              onClick={() => tab.path && navigate(tab.path)}
-              disabled={!tab.path}
+              onClick={() => navigate(tab.path)}
             >
               {tab.label}
             </button>

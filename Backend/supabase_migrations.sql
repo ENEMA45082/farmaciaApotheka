@@ -1093,3 +1093,315 @@ BEGIN
   RETURN row_to_json(nuevo_pedido)::jsonb;
 END;
 $$;
+
+-- --------------------------------------------------------
+-- 18. Sistema de cupones de descuento (fase 1): porcentaje o
+--     fijo, con tope de descuento, compra mínima, vigencia por
+--     fechas y límites de uso (total y por cliente). Un solo
+--     cupón por pedido. El registro del canje se hace adentro
+--     de crear_pedido_completo (18c) para que quede atómico con
+--     la creación del pedido: lockea la fila del cupón con
+--     FOR UPDATE y re-chequea los límites de uso ahí mismo, así
+--     dos pedidos concurrentes con el mismo cupón cerca del
+--     límite no pueden pasar los dos (mismo problema que ya
+--     resuelve descontar_stock() para el stock).
+-- --------------------------------------------------------
+
+-- 18a. Tablas
+CREATE TABLE IF NOT EXISTS cupones (
+  id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  codigo                  text NOT NULL UNIQUE,
+  tipo                    text NOT NULL CHECK (tipo IN ('porcentaje', 'fijo')),
+  valor                   numeric NOT NULL CHECK (valor > 0),
+  compra_minima           numeric NOT NULL DEFAULT 0,
+  descuento_maximo        numeric,
+  limite_usos_total       integer,
+  limite_usos_por_cliente integer,
+  valido_desde            timestamptz,
+  valido_hasta            timestamptz,
+  activo                  boolean NOT NULL DEFAULT true,
+  creado_en               timestamptz NOT NULL DEFAULT now(),
+  actualizado_en          timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT cupones_codigo_mayusculas CHECK (codigo = upper(codigo))
+);
+-- UNIQUE(codigo) ya crea el índice de búsqueda por código.
+
+CREATE TABLE IF NOT EXISTS canjes_cupon (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cupon_id           uuid NOT NULL REFERENCES cupones(id),
+  cliente_id         uuid NOT NULL REFERENCES auth.users(id),
+  pedido_id          uuid NOT NULL REFERENCES pedidos(id),
+  descuento_aplicado numeric NOT NULL,
+  canjeado_en        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_canjes_cupon_cupon_id      ON canjes_cupon(cupon_id);
+CREATE INDEX IF NOT EXISTS idx_canjes_cupon_cupon_cliente ON canjes_cupon(cupon_id, cliente_id);
+
+-- 18b. cupón aplicado a un pedido, para mostrarlo en el detalle
+--      (cliente/admin) sin joinear canjes_cupon cada vez.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cupon_id        uuid REFERENCES cupones(id);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS descuento_cupon numeric NOT NULL DEFAULT 0;
+
+-- 18c. crear_pedido_completo: mismo contrato de siempre, con los
+--      parámetros de cupón nuevos al final con DEFAULT NULL (no
+--      rompe llamadas existentes). p_descuento_cupon ya viene
+--      calculado por cupones.service.ts::validarCupon del lado
+--      Node (misma lógica que ya se revalidó en el preview);
+--      acá solo se re-chequea que el cupón siga vigente/activo y
+--      dentro de sus límites de uso, bajo lock, justo antes de
+--      persistir — es la revalidación final que exige el negocio.
+CREATE OR REPLACE FUNCTION crear_pedido_completo(
+  p_user_id                    uuid,
+  p_total                      numeric,
+  p_subtotal_lista             numeric,
+  p_notas                      text,
+  p_metodo_envio               text,
+  p_costo_envio                numeric,
+  p_sucursal_correo_argentino  text,
+  p_codigo_postal_envio        text,
+  p_metodo_pago                text,
+  p_items                      jsonb,
+  p_destinatario_nombre        text DEFAULT NULL,
+  p_destinatario_dni           text DEFAULT NULL,
+  p_destinatario_cod_area      text DEFAULT NULL,
+  p_destinatario_telefono      text DEFAULT NULL,
+  p_tipo_servicio_envio        text DEFAULT NULL,
+  p_cupon_id                   uuid DEFAULT NULL,
+  p_descuento_cupon            numeric DEFAULT 0
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  nuevo_pedido     pedidos%ROWTYPE;
+  v_item           jsonb;
+  v_cupon_activo   boolean;
+  v_limite_total   integer;
+  v_limite_cliente integer;
+  v_usos_totales   integer;
+  v_usos_cliente   integer;
+BEGIN
+  IF p_cupon_id IS NOT NULL THEN
+    -- Lockea la fila del cupón: serializa canjes concurrentes del
+    -- mismo cupón para que el chequeo de límites de abajo sea
+    -- confiable (si no, dos requests simultáneos podrían leer el
+    -- mismo conteo "viejo" y los dos pasar el límite).
+    SELECT activo, limite_usos_total, limite_usos_por_cliente
+      INTO v_cupon_activo, v_limite_total, v_limite_cliente
+      FROM cupones WHERE id = p_cupon_id FOR UPDATE;
+
+    IF NOT FOUND OR NOT v_cupon_activo THEN
+      RAISE EXCEPTION 'cupon_invalido';
+    END IF;
+
+    IF v_limite_total IS NOT NULL THEN
+      SELECT count(*) INTO v_usos_totales FROM canjes_cupon WHERE cupon_id = p_cupon_id;
+      IF v_usos_totales >= v_limite_total THEN
+        RAISE EXCEPTION 'cupon_limite_usos_alcanzado';
+      END IF;
+    END IF;
+
+    IF v_limite_cliente IS NOT NULL THEN
+      SELECT count(*) INTO v_usos_cliente FROM canjes_cupon WHERE cupon_id = p_cupon_id AND cliente_id = p_user_id;
+      IF v_usos_cliente >= v_limite_cliente THEN
+        RAISE EXCEPTION 'cupon_limite_cliente_alcanzado';
+      END IF;
+    END IF;
+  END IF;
+
+  INSERT INTO pedidos (
+    user_id, total, subtotal_lista, notas,
+    metodo_envio, costo_envio, sucursal_correo_argentino,
+    codigo_postal_envio, metodo_pago,
+    destinatario_nombre, destinatario_dni, destinatario_cod_area, destinatario_telefono,
+    tipo_servicio_envio, cupon_id, descuento_cupon
+  ) VALUES (
+    p_user_id, p_total, p_subtotal_lista, p_notas,
+    p_metodo_envio, p_costo_envio, p_sucursal_correo_argentino,
+    p_codigo_postal_envio, p_metodo_pago,
+    p_destinatario_nombre, p_destinatario_dni, p_destinatario_cod_area, p_destinatario_telefono,
+    p_tipo_servicio_envio, p_cupon_id, p_descuento_cupon
+  )
+  RETURNING * INTO nuevo_pedido;
+
+  INSERT INTO detalles_pedido (
+    pedido_id, producto_id, nombre_producto,
+    cantidad, precio_unitario, precio_lista, descuento, subtotal
+  )
+  SELECT
+    nuevo_pedido.id,
+    (item->>'producto_id')::uuid,
+    item->>'nombre_producto',
+    (item->>'cantidad')::int,
+    (item->>'precio_unitario')::numeric,
+    (item->>'precio_lista')::numeric,
+    COALESCE((item->>'descuento')::numeric, 0),
+    (item->>'subtotal')::numeric
+  FROM jsonb_array_elements(p_items) AS item;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    PERFORM descontar_stock((v_item->>'producto_id')::uuid, (v_item->>'cantidad')::int);
+  END LOOP;
+
+  IF p_cupon_id IS NOT NULL THEN
+    INSERT INTO canjes_cupon (cupon_id, cliente_id, pedido_id, descuento_aplicado)
+    VALUES (p_cupon_id, p_user_id, nuevo_pedido.id, p_descuento_cupon);
+  END IF;
+
+  RETURN row_to_json(nuevo_pedido)::jsonb;
+END;
+$$;
+
+-- --------------------------------------------------------
+-- 19. Sistema de puntos de fidelización (fase 2): el cliente gana
+--     puntos al entregarse un pedido (1 punto cada $100 de
+--     pedido.total, ver puntosConfig.ts) y los puede canjear por
+--     premios de un catálogo. Se acredita recién en 'Entregado'
+--     (mismo criterio que la facturación AFIP, ver sección 8 y
+--     pedidos.service.ts::cambiarEstado) porque es estado terminal
+--     sin cancelación posible: los puntos acreditados ahí nunca
+--     necesitan revertirse. El canje usa el mismo patrón FOR UPDATE
+--     que crear_pedido_completo/cupones para evitar condiciones de
+--     carrera (dos canjes simultáneos del mismo cliente, o dos
+--     acreditaciones del mismo pedido).
+-- --------------------------------------------------------
+
+-- 19a. Saldo cacheado en perfiles: puntos_movimientos es la fuente de
+--      verdad/auditoría, esta columna evita sumar el historial completo
+--      en cada lectura. Se actualiza EXCLUSIVAMENTE desde las funciones
+--      plpgsql de abajo — nunca vía PUT /api/perfil.
+ALTER TABLE perfiles ADD COLUMN IF NOT EXISTS puntos_saldo integer NOT NULL DEFAULT 0;
+
+-- Cuántos puntos generó cada pedido puntualmente (0 hasta que se entrega).
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS puntos_ganados integer NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS premios (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre         text NOT NULL,
+  descripcion    text,
+  imagen_url     text,
+  costo_puntos   integer NOT NULL CHECK (costo_puntos > 0),
+  stock          integer,  -- null = ilimitado (mismo criterio que cupones.limite_usos_total)
+  activo         boolean NOT NULL DEFAULT true,
+  creado_en      timestamptz NOT NULL DEFAULT now(),
+  actualizado_en timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS canjes_premio (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cliente_id      uuid NOT NULL REFERENCES auth.users(id),
+  premio_id       uuid NOT NULL REFERENCES premios(id),
+  puntos_gastados integer NOT NULL,
+  canjeado_en     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_canjes_premio_cliente ON canjes_premio(cliente_id);
+
+-- Ledger de auditoría: una fila por movimiento (acreditación o canje).
+CREATE TABLE IF NOT EXISTS puntos_movimientos (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cliente_id uuid NOT NULL REFERENCES auth.users(id),
+  tipo       text NOT NULL CHECK (tipo IN ('acreditacion', 'canje')),
+  puntos     integer NOT NULL,  -- positivo = acreditación, negativo = canje
+  pedido_id  uuid REFERENCES pedidos(id),
+  canje_id   uuid REFERENCES canjes_premio(id),
+  creado_en  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_puntos_movimientos_cliente ON puntos_movimientos(cliente_id);
+
+-- Garantía a nivel DB (no solo en Node) de que un mismo pedido nunca
+-- acredita puntos dos veces, aunque cambiarEstado se llegue a invocar más
+-- de una vez por una carrera de requests admin (además de que la máquina
+-- de estados ya impide re-entrar a 'Entregado' en el mismo pedido).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_puntos_movimientos_pedido_acreditacion
+  ON puntos_movimientos(pedido_id) WHERE tipo = 'acreditacion';
+
+-- 19b. acreditar_puntos_pedido: se llama al marcar un pedido 'Entregado'.
+--      p_puntos ya viene calculado desde Node (calcularPuntosPorPedido).
+--      Si p_puntos <= 0 no hace nada (pedido de monto muy bajo).
+CREATE OR REPLACE FUNCTION acreditar_puntos_pedido(
+  p_pedido_id  uuid,
+  p_cliente_id uuid,
+  p_puntos     integer
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF p_puntos <= 0 THEN
+    RETURN;
+  END IF;
+
+  -- El índice único parcial idx_puntos_movimientos_pedido_acreditacion
+  -- rechaza este INSERT si el pedido ya había acreditado puntos antes.
+  INSERT INTO puntos_movimientos (cliente_id, tipo, puntos, pedido_id)
+  VALUES (p_cliente_id, 'acreditacion', p_puntos, p_pedido_id);
+
+  INSERT INTO perfiles (user_id, puntos_saldo)
+  VALUES (p_cliente_id, p_puntos)
+  ON CONFLICT (user_id) DO UPDATE SET puntos_saldo = perfiles.puntos_saldo + p_puntos;
+
+  UPDATE pedidos SET puntos_ganados = p_puntos WHERE id = p_pedido_id;
+END;
+$$;
+
+-- 19c. canjear_premio: lockea saldo del cliente y stock del premio antes
+--      de descontar, para que dos canjes concurrentes del mismo cliente
+--      (o del mismo premio con stock limitado) no puedan pasar los dos.
+CREATE OR REPLACE FUNCTION canjear_premio(
+  p_cliente_id uuid,
+  p_premio_id  uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_saldo  integer;
+  v_premio premios%ROWTYPE;
+  v_canje  canjes_premio%ROWTYPE;
+BEGIN
+  SELECT puntos_saldo INTO v_saldo FROM perfiles WHERE user_id = p_cliente_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'perfil_no_encontrado';
+  END IF;
+
+  SELECT * INTO v_premio FROM premios WHERE id = p_premio_id FOR UPDATE;
+  IF NOT FOUND OR NOT v_premio.activo THEN
+    RAISE EXCEPTION 'premio_invalido';
+  END IF;
+  IF v_premio.stock IS NOT NULL AND v_premio.stock < 1 THEN
+    RAISE EXCEPTION 'premio_sin_stock';
+  END IF;
+  IF v_saldo < v_premio.costo_puntos THEN
+    RAISE EXCEPTION 'saldo_insuficiente';
+  END IF;
+
+  UPDATE perfiles SET puntos_saldo = puntos_saldo - v_premio.costo_puntos WHERE user_id = p_cliente_id;
+
+  IF v_premio.stock IS NOT NULL THEN
+    UPDATE premios SET stock = stock - 1 WHERE id = p_premio_id;
+  END IF;
+
+  INSERT INTO canjes_premio (cliente_id, premio_id, puntos_gastados)
+  VALUES (p_cliente_id, p_premio_id, v_premio.costo_puntos)
+  RETURNING * INTO v_canje;
+
+  INSERT INTO puntos_movimientos (cliente_id, tipo, puntos, canje_id)
+  VALUES (p_cliente_id, 'canje', -v_premio.costo_puntos, v_canje.id);
+
+  RETURN row_to_json(v_canje)::jsonb;
+END;
+$$;
+
+-- --------------------------------------------------------
+-- 20. codigo_barras único en products: el chequeo real está en
+--     productos.service.ts::crear (mensaje con el nombre del
+--     producto existente), este índice es la garantía a nivel DB
+--     para que dos altas concurrentes con el mismo código no
+--     pasen las dos. Parcial (WHERE codigo_barras IS NOT NULL)
+--     porque el campo es opcional y varios productos sin código
+--     cargado todavía no deben chocar entre sí.
+-- --------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS idx_products_codigo_barras_unico
+  ON products(codigo_barras) WHERE codigo_barras IS NOT NULL;

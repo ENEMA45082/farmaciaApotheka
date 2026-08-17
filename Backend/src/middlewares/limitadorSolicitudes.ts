@@ -70,6 +70,18 @@ export const limitadorPedidos = rateLimit({
   message: { error: 'Demasiadas solicitudes de pedidos. Intentá en unos minutos.', statusCode: 429 },
 });
 
+// Límite moderado para canjear premios por puntos: mueve saldo real del
+// cliente, mismo criterio de "acción que el usuario dispara a voluntad" que
+// limitadorPagos/limitadorPedidos.
+export const limitadorCanjePuntos = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: generarClavePorUsuarioOIP,
+  message: { error: 'Demasiados intentos de canje. Intentá en unos minutos.', statusCode: 429 },
+});
+
 // Límite estricto para cotizar envío: a diferencia del cotizador anterior
 // (un POST a una API), cada cotización ahora es un scrape completo del
 // portal de MiCorreo (browser + login), mucho más caro — acotar abuso más

@@ -87,7 +87,13 @@ export function PagoResultadoPage() {
     const detalles      = pedido?.detalles ?? [];
     const totalFinal    = (pedido?.total ?? 0);
     const costoEnvio    = pedido?.costo_envio ?? 0;
-    const subtotal      = totalFinal - costoEnvio;
+    const descuentoCupon = pedido?.descuento_cupon ?? 0;
+    // pedido.total ya viene con el cupón descontado (ver pedidos.service.ts::crear),
+    // así que el subtotal "de productos" hay que reconstruirlo sumando ese
+    // descuento de vuelta — si no, esta línea mostraba el total post-cupón
+    // pero sin ninguna mención al cupón, y no coincidía con la suma de los
+    // ítems de la tabla de arriba (que sí muestran precio de catálogo).
+    const subtotal      = totalFinal - costoEnvio + descuentoCupon;
     const metodoEnvio   = pedido?.metodo_envio;
 
     return (
@@ -158,6 +164,12 @@ export function PagoResultadoPage() {
                 <span>Subtotal</span>
                 <span>${formatPrecio(subtotal)}</span>
               </div>
+              {pedido?.cupon_id && descuentoCupon > 0 && (
+                <div className="pedido-receipt__total-fila pedido-receipt__total-fila--descuento">
+                  <span>Cupón aplicado{pedido.cupon_codigo && ` (${pedido.cupon_codigo})`}</span>
+                  <span>-${formatPrecio(descuentoCupon)}</span>
+                </div>
+              )}
               <div className="pedido-receipt__total-fila">
                 <span>Envío {metodoEnvio === 'retiro_farmacia' ? '(retiro en farmacia)' : metodoEnvio === 'domicilio' ? '(a domicilio)' : '(retiro en sucursal)'}</span>
                 <span>{costoEnvio === 0 ? <strong className="checkout-totales__gratis">GRATIS</strong> : `$${formatPrecio(costoEnvio)}`}</span>
