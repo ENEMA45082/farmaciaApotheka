@@ -7,7 +7,7 @@ import type {
   FiltrosProducto,
 } from '../types';
 
-function mapearProducto(row: Record<string, unknown>): Producto {
+export function mapearProducto(row: Record<string, unknown>): Producto {
   return {
     id:                row.id as string,
     nombre:            row.nombre as string,

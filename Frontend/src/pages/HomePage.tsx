@@ -9,6 +9,7 @@ import { HeroCarousel } from '../components/home/HeroCarousel';
 import { BeneficiosBar } from '../components/home/BeneficiosBar';
 import { ProductosDestacadosCarousel } from '../components/home/ProductosDestacadosCarousel';
 import { MediosDePago } from '../components/home/MediosDePago';
+import { PromoBanners } from '../components/home/PromoBanners';
 import { CategoriasMasVistas } from '../components/home/CategoriasMasVistas';
 import { SortSelect } from '../components/ui/SortSelect';
 import { Spinner } from '../components/ui/Spinner';
@@ -262,6 +263,7 @@ export function HomePage() {
       <div className="home-hero-wrap"><BeneficiosBar /></div>
       {esHome && <div className="home-hero-wrap"><ProductosDestacadosCarousel /></div>}
       <div className="home-hero-wrap"><MediosDePago /></div>
+      <div className="home-hero-wrap"><PromoBanners /></div>
       <div className="home-hero-wrap"><CategoriasMasVistas /></div>
       <div className="page">
         {mostrarFiltros ? (

@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useProductos } from '../../hooks/useProductos';
+import { useProductosDestacados } from '../../hooks/useProductosDestacados';
 import { useCarruselScroll } from '../../hooks/useCarruselScroll';
 import { ProductCard } from '../products/ProductCard';
 import { staggerContainer } from '../ui/motion';
 
 export function ProductosDestacadosCarousel() {
-  const { productos, cargando, error } = useProductos({ en_oferta: true, limite: 10 });
+  const { productosDestacados, cargando, error } = useProductosDestacados();
+  const productos = productosDestacados.map(pd => pd.producto);
   const { trackRef, puedeIzq, puedeDer, actualizarFlechas, desplazar } = useCarruselScroll(productos);
 
   if (cargando || error || productos.length === 0) return null;
