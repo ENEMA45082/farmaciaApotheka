@@ -198,12 +198,20 @@ export function DetallePedidoPage() {
           {pedido.metodo_envio === 'retiro_farmacia' && (
             <p>Envío: <strong style={{ color: '#16a34a' }}>GRATIS — Retiro en farmacia</strong></p>
           )}
+          {pedido.cupon_id && pedido.descuento_cupon > 0 && (
+            <p className="pedido-detalle__ahorro">
+              Cupón aplicado{pedido.cupon_codigo && ` (${pedido.cupon_codigo})`}: -${formatPrecio(pedido.descuento_cupon)}
+            </p>
+          )}
           <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedido.total)}</strong></p>
           {pedido.pw_payment_id && (
             <p className="pedido-detalle__pago">
               Pago procesado · ID: {pedido.pw_payment_id}
               {pedido.pw_site_transaction_id && ` · Ref. Payway: ${pedido.pw_site_transaction_id}`}
             </p>
+          )}
+          {pedido.puntos_ganados > 0 && (
+            <p className="pedido-detalle__puntos-ganados">Ganaste {pedido.puntos_ganados} puntos con esta compra</p>
           )}
         </div>
 

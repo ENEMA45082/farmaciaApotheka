@@ -1,11 +1,22 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as categoriasService from '../services/categorias.service';
-import type { CrearCategoriaDTO, ActualizarCategoriaDTO } from '../types';
+import type { CrearCategoriaDTO, ActualizarCategoriaDTO, FiltrosCategoria } from '../types';
 
-export async function listar(_req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function listar(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const categorias = await categoriasService.listar();
-    res.json(categorias);
+    // req.query ya viene validado y coercionado por validar(filtrosCategoriaQuerySchema).
+    // Paginado opt-in: si no se manda busqueda/pagina/limite, se mantiene la
+    // respuesta de siempre (array plano) para no romper a los otros consumidores
+    // de este endpoint (home, selector de categoría del alta de productos, etc.).
+    const filtros = req.query as unknown as FiltrosCategoria;
+    const quierePaginado = filtros.busqueda !== undefined || filtros.pagina !== undefined || filtros.limite !== undefined;
+
+    if (quierePaginado) {
+      res.json(await categoriasService.listarPaginado(filtros));
+      return;
+    }
+
+    res.json(await categoriasService.listar());
   } catch (err) {
     next(err);
   }

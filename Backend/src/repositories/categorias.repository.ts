@@ -20,6 +20,27 @@ export async function encontrarTodas(): Promise<Categoria[]> {
   return (data ?? []).map(mapearCategoria);
 }
 
+export async function encontrarPaginadas(
+  filtros: { busqueda?: string; pagina: number; limite: number }
+): Promise<{ datos: Categoria[]; total: number }> {
+  const desde = (filtros.pagina - 1) * filtros.limite;
+  const hasta = desde + filtros.limite - 1;
+
+  let query = supabase
+    .from('categories')
+    .select('*', { count: 'exact' })
+    .order('nombre', { ascending: true });
+
+  if (filtros.busqueda) {
+    query = query.ilike('nombre', `%${filtros.busqueda}%`);
+  }
+
+  const { data, error, count } = await query.range(desde, hasta);
+  if (error) throw error;
+
+  return { datos: (data ?? []).map(mapearCategoria), total: count ?? 0 };
+}
+
 export async function encontrarPorId(id: string): Promise<Categoria | null> {
   const { data, error } = await supabase
     .from('categories')

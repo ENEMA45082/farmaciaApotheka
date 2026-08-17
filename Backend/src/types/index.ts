@@ -10,6 +10,20 @@ export interface Categoria {
   hijos?: Categoria[];
 }
 
+export interface CategoriasPaginadas {
+  datos: Categoria[];
+  total: number;
+  pagina: number;
+  limite: number;
+  totalPaginas: number;
+}
+
+export interface FiltrosCategoria {
+  busqueda?: string;
+  pagina?: number;
+  limite?: number;
+}
+
 export interface Producto {
   id: string;
   nombre: string;
@@ -138,6 +152,10 @@ export interface Pedido {
   destinatario_dni: string | null;
   destinatario_cod_area: string | null;
   destinatario_telefono: string | null;
+  cupon_id: string | null;
+  cupon_codigo: string | null;
+  descuento_cupon: number;
+  puntos_ganados: number;
   detalles?: DetallePedido[];
 }
 
@@ -204,6 +222,143 @@ export interface CrearPedidoDTO {
   destinatario_dni?: string;
   destinatario_cod_area?: string;
   destinatario_telefono?: string;
+  codigo_cupon?: string;
+}
+
+export type TipoCupon = 'porcentaje' | 'fijo';
+
+export interface Cupon {
+  id: string;
+  codigo: string;
+  tipo: TipoCupon;
+  valor: number;
+  compra_minima: number;
+  descuento_maximo: number | null;
+  limite_usos_total: number | null;
+  limite_usos_por_cliente: number | null;
+  valido_desde: string | null;
+  valido_hasta: string | null;
+  activo: boolean;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+// Cupón + conteo de canjes totales, para el listado de admin.
+export interface CuponConUsos extends Cupon {
+  usos: number;
+}
+
+export interface CrearCuponDTO {
+  codigo: string;
+  tipo: TipoCupon;
+  valor: number;
+  compra_minima?: number;
+  descuento_maximo?: number | null;
+  limite_usos_total?: number | null;
+  limite_usos_por_cliente?: number | null;
+  valido_desde?: string | null;
+  valido_hasta?: string | null;
+  activo?: boolean;
+}
+
+export interface ActualizarCuponDTO {
+  tipo?: TipoCupon;
+  valor?: number;
+  compra_minima?: number;
+  descuento_maximo?: number | null;
+  limite_usos_total?: number | null;
+  limite_usos_por_cliente?: number | null;
+  valido_desde?: string | null;
+  valido_hasta?: string | null;
+  activo?: boolean;
+}
+
+// Item mínimo confiable del carrito: el precio SIEMPRE se re-resuelve contra
+// el catálogo (ver resolverItemsCarrito en productos.service.ts), nunca se
+// toma del que manda el cliente.
+export interface ItemCarritoInput {
+  producto_id: string;
+  cantidad: number;
+}
+
+export type MotivoCuponInvalido =
+  | 'CODIGO_INEXISTENTE'
+  | 'INACTIVO'
+  | 'VENCIDO'
+  | 'AUN_NO_VIGENTE'
+  | 'LIMITE_USOS_ALCANZADO'
+  | 'LIMITE_CLIENTE_ALCANZADO'
+  | 'COMPRA_MINIMA_NO_ALCANZADA';
+
+export interface ResultadoValidacionCupon {
+  valido: boolean;
+  descuento: number;
+  montoElegible: number;
+  motivo?: MotivoCuponInvalido;
+  mensaje?: string;
+  // Solo cuando valido === true — lo usa pedidos.service.ts para no volver a
+  // buscar el cupón por código al pasarle el id a la RPC.
+  cuponId?: string;
+}
+
+export interface Premio {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  imagen_url: string | null;
+  costo_puntos: number;
+  stock: number | null;
+  activo: boolean;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface CrearPremioDTO {
+  nombre: string;
+  descripcion?: string | null;
+  imagen_url?: string | null;
+  costo_puntos: number;
+  stock?: number | null;
+  activo?: boolean;
+}
+
+export interface ActualizarPremioDTO {
+  nombre?: string;
+  descripcion?: string | null;
+  imagen_url?: string | null;
+  costo_puntos?: number;
+  stock?: number | null;
+  activo?: boolean;
+}
+
+export type TipoMovimientoPuntos = 'acreditacion' | 'canje';
+
+export interface MovimientoPuntos {
+  id: string;
+  cliente_id: string;
+  tipo: TipoMovimientoPuntos;
+  puntos: number;
+  pedido_id: string | null;
+  canje_id: string | null;
+  creado_en: string;
+}
+
+export interface CanjePremio {
+  id: string;
+  cliente_id: string;
+  premio_id: string;
+  puntos_gastados: number;
+  canjeado_en: string;
+}
+
+// Canje + nombre del premio, para que el admin vea qué despachar sin un join aparte.
+export interface CanjePremioConDetalle extends CanjePremio {
+  premio_nombre: string;
+}
+
+export interface SaldoPuntos {
+  saldo: number;
+  movimientos: MovimientoPuntos[];
 }
 
 export interface CrearCategoriaDTO {

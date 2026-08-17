@@ -3,7 +3,7 @@ import * as productosRepo from '../repositories/productos.repository';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import { recopilarDescendientes } from '../utils/categoriaTree';
-import type { Categoria, CrearCategoriaDTO, ActualizarCategoriaDTO } from '../types';
+import type { Categoria, CategoriasPaginadas, FiltrosCategoria, CrearCategoriaDTO, ActualizarCategoriaDTO } from '../types';
 
 function tieneAntepasadoCiclico(id: string, mapa: Map<string, Categoria>): boolean {
   const visitados = new Set<string>([id]);
@@ -35,6 +35,19 @@ function construirArbol(flat: Categoria[]): Categoria[] {
 
 export async function listar(): Promise<Categoria[]> {
   return categoriasRepo.encontrarTodas();
+}
+
+export async function listarPaginado(filtros: FiltrosCategoria): Promise<CategoriasPaginadas> {
+  const pagina = Math.max(1, filtros.pagina ?? 1);
+  const limite = Math.min(50, Math.max(1, filtros.limite ?? 20));
+
+  const { datos, total } = await categoriasRepo.encontrarPaginadas({
+    busqueda: filtros.busqueda,
+    pagina,
+    limite,
+  });
+
+  return { datos, total, pagina, limite, totalPaginas: Math.ceil(total / limite) };
 }
 
 export async function obtenerArbol(): Promise<Categoria[]> {

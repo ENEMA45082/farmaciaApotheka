@@ -2,11 +2,11 @@ import { Router } from 'express';
 import * as categoriasController from '../controllers/categorias.controller';
 import { requiereAdmin } from '../middlewares/autenticacion.middleware';
 import { validar } from '../middlewares/validar';
-import { crearCategoriaSchema, actualizarCategoriaSchema } from '../schemas/categorias.schema';
+import { crearCategoriaSchema, actualizarCategoriaSchema, filtrosCategoriaQuerySchema } from '../schemas/categorias.schema';
 
 const router = Router();
 
-router.get('/',        categoriasController.listar);
+router.get('/',        validar(filtrosCategoriaQuerySchema, 'query'), categoriasController.listar);
 
 router.get('/arbol',   categoriasController.obtenerArbol);
 

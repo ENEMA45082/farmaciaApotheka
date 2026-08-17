@@ -23,7 +23,7 @@ export function AdminFacturasPage() {
   }, []);
 
   return (
-    <AdminLayout>
+    <AdminLayout subtitle="Facturas ARCA que fallaron al emitirse">
       <div className="admin-section">
         <div className="admin-table-card">
           <h2>Facturas con problemas ({facturasConProblemas.length})</h2>

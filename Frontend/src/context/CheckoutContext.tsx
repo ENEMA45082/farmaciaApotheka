@@ -1,6 +1,11 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { MetodoEnvio, TipoServicioEnvio, SucursalCorreoArgentino, Direccion } from '../types';
 
+interface CuponAplicado {
+  codigo: string;
+  descuento: number;
+}
+
 interface CheckoutContextType {
   metodo:               MetodoEnvio;
   costoEnvio:           number;
@@ -13,6 +18,7 @@ interface CheckoutContextType {
   destinatarioDni:      string;
   destinatarioCodArea:  string;
   destinatarioTelefono: string;
+  cuponAplicado:        CuponAplicado | null;
   setMetodo:               (m: MetodoEnvio) => void;
   setCostoEnvio:           (c: number) => void;
   setDiasEstimados:        (d: string) => void;
@@ -24,6 +30,7 @@ interface CheckoutContextType {
   setDestinatarioDni:      (v: string) => void;
   setDestinatarioCodArea:  (v: string) => void;
   setDestinatarioTelefono: (v: string) => void;
+  setCuponAplicado:        (c: CuponAplicado | null) => void;
   resetCheckout:           () => void;
 }
 
@@ -41,6 +48,7 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
   const [destinatarioDni,      setDestinatarioDni]      = useState('');
   const [destinatarioCodArea,  setDestinatarioCodArea]  = useState('');
   const [destinatarioTelefono, setDestinatarioTelefono] = useState('');
+  const [cuponAplicado,        setCuponAplicado]        = useState<CuponAplicado | null>(null);
 
   function resetCheckout() {
     setMetodo('retiro_farmacia');
@@ -53,15 +61,16 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
     setDestinatarioDni('');
     setDestinatarioCodArea('');
     setDestinatarioTelefono('');
+    setCuponAplicado(null);
   }
 
   return (
     <CheckoutContext.Provider value={{
       metodo, costoEnvio, diasEstimados, tipoServicioEnvio, sucursalSeleccionada, provinciaCodigo, direccion,
-      destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono,
+      destinatarioNombre, destinatarioDni, destinatarioCodArea, destinatarioTelefono, cuponAplicado,
       setMetodo, setCostoEnvio, setDiasEstimados, setTipoServicioEnvio, setSucursalSeleccionada, setProvinciaCodigo,
       setDireccion, setDestinatarioNombre, setDestinatarioDni, setDestinatarioCodArea,
-      setDestinatarioTelefono, resetCheckout,
+      setDestinatarioTelefono, setCuponAplicado, resetCheckout,
     }}>
       {children}
     </CheckoutContext.Provider>

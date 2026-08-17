@@ -67,6 +67,16 @@ export function HomePage() {
 
   const mostrarFiltros = !!busqueda || !!categoriaActiva;
 
+  // A diferencia de mostrarFiltros (que depende de categoriaActiva, resuelta
+  // recién cuando categoriasFlat termina de cargar), esto se calcula solo con
+  // datos ya disponibles en el primer render: slug/busqueda/categoria vienen
+  // de la URL, no de un fetch. HomePage se remonta entero en cada navegación
+  // (AnimatedRoutes en App.tsx usa key={location.pathname}), así que si
+  // Hero/Destacados dependieran de mostrarFiltros, alcanzaban a montarse (y a
+  // disparar sus fetches de banners/productos en oferta) durante ese primer
+  // render, antes de que categoriaActiva resolviera y los desmontara.
+  const esHome = !busqueda && !slug && !searchParams.get('categoria');
+
   // Resincroniza el estado local cada vez que cambia la URL (back/forward, links, etc.)
   useEffect(() => {
     setBusqueda(searchParams.get('busqueda') ?? undefined);
@@ -248,9 +258,9 @@ export function HomePage() {
 
   return (
     <>
-      <div className="home-hero-wrap"><HeroCarousel /></div>
+      {esHome && <div className="home-hero-wrap"><HeroCarousel /></div>}
       <div className="home-hero-wrap"><BeneficiosBar /></div>
-      <div className="home-hero-wrap"><ProductosDestacadosCarousel /></div>
+      {esHome && <div className="home-hero-wrap"><ProductosDestacadosCarousel /></div>}
       <div className="home-hero-wrap"><MediosDePago /></div>
       <div className="home-hero-wrap"><CategoriasMasVistas /></div>
       <div className="page">

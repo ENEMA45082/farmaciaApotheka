@@ -28,6 +28,8 @@ const AdminProductosPage      = lazy(() => import('./pages/AdminProductosPage').
 const AdminCategoriasPage     = lazy(() => import('./pages/AdminCategoriasPage').then(m => ({ default: m.AdminCategoriasPage })));
 const AdminCarteleriaPage     = lazy(() => import('./pages/AdminCarteleriaPage').then(m => ({ default: m.AdminCarteleriaPage })));
 const AdminPedidosPage        = lazy(() => import('./pages/AdminPedidosPage').then(m => ({ default: m.AdminPedidosPage })));
+const AdminPuntosPage         = lazy(() => import('./pages/AdminPuntosPage').then(m => ({ default: m.AdminPuntosPage })));
+const AdminCuponesPage        = lazy(() => import('./pages/AdminCuponesPage').then(m => ({ default: m.AdminCuponesPage })));
 const AdminImportarPreciosPage = lazy(() => import('./pages/AdminImportarPreciosPage').then(m => ({ default: m.AdminImportarPreciosPage })));
 const AdminFacturasPage       = lazy(() => import('./pages/AdminFacturasPage').then(m => ({ default: m.AdminFacturasPage })));
 const LoginPage          = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -35,6 +37,7 @@ const EstadisticasPage   = lazy(() => import('./pages/EstadisticasPage').then(m 
 const PerfilPage         = lazy(() => import('./pages/PerfilPage').then(m => ({ default: m.PerfilPage })));
 const PedidosPage        = lazy(() => import('./pages/PedidosPage').then(m => ({ default: m.PedidosPage })));
 const DetallePedidoPage  = lazy(() => import('./pages/DetallePedidoPage').then(m => ({ default: m.DetallePedidoPage })));
+const PuntosPage         = lazy(() => import('./pages/PuntosPage').then(m => ({ default: m.PuntosPage })));
 const DireccionesPage    = lazy(() => import('./pages/DireccionesPage').then(m => ({ default: m.DireccionesPage })));
 const OfertasPage        = lazy(() => import('./pages/OfertasPage').then(m => ({ default: m.OfertasPage })));
 const ContactoPage       = lazy(() => import('./pages/ContactoPage').then(m => ({ default: m.ContactoPage })));
@@ -63,6 +66,7 @@ function AnimatedRoutes() {
             <Route path="/perfil" element={<PerfilPage />} />
             <Route path="/pedidos" element={<PedidosPage />} />
             <Route path="/pedidos/:id" element={<DetallePedidoPage />} />
+            <Route path="/puntos" element={<PuntosPage />} />
             <Route path="/direcciones" element={<DireccionesPage />} />
             <Route path="/ofertas" element={<OfertasPage />} />
             <Route path="/contacto" element={<ContactoPage />} />
@@ -108,6 +112,22 @@ function AnimatedRoutes() {
               element={
                 <AdminRoute>
                   <AdminPedidosPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/cupones"
+              element={
+                <AdminRoute>
+                  <AdminCuponesPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/puntos"
+              element={
+                <AdminRoute>
+                  <AdminPuntosPage />
                 </AdminRoute>
               }
             />

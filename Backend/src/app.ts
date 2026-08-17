@@ -14,6 +14,8 @@ import uploadsRoutes       from './routes/uploads.routes';
 import estadisticasRoutes  from './routes/estadisticas.routes';
 import perfilRoutes        from './routes/perfil.routes';
 import pedidosRoutes       from './routes/pedidos.routes';
+import cuponesRoutes       from './routes/cupones.routes';
+import puntosRoutes        from './routes/puntos.routes';
 import direccionesRoutes   from './routes/direcciones.routes';
 import favoritosRoutes     from './routes/favoritos.routes';
 import envioRoutes         from './routes/envio.routes';
@@ -37,8 +39,13 @@ const origenesPermitidos = (process.env.FRONTEND_URL || 'http://localhost:5173')
 
 app.use(helmet());
 app.use(morgan('combined'));
-app.use(limitadorGeneral);
 
+// cors() va antes que el limitador: así el preflight OPTIONS lo responde
+// cors() directo (204) sin pasar por limitadorGeneral. Si quedara después,
+// cada preflight consume cupo del limitador general igual que una request
+// real — y si el cupo ya se agotó, el propio preflight vuelve 429, el
+// browser nunca intenta la request real, y se rompe TODO /api/*, no
+// solo el endpoint que la disparó.
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || origenesPermitidos.some(o => origin === o)) {
@@ -50,6 +57,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.use(limitadorGeneral);
 app.use(express.json());
 
 app.get('/health', async (_req, res) => {
@@ -84,6 +92,8 @@ app.use('/api/uploads',     uploadsRoutes);
 app.use('/api/estadisticas', estadisticasRoutes);
 app.use('/api/perfil',      perfilRoutes);
 app.use('/api/pedidos',     limitadorPedidos, pedidosRoutes);
+app.use('/api/cupones',     cuponesRoutes);
+app.use('/api/puntos',      puntosRoutes);
 app.use('/api/direcciones', direccionesRoutes);
 app.use('/api/favoritos',   favoritosRoutes);
 app.use('/api/envio',       envioRoutes);

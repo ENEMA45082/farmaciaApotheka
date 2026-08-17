@@ -46,6 +46,13 @@ function mapearPedido(row: Record<string, unknown>): Pedido {
     destinatario_dni:          row.destinatario_dni as string | null ?? null,
     destinatario_cod_area:     row.destinatario_cod_area as string | null ?? null,
     destinatario_telefono:     row.destinatario_telefono as string | null ?? null,
+    cupon_id:           row.cupon_id as string | null ?? null,
+    // Join contra cupones solo trae algo cuando encontrarPorId pide
+    // "cupones(codigo)" en el select — encontrarPorUsuario/encontrarTodos no
+    // lo piden (esas vistas no muestran el código), así que ahí siempre da null.
+    cupon_codigo:       (row.cupones as { codigo: string } | null)?.codigo ?? null,
+    descuento_cupon:    Number(row.descuento_cupon ?? 0),
+    puntos_ganados:     Number(row.puntos_ganados ?? 0),
     detalles: Array.isArray(row.detalles_pedido)
       ? (row.detalles_pedido as Record<string, unknown>[]).map(mapearDetalle)
       : undefined,
@@ -58,6 +65,8 @@ export async function crear(
   itemsConfirmados: ItemPedidoConfirmado[],
   total: number,
   subtotalLista: number,
+  cuponId?: string,
+  descuentoCupon = 0,
 ): Promise<Pedido> {
   const items = itemsConfirmados.map(i => ({
     producto_id:     i.producto_id,
@@ -86,20 +95,33 @@ export async function crear(
     p_destinatario_dni:         dto.destinatario_dni ?? null,
     p_destinatario_cod_area:    dto.destinatario_cod_area ?? null,
     p_destinatario_telefono:    dto.destinatario_telefono ?? null,
+    p_cupon_id:                 cuponId ?? null,
+    p_descuento_cupon:          descuentoCupon,
   });
 
   if (error || !pedidoData) {
-    // crear_pedido_completo descuenta stock atómicamente adentro de la misma
-    // transacción (ver supabase_migrations.sql, sección 14) — si algún item
-    // se quedó sin stock justo en el medio (carrera con otro pedido), Postgres
-    // aborta todo y devuelve este mensaje. Se traduce a un AppError legible
-    // en vez de dejarlo caer como error interno genérico.
+    // crear_pedido_completo descuenta stock y registra el canje del cupón
+    // (si hay) atómicamente adentro de la misma transacción (ver
+    // supabase_migrations.sql, secciones 14 y 18) — si algo se agotó justo
+    // en el medio (carrera con otro pedido), Postgres aborta todo y devuelve
+    // uno de estos mensajes. Se traducen a un AppError legible en vez de
+    // dejarlos caer como error interno genérico.
     if (error?.message?.includes('stock_insuficiente')) {
       throw new AppError(
         'El stock de algún producto cambió mientras se procesaba el pedido. Volvé a intentarlo.',
         409,
         'STOCK_INSUFICIENTE',
       );
+    }
+    if (error?.message?.includes('cupon_limite_usos_alcanzado') || error?.message?.includes('cupon_limite_cliente_alcanzado')) {
+      throw new AppError(
+        'El cupón alcanzó su límite de usos mientras se procesaba el pedido.',
+        409,
+        'CUPON_LIMITE_USOS_ALCANZADO',
+      );
+    }
+    if (error?.message?.includes('cupon_invalido')) {
+      throw new AppError('El cupón ya no es válido.', 409, 'CUPON_INVALIDO');
     }
     throw error ?? new Error('Error al crear pedido');
   }
@@ -124,7 +146,7 @@ export async function encontrarPorUsuario(userId: string): Promise<Pedido[]> {
 export async function encontrarPorId(id: string): Promise<Pedido | null> {
   const { data, error } = await supabase
     .from('pedidos')
-    .select('*, detalles_pedido(*)')
+    .select('*, detalles_pedido(*), cupones(codigo)')
     .eq('id', id)
     .single();
 

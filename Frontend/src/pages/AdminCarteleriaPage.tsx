@@ -126,7 +126,7 @@ export function AdminCarteleriaPage() {
   }
 
   return (
-    <AdminLayout>
+    <AdminLayout subtitle="Banners del carrusel de la home">
       <div className="admin-section">
         <div className={`admin-form-card${bannerEditando ? ' admin-form-card--editando' : ''}`}>
           <h2>{bannerEditando ? 'Editando banner' : 'Agregar banner'}</h2>

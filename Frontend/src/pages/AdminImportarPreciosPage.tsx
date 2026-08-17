@@ -79,7 +79,7 @@ export function AdminImportarPreciosPage() {
   }
 
   return (
-    <AdminLayout>
+    <AdminLayout subtitle="Actualización masiva de precios por CSV">
       <div className="admin-section">
         <div className="admin-form-card">
           <h2>Importar precios desde CSV</h2>

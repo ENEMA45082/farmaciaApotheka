@@ -21,7 +21,9 @@ export async function cotizar(req: Request, res: Response, next: NextFunction) {
     };
 
     const pesoTotalGramos = (items ?? []).reduce(
-      (sum, i) => sum + (i.peso_gramos ?? PESO_DEFAULT_GRAMOS) * (i.cantidad ?? 1),
+      // || (no ??): un producto sin peso cargado manda peso_gramos: 0, que
+      // también tiene que caer al default — 0g reales no existen.
+      (sum, i) => sum + (i.peso_gramos || PESO_DEFAULT_GRAMOS) * (i.cantidad ?? 1),
       0,
     );
 
