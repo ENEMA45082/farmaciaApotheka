@@ -1406,7 +1406,6 @@ $$;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_codigo_barras_unico
   ON products(codigo_barras) WHERE codigo_barras IS NOT NULL;
 
-
 -- --------------------------------------------------------
 -- 21. Curaduría manual del carrusel "Los elegidos de Apotheka"
 --     de la home. Antes ese carrusel mostraba automáticamente
@@ -1452,3 +1451,48 @@ CREATE TABLE IF NOT EXISTS banners_promo (
 
 CREATE INDEX IF NOT EXISTS idx_banners_promo_orden
   ON banners_promo(orden);
+
+-- --------------------------------------------------------
+-- 23. Carga manual de puntos por DNI: el admin acredita puntos a un
+--     cliente ya registrado (busca su perfil por perfiles.dni) para
+--     cubrir compras físicas hechas en el local, que no pasan por
+--     pedidos.service.ts::cambiarEstado (única vía automática hasta
+--     ahora, ver sección 19). Mismo patrón FOR UPDATE que
+--     acreditar_puntos_pedido/canjear_premio para evitar carreras.
+-- --------------------------------------------------------
+ALTER TABLE puntos_movimientos ADD COLUMN IF NOT EXISTS motivo text;
+
+ALTER TABLE puntos_movimientos DROP CONSTRAINT IF EXISTS puntos_movimientos_tipo_check;
+ALTER TABLE puntos_movimientos ADD CONSTRAINT puntos_movimientos_tipo_check
+  CHECK (tipo IN ('acreditacion', 'canje', 'ajuste'));
+
+CREATE OR REPLACE FUNCTION acreditar_puntos_manual(
+  p_cliente_id uuid,
+  p_puntos     integer,
+  p_motivo     text DEFAULT NULL
+)
+RETURNS integer
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_saldo integer;
+BEGIN
+  IF p_puntos <= 0 THEN
+    RAISE EXCEPTION 'puntos_invalidos';
+  END IF;
+
+  PERFORM 1 FROM perfiles WHERE user_id = p_cliente_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'perfil_no_encontrado';
+  END IF;
+
+  INSERT INTO puntos_movimientos (cliente_id, tipo, puntos, motivo)
+  VALUES (p_cliente_id, 'ajuste', p_puntos, p_motivo);
+
+  UPDATE perfiles SET puntos_saldo = puntos_saldo + p_puntos
+  WHERE user_id = p_cliente_id
+  RETURNING puntos_saldo INTO v_saldo;
+
+  RETURN v_saldo;
+END;
+$$;

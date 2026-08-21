@@ -31,6 +31,7 @@ function mapearMovimiento(row: Record<string, unknown>): MovimientoPuntos {
     puntos:     Number(row.puntos),
     pedido_id:  row.pedido_id as string | null,
     canje_id:   row.canje_id as string | null,
+    motivo:     row.motivo as string | null,
     creado_en:  row.creado_en as string,
   };
 }
@@ -80,6 +81,23 @@ export async function acreditarPuntos(pedidoId: string, clienteId: string, punto
   });
 
   if (error && error.code !== '23505') throw error;
+}
+
+export async function acreditarManual(clienteId: string, puntos: number, motivo: string | null): Promise<number> {
+  const { data, error } = await supabase.rpc('acreditar_puntos_manual', {
+    p_cliente_id: clienteId,
+    p_puntos:     puntos,
+    p_motivo:     motivo,
+  });
+
+  if (error || data == null) {
+    if (error?.message?.includes('perfil_no_encontrado')) {
+      throw new AppError('El cliente no tiene un perfil registrado.', 404, 'CLIENTE_NOT_FOUND');
+    }
+    throw error ?? new Error('Error al acreditar los puntos');
+  }
+
+  return Number(data);
 }
 
 export async function canjear(clienteId: string, premioId: string): Promise<CanjePremio> {

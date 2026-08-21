@@ -52,6 +52,18 @@ export async function encontrarOCrear(
   return mapearPerfil(data);
 }
 
+// No hay unicidad de DNI a nivel DB, por eso devuelve una lista
+// (normalmente 0 o 1 fila) en vez de asumir un único resultado.
+export async function encontrarPorDni(dni: string): Promise<Perfil[]> {
+  const { data, error } = await supabase
+    .from('perfiles')
+    .select('*')
+    .eq('dni', dni);
+
+  if (error) throw error;
+  return (data ?? []).map(mapearPerfil);
+}
+
 export async function actualizar(userId: string, dto: ActualizarPerfilDTO): Promise<Perfil> {
   const { data, error } = await supabase
     .from('perfiles')

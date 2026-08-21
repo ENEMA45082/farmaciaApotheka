@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as puntosService from '../services/puntos.service';
-import type { AuthRequest, CrearPremioDTO, ActualizarPremioDTO } from '../types';
+import type { AuthRequest, CrearPremioDTO, ActualizarPremioDTO, AcreditarPuntosManualDTO } from '../types';
 
 export async function obtenerMiSaldo(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -53,5 +53,21 @@ export async function listarCanjesAdmin(req: Request, res: Response, next: NextF
   try {
     const canjes = await puntosService.listarCanjesAdmin();
     res.json(canjes);
+  } catch (err) { next(err); }
+}
+
+export async function buscarClientePorDni(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { dni } = req.query as { dni: string };
+    const clientes = await puntosService.buscarClientePorDni(dni);
+    res.json(clientes);
+  } catch (err) { next(err); }
+}
+
+export async function acreditarManual(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const dto = req.body as AcreditarPuntosManualDTO;
+    const saldo = await puntosService.acreditarManual(dto);
+    res.status(201).json({ saldo });
   } catch (err) { next(err); }
 }

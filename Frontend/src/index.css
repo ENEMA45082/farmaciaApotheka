@@ -1255,6 +1255,15 @@ img { max-width: 100%; display: block; }
   .footer__copy { text-align: center; }
 }
 
+/* ===== Legal (Política de Privacidad) ===== */
+.legal-page { max-width: 760px; line-height: 1.6; }
+.legal-page h1 { font-size: 1.6rem; font-weight: 800; color: var(--navy); }
+.legal-page__actualizado { color: var(--text-light); font-size: 0.85rem; margin: 0.35rem 0 1.5rem; }
+.legal-page h2 { font-size: 1.05rem; font-weight: 700; color: var(--navy); margin: 1.75rem 0 0.5rem; }
+.legal-page p { color: var(--text); margin: 0.5rem 0; }
+.legal-page ul { color: var(--text); margin: 0.5rem 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.legal-page a { color: var(--navy); }
+
 /* ===== Contacto Page ===== */
 .contacto-titulo { font-size: 1.6rem; font-weight: 800; color: var(--navy); }
 .contacto-intro { color: var(--text-light); margin: 0.5rem 0 1.5rem; max-width: 640px; line-height: 1.5; }

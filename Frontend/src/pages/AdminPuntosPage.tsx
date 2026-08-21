@@ -1,8 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import { Pencil } from 'lucide-react';
-import { crearPremio, listarPremiosAdmin, actualizarPremio, listarCanjesAdmin } from '../api/puntos.api';
-import type { Premio, CanjePremioConDetalle } from '../types';
+import {
+  crearPremio,
+  listarPremiosAdmin,
+  actualizarPremio,
+  listarCanjesAdmin,
+  buscarClientePorDni,
+  acreditarPuntosManual,
+} from '../api/puntos.api';
+import type { Premio, CanjePremioConDetalle, ClienteBusquedaDNI } from '../types';
 import { AdminLayout } from '../components/admin/AdminLayout';
+
+function nombreCliente(c: ClienteBusquedaDNI): string {
+  const partes = [c.nombre, c.apellido].filter(Boolean);
+  return partes.length > 0 ? partes.join(' ') : (c.email ?? 'Cliente sin nombre cargado');
+}
 
 const FORM_VACIO = {
   nombre: '',
@@ -32,6 +45,18 @@ export function AdminPuntosPage() {
   const [cargandoCanjes, setCargandoCanjes] = useState(true);
   const [errorCanjes, setErrorCanjes]     = useState<string | null>(null);
 
+  const [dniBusqueda, setDniBusqueda]           = useState('');
+  const [buscandoCliente, setBuscandoCliente]   = useState(false);
+  const [errorBusqueda, setErrorBusqueda]       = useState<string | null>(null);
+  const [clientesEncontrados, setClientesEncontrados] = useState<ClienteBusquedaDNI[]>([]);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteBusquedaDNI | null>(null);
+
+  const [puntosACargar, setPuntosACargar] = useState('');
+  const [motivoCarga, setMotivoCarga]     = useState('');
+  const [acreditando, setAcreditando]     = useState(false);
+  const [errorAcreditar, setErrorAcreditar] = useState<string | null>(null);
+  const [mensajeExito, setMensajeExito]     = useState<string | null>(null);
+
   const cargarPremios = useCallback(async () => {
     setCargandoPremios(true);
     setErrorPremios(null);
@@ -58,6 +83,74 @@ export function AdminPuntosPage() {
 
   useEffect(() => { cargarPremios(); }, [cargarPremios]);
   useEffect(() => { cargarCanjes(); }, [cargarCanjes]);
+
+  function reiniciarBusquedaCliente() {
+    setDniBusqueda('');
+    setErrorBusqueda(null);
+    setClientesEncontrados([]);
+    setClienteSeleccionado(null);
+    setPuntosACargar('');
+    setMotivoCarga('');
+    setErrorAcreditar(null);
+    setMensajeExito(null);
+  }
+
+  function seleccionarCliente(c: ClienteBusquedaDNI) {
+    setClienteSeleccionado(c);
+    setErrorAcreditar(null);
+    setMensajeExito(null);
+  }
+
+  async function handleBuscarCliente(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorBusqueda(null);
+    setMensajeExito(null);
+    setClientesEncontrados([]);
+    setClienteSeleccionado(null);
+
+    if (!dniBusqueda.trim()) {
+      setErrorBusqueda('Ingresá un DNI para buscar.');
+      return;
+    }
+
+    setBuscandoCliente(true);
+    try {
+      const clientes = await buscarClientePorDni(dniBusqueda.trim());
+      setClientesEncontrados(clientes);
+      if (clientes.length === 1) setClienteSeleccionado(clientes[0]);
+    } catch (err) {
+      const mensaje = axios.isAxiosError(err) ? err.response?.data?.error : null;
+      setErrorBusqueda(mensaje ?? 'Error al buscar el cliente.');
+    } finally {
+      setBuscandoCliente(false);
+    }
+  }
+
+  async function handleAcreditar(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorAcreditar(null);
+    setMensajeExito(null);
+    if (!clienteSeleccionado) return;
+
+    const puntos = Number(puntosACargar);
+    if (!puntosACargar.trim() || !Number.isInteger(puntos) || puntos <= 0) {
+      setErrorAcreditar('Ingresá una cantidad de puntos válida (número entero mayor a 0).');
+      return;
+    }
+
+    setAcreditando(true);
+    try {
+      const { saldo } = await acreditarPuntosManual(clienteSeleccionado.user_id, puntos, motivoCarga);
+      setMensajeExito(`Se acreditaron ${puntos} puntos a ${nombreCliente(clienteSeleccionado)}. Nuevo saldo: ${saldo} pts.`);
+      setClienteSeleccionado(c => c && { ...c, puntos_saldo: saldo });
+      setPuntosACargar('');
+      setMotivoCarga('');
+    } catch {
+      setErrorAcreditar('Error al acreditar los puntos. Intentá de nuevo.');
+    } finally {
+      setAcreditando(false);
+    }
+  }
 
   function iniciarEdicion(p: Premio) {
     setPremioEditando(p);
@@ -126,6 +219,118 @@ export function AdminPuntosPage() {
   return (
     <AdminLayout subtitle="Catálogo de premios y canjes de clientes">
       <div className="admin-section">
+        <div className="admin-form-card">
+          <h2>Cargar puntos a un cliente</h2>
+          <p style={{ color: 'var(--text-light)', fontSize: '0.85rem', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+            Buscá al cliente por DNI para acreditarle puntos a mano — por ejemplo, cuando compra en el local y quiere registrar sus puntos.
+          </p>
+
+          <form onSubmit={handleBuscarCliente} className="admin-form">
+            <div className="admin-form-grid">
+              <div className="form-group">
+                <label htmlFor="cliente-dni">DNI del cliente</label>
+                <input
+                  id="cliente-dni"
+                  type="text"
+                  inputMode="numeric"
+                  value={dniBusqueda}
+                  onChange={e => setDniBusqueda(e.target.value)}
+                  placeholder="Ej: 30123456"
+                />
+              </div>
+            </div>
+
+            {errorBusqueda && <div className="admin-error">{errorBusqueda}</div>}
+
+            <div className="admin-form-actions">
+              <button type="submit" className="btn btn-primary" disabled={buscandoCliente}>
+                {buscandoCliente ? 'Buscando...' : 'Buscar cliente'}
+              </button>
+              {(clientesEncontrados.length > 0 || errorBusqueda) && (
+                <button type="button" className="btn btn-secondary" onClick={reiniciarBusquedaCliente}>
+                  Nueva búsqueda
+                </button>
+              )}
+            </div>
+          </form>
+
+          {clientesEncontrados.length > 1 && !clienteSeleccionado && (
+            <div className="admin-table-wrapper" style={{ marginTop: '1rem' }}>
+              <p>Se encontró más de un cliente con ese DNI. Elegí a cuál cargarle los puntos:</p>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Saldo</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientesEncontrados.map(c => (
+                    <tr key={c.user_id}>
+                      <td>{nombreCliente(c)}</td>
+                      <td>{c.email ?? '—'}</td>
+                      <td>{c.puntos_saldo} pts</td>
+                      <td>
+                        <button type="button" className="btn btn--ghost btn--sm" onClick={() => seleccionarCliente(c)}>
+                          Elegir
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {clienteSeleccionado && (
+            <form onSubmit={handleAcreditar} className="admin-form" style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+              <p style={{ marginTop: 0 }}>
+                Cliente: <strong>{nombreCliente(clienteSeleccionado)}</strong>
+                {clienteSeleccionado.email && ` (${clienteSeleccionado.email})`}
+                {clienteSeleccionado.dni && ` — DNI ${clienteSeleccionado.dni}`}
+                <br />
+                Saldo actual: <strong>{clienteSeleccionado.puntos_saldo} pts</strong>
+              </p>
+
+              {mensajeExito && <div className="admin-success">{mensajeExito}</div>}
+              {errorAcreditar && <div className="admin-error">{errorAcreditar}</div>}
+
+              <div className="admin-form-grid">
+                <div className="form-group">
+                  <label htmlFor="puntos-cargar">Puntos a cargar *</label>
+                  <input
+                    id="puntos-cargar"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={puntosACargar}
+                    onChange={e => setPuntosACargar(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="motivo-carga">Motivo (opcional)</label>
+                  <input
+                    id="motivo-carga"
+                    type="text"
+                    value={motivoCarga}
+                    onChange={e => setMotivoCarga(e.target.value)}
+                    placeholder="Ej: Compra en el local - Boleta #1234"
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form-actions">
+                <button type="submit" className="btn btn-primary" disabled={acreditando}>
+                  {acreditando ? 'Acreditando...' : 'Acreditar puntos'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
         <div className={`admin-form-card${premioEditando ? ' admin-form-card--editando' : ''}`}>
           <h2>{premioEditando ? `Editando: ${premioEditando.nombre}` : 'Nuevo premio'}</h2>
 

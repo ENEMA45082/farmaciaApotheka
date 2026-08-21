@@ -6,6 +6,7 @@ import type {
   ActualizarPremioDTO,
   CanjePremio,
   CanjePremioConDetalle,
+  ClienteBusquedaDNI,
 } from '../types';
 import { supabase } from '../lib/supabase';
 import { addErrorInterceptor } from './apiClient';
@@ -54,5 +55,24 @@ export async function actualizarPremio(id: string, dto: ActualizarPremioDTO): Pr
 
 export async function listarCanjesAdmin(): Promise<CanjePremioConDetalle[]> {
   const { data } = await api.get<CanjePremioConDetalle[]>('/puntos/canjes/admin');
+  return data;
+}
+
+// Sin resultados -> 404. El caller maneja ese caso en el propio formulario
+// de búsqueda, por eso no dispara el ErrorModal genérico.
+export async function buscarClientePorDni(dni: string): Promise<ClienteBusquedaDNI[]> {
+  const { data } = await api.get<ClienteBusquedaDNI[]>('/puntos/clientes', {
+    params: { dni },
+    suppressGlobalError: true,
+  });
+  return data;
+}
+
+export async function acreditarPuntosManual(clienteId: string, puntos: number, motivo: string): Promise<{ saldo: number }> {
+  const { data } = await api.post<{ saldo: number }>('/puntos/acreditar', {
+    cliente_id: clienteId,
+    puntos,
+    motivo: motivo.trim() || null,
+  });
   return data;
 }

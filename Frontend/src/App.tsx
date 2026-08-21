@@ -41,6 +41,7 @@ const PuntosPage         = lazy(() => import('./pages/PuntosPage').then(m => ({ 
 const DireccionesPage    = lazy(() => import('./pages/DireccionesPage').then(m => ({ default: m.DireccionesPage })));
 const OfertasPage        = lazy(() => import('./pages/OfertasPage').then(m => ({ default: m.OfertasPage })));
 const ContactoPage       = lazy(() => import('./pages/ContactoPage').then(m => ({ default: m.ContactoPage })));
+const PoliticaPrivacidadPage = lazy(() => import('./pages/PoliticaPrivacidadPage').then(m => ({ default: m.PoliticaPrivacidadPage })));
 const FavoritosPage      = lazy(() => import('./pages/FavoritosPage').then(m => ({ default: m.FavoritosPage })));
 const EnvioPage          = lazy(() => import('./pages/EnvioPage').then(m => ({ default: m.EnvioPage })));
 const PagarPage          = lazy(() => import('./pages/PagarPage').then(m => ({ default: m.PagarPage })));
@@ -70,6 +71,7 @@ function AnimatedRoutes() {
             <Route path="/direcciones" element={<DireccionesPage />} />
             <Route path="/ofertas" element={<OfertasPage />} />
             <Route path="/contacto" element={<ContactoPage />} />
+            <Route path="/privacidad" element={<PoliticaPrivacidadPage />} />
             <Route path="/favoritos" element={<FavoritosPage />} />
             <Route path="/checkout" element={<Navigate to="/envio" replace />} />
             <Route path="/envio" element={<RequiereDocumentoRoute><EnvioPage /></RequiereDocumentoRoute>} />

@@ -3,7 +3,13 @@ import * as puntosController from '../controllers/puntos.controller';
 import { requiereAutenticacion, requiereAdmin } from '../middlewares/autenticacion.middleware';
 import { validar } from '../middlewares/validar';
 import { limitadorCanjePuntos } from '../middlewares/limitadorSolicitudes';
-import { crearPremioSchema, actualizarPremioSchema, canjearPremioSchema } from '../schemas/puntos.schema';
+import {
+  crearPremioSchema,
+  actualizarPremioSchema,
+  canjearPremioSchema,
+  buscarClienteDniSchema,
+  acreditarManualSchema,
+} from '../schemas/puntos.schema';
 
 const router = Router();
 
@@ -15,5 +21,8 @@ router.post('/premios',      requiereAdmin, validar(crearPremioSchema), puntosCo
 router.get('/premios/admin', requiereAdmin, puntosController.listarPremiosAdmin);
 router.patch('/premios/:id', requiereAdmin, validar(actualizarPremioSchema), puntosController.actualizarPremio);
 router.get('/canjes/admin',  requiereAdmin, puntosController.listarCanjesAdmin);
+
+router.get('/clientes',   requiereAdmin, validar(buscarClienteDniSchema, 'query'), puntosController.buscarClientePorDni);
+router.post('/acreditar', requiereAdmin, validar(acreditarManualSchema), puntosController.acreditarManual);
 
 export default router;

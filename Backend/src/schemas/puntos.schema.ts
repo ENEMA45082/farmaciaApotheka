@@ -21,3 +21,13 @@ export const actualizarPremioSchema = z.object({
 export const canjearPremioSchema = z.object({
   premio_id: z.string().uuid(),
 });
+
+export const buscarClienteDniSchema = z.object({
+  dni: z.string().trim().min(1).max(30),
+});
+
+export const acreditarManualSchema = z.object({
+  cliente_id: z.string().uuid(),
+  puntos:     z.number().int().positive(),
+  motivo:     z.string().max(300).nullable().optional(),
+});

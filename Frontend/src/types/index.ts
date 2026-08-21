@@ -413,7 +413,7 @@ export interface ActualizarPremioDTO {
   activo?: boolean;
 }
 
-export type TipoMovimientoPuntos = 'acreditacion' | 'canje';
+export type TipoMovimientoPuntos = 'acreditacion' | 'canje' | 'ajuste';
 
 export interface MovimientoPuntos {
   id: string;
@@ -422,7 +422,17 @@ export interface MovimientoPuntos {
   puntos: number;
   pedido_id: string | null;
   canje_id: string | null;
+  motivo: string | null;
   creado_en: string;
+}
+
+export interface ClienteBusquedaDNI {
+  user_id: string;
+  email: string | null;
+  nombre: string | null;
+  apellido: string | null;
+  dni: string | null;
+  puntos_saldo: number;
 }
 
 export interface CanjePremio {

@@ -1,4 +1,6 @@
 import * as puntosRepo from '../repositories/puntos.repository';
+import * as perfilRepo from '../repositories/perfil.repository';
+import { supabase } from '../config/supabase';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import { calcularPuntosPorPedido } from '../config/puntosConfig';
@@ -10,6 +12,8 @@ import type {
   ActualizarPremioDTO,
   CanjePremio,
   CanjePremioConDetalle,
+  ClienteBusquedaDNI,
+  AcreditarPuntosManualDTO,
 } from '../types';
 
 // Se llama desde pedidos.service.ts::cambiarEstado al marcar 'Entregado'.
@@ -80,4 +84,37 @@ export async function actualizarPremio(id: string, dto: ActualizarPremioDTO): Pr
 
 export async function listarCanjesAdmin(): Promise<CanjePremioConDetalle[]> {
   return puntosRepo.listarCanjesAdmin();
+}
+
+export async function buscarClientePorDni(dni: string): Promise<ClienteBusquedaDNI[]> {
+  const dniLimpio = dni.trim();
+  if (!dniLimpio) {
+    throw new AppError('Ingresá un DNI para buscar', 400, 'DNI_REQUERIDO');
+  }
+
+  const perfiles = await perfilRepo.encontrarPorDni(dniLimpio);
+  if (perfiles.length === 0) {
+    throw new AppError('No se encontró ningún cliente registrado con ese DNI.', 404, 'CLIENTE_NOT_FOUND');
+  }
+
+  return Promise.all(perfiles.map(async perfil => {
+    const userResult = await supabase.auth.admin.getUserById(perfil.user_id).catch(() => null);
+    return {
+      user_id:      perfil.user_id,
+      email:        userResult?.data?.user?.email ?? null,
+      nombre:       perfil.nombre,
+      apellido:     perfil.apellido,
+      dni:          perfil.dni,
+      puntos_saldo: await puntosRepo.obtenerSaldo(perfil.user_id),
+    };
+  }));
+}
+
+export async function acreditarManual(dto: AcreditarPuntosManualDTO): Promise<number> {
+  validarUUID(dto.cliente_id, 'cliente');
+  if (!Number.isInteger(dto.puntos) || dto.puntos <= 0) {
+    throw new AppError('La cantidad de puntos debe ser un número entero mayor a 0', 400, 'PUNTOS_INVALIDOS');
+  }
+
+  return puntosRepo.acreditarManual(dto.cliente_id, dto.puntos, dto.motivo?.trim() || null);
 }

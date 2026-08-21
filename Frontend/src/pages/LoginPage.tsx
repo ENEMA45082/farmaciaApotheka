@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { staggerContainer, staggerItem } from '../components/ui/motion';
@@ -65,7 +65,8 @@ export function LoginPage() {
           </motion.button>
 
           <motion.p className="login-footer" variants={staggerItem}>
-            Al continuar, aceptás nuestros términos de uso y política de privacidad.
+            Al continuar, aceptás nuestros términos de uso y{' '}
+            <Link to="/privacidad">política de privacidad</Link>.
           </motion.p>
         </motion.div>
       </motion.div>
