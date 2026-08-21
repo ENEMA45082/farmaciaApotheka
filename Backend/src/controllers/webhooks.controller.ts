@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import * as emailService from '../services/email.service';
 import type { nuevoUsuarioWebhookSchema } from '../schemas/webhooks.schema';
 import type { z } from 'zod';
@@ -13,18 +13,23 @@ function extraerNombre(meta: Record<string, unknown> | undefined): string | null
   return fullName?.trim().split(/\s+/)[0] ?? null;
 }
 
-// Database Webhook de Supabase sobre auth.users (INSERT) — ver instrucciones
-// de configuración en .env.example, bloque "Resend". Igual que
-// pagos.controller.ts::notificacion: valida el secreto por query param y
-// siempre responde 200 (Supabase reintenta si no recibe 2xx).
-export async function nuevoUsuario(req: Request, res: Response): Promise<void> {
+// Va ANTES que validar(schema) en la ruta: así una request sin el secreto
+// correcto nunca llega a ver el detalle de qué shape espera el body.
+export function verificarSecreto(req: Request, res: Response, next: NextFunction): void {
   const secretEsperado = process.env.SUPABASE_WEBHOOK_SECRET;
   if (secretEsperado && req.query.secret !== secretEsperado) {
     console.error('[Webhook nuevo usuario] secreto inválido o ausente — posible intento de forjado. IP:', req.ip);
     res.status(401).json({ error: 'No autorizado' });
     return;
   }
+  next();
+}
 
+// Database Webhook de Supabase sobre auth.users (INSERT) — ver instrucciones
+// de configuración en .env.example, bloque "Resend". Igual que
+// pagos.controller.ts::notificacion: siempre responde 200 (Supabase
+// reintenta si no recibe 2xx).
+export async function nuevoUsuario(req: Request, res: Response): Promise<void> {
   const { record } = req.body as NuevoUsuarioBody;
   const nombre = extraerNombre(record.raw_user_meta_data);
 

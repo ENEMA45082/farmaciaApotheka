@@ -6,7 +6,13 @@ import { nuevoUsuarioWebhookSchema } from '../schemas/webhooks.schema';
 const router = Router();
 
 // Sin requiereAutenticacion: lo llama Supabase, no un usuario logueado.
-// La verificación es el ?secret= (ver webhooks.controller.ts).
-router.post('/nuevo-usuario', validar(nuevoUsuarioWebhookSchema), webhooksController.nuevoUsuario);
+// verificarSecreto va antes que validar: una request sin el secreto correcto
+// no debe ni enterarse de qué shape espera el body.
+router.post(
+  '/nuevo-usuario',
+  webhooksController.verificarSecreto,
+  validar(nuevoUsuarioWebhookSchema),
+  webhooksController.nuevoUsuario,
+);
 
 export default router;
