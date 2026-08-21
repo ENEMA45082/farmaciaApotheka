@@ -15,12 +15,12 @@ export function ProductGrid({ productos, cargando, error }: Props) {
   if (cargando) return <Spinner />;
   if (error)    return <ErrorMessage message={error} />;
   if (productos.length === 0) {
-    return <p className="empty-state">No se encontraron productos.</p>;
+    return <p className="py-12 text-center text-sm text-muted">No se encontraron productos.</p>;
   }
 
   return (
     <motion.div
-      className="product-grid"
+      className="grid grid-cols-2 gap-3 py-2 sm:gap-5 sm:py-4 sm:[grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]"
       variants={staggerContainer}
       initial="initial"
       animate="animate"

@@ -1,0 +1,20 @@
+/*
+ * Sin preflight a propósito: el preflight de Tailwind resetea márgenes,
+ * tipografía y estilos de botones/inputs globalmente, lo que pisaría los
+ * estilos del resto del sitio (que sigue usando index.css). Mientras
+ * Tailwind conviva con el CSS existente, solo importamos theme+utilities.
+ * Si en algún momento se migra todo el sitio a Tailwind, ahí sí conviene
+ * pasar a `@import "tailwindcss";` (con preflight) de una.
+ */
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+@theme {
+  --color-navy:      #002D62;
+  --color-navy-dark: #004080;
+  --color-verde:     #88D8C0;
+  --color-ink:       #1a1a2e;
+  --color-muted:     #9CA3AF;
+  --color-line:      #D1D5DB;
+  --color-page:      #f4f8fb;
+}

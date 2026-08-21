@@ -466,8 +466,6 @@ img { max-width: 100%; display: block; }
 .btn--ghost:hover { background: var(--border); }
 .btn--ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn--sm { padding: 0.4rem 0.9rem; font-size: 0.82rem; }
-.btn--whatsapp { background: #25D366; color: #fff; display: inline-flex; align-items: center; gap: 0.5rem; }
-.btn--whatsapp:hover { background: #1ebe5a; }
 .input {
   width: 100%;
   padding: 0.6rem 0.85rem;
@@ -1255,44 +1253,6 @@ img { max-width: 100%; display: block; }
   .footer__copy { text-align: center; }
 }
 
-/* ===== Legal (Política de Privacidad) ===== */
-.legal-page { max-width: 760px; line-height: 1.6; }
-.legal-page h1 { font-size: 1.6rem; font-weight: 800; color: var(--navy); }
-.legal-page__actualizado { color: var(--text-light); font-size: 0.85rem; margin: 0.35rem 0 1.5rem; }
-.legal-page h2 { font-size: 1.05rem; font-weight: 700; color: var(--navy); margin: 1.75rem 0 0.5rem; }
-.legal-page p { color: var(--text); margin: 0.5rem 0; }
-.legal-page ul { color: var(--text); margin: 0.5rem 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.35rem; }
-.legal-page a { color: var(--navy); }
-
-/* ===== Contacto Page ===== */
-.contacto-titulo { font-size: 1.6rem; font-weight: 800; color: var(--navy); }
-.contacto-intro { color: var(--text-light); margin: 0.5rem 0 1.5rem; max-width: 640px; line-height: 1.5; }
-
-.contacto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
-@media (max-width: 768px) {
-  .contacto-grid { grid-template-columns: 1fr; }
-}
-
-.contacto-info {
-  display: flex; flex-direction: column; gap: 1.1rem;
-  background: var(--white); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow); padding: 1.5rem;
-}
-.contacto-info__item h2 { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--verde-dark); margin-bottom: 0.25rem; }
-.contacto-info__item address,
-.contacto-info__item a { font-style: normal; font-size: 0.95rem; color: var(--text); }
-.contacto-info__item a { display: inline-block; padding: 0.4rem 0; margin: -0.4rem 0; text-decoration: none; }
-.contacto-info__item a:hover { color: var(--navy); text-decoration: underline; }
-
-.contacto-horarios { list-style: none; display: flex; flex-direction: column; gap: 0.2rem; }
-.contacto-horarios li { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.95rem; color: var(--text); max-width: 320px; }
-
-.contacto-mapa { position: relative; width: 100%; height: 320px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
-.contacto-mapa iframe { display: block; }
-@media (min-width: 768px) {
-  .contacto-mapa { height: 400px; }
-}
-
 /* ===== Admin Page ===== */
 .admin-page { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem; }
 
@@ -1875,48 +1835,6 @@ img { max-width: 100%; display: block; }
 .admin-buscador-producto__vacio { padding: 0.6rem 1rem; font-size: 0.85rem; color: var(--text-light); }
 
 /* ===== Login Page ===== */
-.login-page {
-  min-height: 70vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-}
-.login-card {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 2.5rem 2rem;
-  width: 100%;
-  max-width: 400px;
-  text-align: center;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-}
-.login-logo { margin-bottom: 1.5rem; }
-.login-logo__name { display: block; font-size: 1.6rem; font-weight: 800; color: var(--navy); letter-spacing: -0.5px; }
-.login-logo__sub { display: block; font-size: 0.7rem; letter-spacing: 3px; color: var(--text-light); font-weight: 600; }
-.login-title { font-size: 1.25rem; font-weight: 700; color: var(--navy); margin-bottom: 0.5rem; }
-.login-subtitle { font-size: 0.9rem; color: var(--text-light); margin-bottom: 1.75rem; }
-.btn-google {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--navy);
-  background: var(--white);
-  transition: background 0.15s, border-color 0.15s;
-  cursor: pointer;
-  margin-bottom: 1.25rem;
-}
-.btn-google:hover { background: var(--bg); border-color: #aaa; }
-.btn-google__icon { flex-shrink: 0; }
-
 /* ===== Dashboard de Estadísticas ===== */
 .stats-page {
   max-width: 1280px;
@@ -2043,8 +1961,6 @@ img { max-width: 100%; display: block; }
   color: var(--navy);
   margin-bottom: 0.2rem;
 }
-.login-footer { font-size: 0.78rem; color: var(--text-light); line-height: 1.5; }
-
 /* ===== Checkout ===== */
 .checkout-page {
   max-width: 1100px;

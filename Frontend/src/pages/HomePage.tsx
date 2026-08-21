@@ -224,18 +224,23 @@ export function HomePage() {
 
   const contenidoPrincipal = (
     <>
-      <div className="sort-bar">
-        <span className="sort-bar__label">Ordenar por:</span>
+      <div className="mb-2 flex flex-wrap items-center gap-2.5 py-2">
+        <span className="text-sm font-semibold whitespace-nowrap text-ink">Ordenar por:</span>
         <SortSelect
           value={ordenar ?? ''}
           onChange={value => setSearchParams(construirParams({ ordenar: value || undefined }))}
           opciones={OPCIONES_ORDEN}
         />
         {mostrarFiltros && (
-          <button className="filtros-trigger-btn" onClick={() => setFiltrosMovilAbierto(true)}>
+          <button
+            className="ml-auto hidden items-center gap-1.5 rounded-lg border border-line bg-white px-3.5 py-2 text-sm font-semibold text-navy max-[768px]:flex"
+            onClick={() => setFiltrosMovilAbierto(true)}
+          >
             Filtros
             {cantidadFiltrosActivos > 0 && (
-              <span className="filtros-trigger-btn__badge">{cantidadFiltrosActivos}</span>
+              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-navy px-1 text-xs font-extrabold text-white">
+                {cantidadFiltrosActivos}
+              </span>
             )}
           </button>
         )}
@@ -244,12 +249,20 @@ export function HomePage() {
       <ProductGrid productos={productos} cargando={cargando} error={error} />
 
       {totalPaginas > 1 && (
-        <div className="pagination">
-          <button className="btn btn--ghost" disabled={pagina <= 1} onClick={() => setPagina(p => p - 1)}>
+        <div className="flex items-center justify-center gap-4 py-6">
+          <button
+            className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-page disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={pagina <= 1}
+            onClick={() => setPagina(p => p - 1)}
+          >
             ← Anterior
           </button>
-          <span className="pagination__info">Página {pagina} de {totalPaginas}</span>
-          <button className="btn btn--ghost" disabled={pagina >= totalPaginas} onClick={() => setPagina(p => p + 1)}>
+          <span className="text-sm text-muted">Página {pagina} de {totalPaginas}</span>
+          <button
+            className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-page disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={pagina >= totalPaginas}
+            onClick={() => setPagina(p => p + 1)}
+          >
             Siguiente →
           </button>
         </div>
