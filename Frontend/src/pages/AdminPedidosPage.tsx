@@ -566,6 +566,11 @@ export function AdminPedidosPage() {
                       {pedidoDetalle.costo_envio > 0 && (
                         <p>Envío: ${formatPrecio(pedidoDetalle.costo_envio)}</p>
                       )}
+                      {pedidoDetalle.cupon_id && pedidoDetalle.descuento_cupon > 0 && (
+                        <p className="pedido-detalle__ahorro">
+                          Cupón aplicado{pedidoDetalle.cupon_codigo && ` (${pedidoDetalle.cupon_codigo})`}: -${formatPrecio(pedidoDetalle.descuento_cupon)}
+                        </p>
+                      )}
                       <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedidoDetalle.total)}</strong></p>
                       {pedidoDetalle.pw_payment_id && (
                         <p className="pedido-detalle__pago">

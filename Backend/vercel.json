@@ -1,9 +1,13 @@
 {
   "version": 2,
+  "framework": null,
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "regions": ["gru1"],
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
-      "includeFiles": "node_modules/@sparticuz/chromium/**"
+      "includeFiles": "node_modules/{@sparticuz/chromium,tar-fs,tar-stream,pump,end-of-stream,once,wrappy,b4a,fast-fifo,streamx,events-universal,text-decoder,teex,bare-fs,bare-path,bare-events,bare-stream,bare-url}/**"
     }
   },
   "routes": [

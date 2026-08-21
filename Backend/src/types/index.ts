@@ -396,6 +396,58 @@ export interface ActualizarBannerDTO {
   activo?: boolean;
 }
 
+export type TemaBannerPromo = 'turquesa' | 'azul' | 'coral' | 'violeta' | 'verde';
+
+export interface BannerPromo {
+  id: string;
+  imagen_url: string;
+  titulo: string;
+  vigencia_texto: string | null;
+  badge_texto: string | null;
+  tema: TemaBannerPromo;
+  link_url: string | null;
+  orden: number;
+  activo: boolean;
+  creado_en: string;
+}
+
+export interface CrearBannerPromoDTO {
+  imagen_url: string;
+  titulo: string;
+  vigencia_texto?: string | null;
+  badge_texto?: string | null;
+  tema?: TemaBannerPromo;
+  link_url?: string | null;
+  orden?: number;
+}
+
+export interface ActualizarBannerPromoDTO {
+  imagen_url?: string;
+  titulo?: string;
+  vigencia_texto?: string | null;
+  badge_texto?: string | null;
+  tema?: TemaBannerPromo;
+  link_url?: string | null;
+  orden?: number;
+  activo?: boolean;
+}
+
+export interface ProductoDestacado {
+  id: string;
+  producto_id: string;
+  orden: number;
+  creado_en: string;
+  producto?: Producto;
+}
+
+export interface CrearProductoDestacadoDTO {
+  producto_id: string;
+}
+
+export interface ActualizarProductoDestacadoDTO {
+  orden?: number;
+}
+
 export interface Perfil {
   user_id: string;
   nombre: string | null;

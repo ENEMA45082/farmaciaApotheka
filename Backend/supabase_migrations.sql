@@ -1405,3 +1405,50 @@ $$;
 -- --------------------------------------------------------
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_codigo_barras_unico
   ON products(codigo_barras) WHERE codigo_barras IS NOT NULL;
+
+
+-- --------------------------------------------------------
+-- 21. Curaduría manual del carrusel "Los elegidos de Apotheka"
+--     de la home. Antes ese carrusel mostraba automáticamente
+--     los productos con en_oferta = true; ahora el admin elige
+--     a mano, desde el panel de Cartelería, qué productos del
+--     catálogo aparecen ahí y en qué orden (mismo patrón que
+--     la tabla banners).
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS productos_destacados (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  producto_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  orden       integer NOT NULL DEFAULT 0,
+  creado_en   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (producto_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_productos_destacados_orden
+  ON productos_destacados(orden);
+
+
+-- --------------------------------------------------------
+-- 22. Banners promocionales por categoría, para la home
+--     (tarjetas debajo de "medios de pago": Skincare, Cuidado
+--     Capilar, Fragancias, etc). Administrables desde el panel
+--     de Cartelería, mismo patrón que la tabla banners, pero con
+--     más campos porque acá el texto/insignia se arma en HTML
+--     (no viene "horneado" en la imagen como en los banners del
+--     carrusel hero).
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS banners_promo (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  imagen_url     text NOT NULL,
+  titulo         text NOT NULL,
+  vigencia_texto text,
+  badge_texto    text,
+  tema           text NOT NULL DEFAULT 'turquesa'
+                 CHECK (tema IN ('turquesa','azul','coral','violeta','verde')),
+  link_url       text,
+  orden          integer NOT NULL DEFAULT 0,
+  activo         boolean NOT NULL DEFAULT true,
+  creado_en      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_banners_promo_orden
+  ON banners_promo(orden);

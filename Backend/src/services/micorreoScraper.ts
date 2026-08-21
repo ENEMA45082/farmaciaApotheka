@@ -63,14 +63,26 @@ export interface OpcionScrapeada {
 
 let browserWarm: Browser | null = null;
 
+// @sparticuz/chromium se publica como ES Module puro. tsconfig.json compila
+// este proyecto a CommonJS, y con "module": "commonjs" TypeScript reescribe
+// un `import()` dinámico literal en un `require()` común al emitir JS — lo
+// cual rompe en runtime contra un paquete ESM ("require() of ES Module ...
+// not supported"). Verificado en producción (2026-08-13). El truco estándar
+// para esto es esconder el import() dentro de un `new Function(...)`: así el
+// compilador no puede verlo como un `import()` estático y no lo reescribe,
+// preservando el import() dinámico real en el JS emitido.
+const importDinamico = new Function('specifier', 'return import(specifier)') as (
+  specifier: string,
+) => Promise<any>;
+
 async function obtenerBrowser(): Promise<Browser> {
   if (browserWarm && browserWarm.connected) return browserWarm;
 
   if (ES_ENTORNO_SERVERLESS) {
     // Producción (Vercel): Chromium empaquetado para serverless. El binario
     // de @sparticuz/chromium es Linux-only, no corre en desarrollo local (Windows).
-    const chromium = (await import('@sparticuz/chromium')).default;
-    const puppeteer = await import('puppeteer-core');
+    const chromium = (await importDinamico('@sparticuz/chromium')).default;
+    const puppeteer = await importDinamico('puppeteer-core');
     browserWarm = await puppeteer.launch({
       args: await puppeteer.defaultArgs({ args: chromium.args, headless: 'shell' }),
       executablePath: await chromium.executablePath(),
@@ -87,6 +99,12 @@ async function obtenerBrowser(): Promise<Browser> {
     })) as unknown as Browser;
   }
 
+  // (chromium/puppeteer via importDinamico son `any`, así que TS ya no puede
+  // probar por control flow que browserWarm quedó no-nulo en ambas ramas —
+  // se valida explícito acá, que de paso es una comprobación real en runtime.
+  if (!browserWarm) {
+    throw new MiCorreoQuoteError('No se pudo inicializar el browser de Puppeteer', 'BROWSER_LAUNCH_FAILED');
+  }
   return browserWarm;
 }
 
@@ -247,11 +265,19 @@ export async function completarPaquete(
   pesoKg: number,
   valorDeclarado: number,
 ): Promise<void> {
-  // TODO(verificar en vivo): confirmar el mapeo real Largo/Ancho/Alto → cm.
+  // Verificado en vivo (2026-08-13): mapeo Largo/Ancho/Alto → cm correcto
+  // (medidas 27x21x13 confirmadas en el resumen del formulario real).
   await llenarCampoPorLabel(page, 'Largo', String(dimensiones.largoCm));
   await llenarCampoPorLabel(page, 'Ancho', String(dimensiones.anchoCm));
   await llenarCampoPorLabel(page, 'Alto', String(dimensiones.altoCm));
-  await llenarCampoPorLabel(page, 'Peso (kg)', String(pesoKg));
+  // El sitio usa formato numérico argentino (coma decimal — se ve en los
+  // precios, ej. "$ 10.253,06"). Con un peso entero (ej. "1") no se notaba,
+  // pero un peso con decimales tipeado con PUNTO ("1.5") parece
+  // interpretarse mal en el campo (probablemente lo descarta y lo lee como
+  // "15" en vez de "1.5" — precios ~3x más altos de lo esperado en pruebas
+  // reales con peso 1.5kg). Se tipea con COMA para que coincida con lo que
+  // el formulario espera.
+  await llenarCampoPorLabel(page, 'Peso (kg)', String(pesoKg).replace('.', ','));
   await llenarCampoPorLabel(page, 'Valor del contenido', String(Math.round(valorDeclarado)));
 
   await clickPorTexto(page, 'button', 'Siguiente');
