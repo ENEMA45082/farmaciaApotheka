@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { User, Truck, Receipt, CreditCard } from 'lucide-react';
 import { fetchPedidosAdmin, fetchPedidoAdminPorId, cambiarEstadoPedido, reintentarFactura } from '../api/pedidos.api';
 import type { Pedido, PedidoDetalleAdmin } from '../types';
 import { formatPrecio } from '../types';
@@ -445,7 +446,7 @@ export function AdminPedidosPage() {
                     </div>
 
                     <div className="pedido-detalle__envio-info">
-                      <h3 className="pedido-detalle__seccion-titulo">Cliente</h3>
+                      <h3 className="pedido-detalle__seccion-titulo"><User size={14} strokeWidth={2.5} /> Cliente</h3>
                       <div className="pedido-detalle__envio-row">
                         <span className="pedido-detalle__envio-label">Nombre</span>
                         <span className="pedido-detalle__envio-valor">
@@ -471,7 +472,7 @@ export function AdminPedidosPage() {
                     </div>
 
                     <div className="pedido-detalle__envio-info">
-                      <h3 className="pedido-detalle__seccion-titulo">Entrega</h3>
+                      <h3 className="pedido-detalle__seccion-titulo"><Truck size={14} strokeWidth={2.5} /> Entrega</h3>
                       <div className="pedido-detalle__envio-row">
                         <span className="pedido-detalle__envio-label">Método de entrega</span>
                         <span className="pedido-detalle__envio-valor">
@@ -568,6 +569,7 @@ export function AdminPedidosPage() {
                       <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedidoDetalle.total)}</strong></p>
                       {pedidoDetalle.pw_payment_id && (
                         <p className="pedido-detalle__pago">
+                          <CreditCard size={13} strokeWidth={2.25} />
                           Pago procesado · ID: {pedidoDetalle.pw_payment_id}
                           {pedidoDetalle.pw_site_transaction_id && ` · Ref. Payway: ${pedidoDetalle.pw_site_transaction_id}`}
                         </p>
@@ -575,7 +577,16 @@ export function AdminPedidosPage() {
                     </div>
 
                     <div className="pedido-detalle__factura">
-                      <h3 className="pedido-detalle__seccion-titulo">Factura ARCA</h3>
+                      <div className="pedido-detalle__factura-header">
+                        <h3 className="pedido-detalle__seccion-titulo"><Receipt size={14} strokeWidth={2.5} /> Factura ARCA</h3>
+                        {pedidoDetalle.factura && (
+                          <span className={`factura-badge factura-badge--${pedidoDetalle.factura.estado}`}>
+                            {pedidoDetalle.factura.estado === 'emitida' && 'Emitida'}
+                            {pedidoDetalle.factura.estado === 'pendiente' && 'Pendiente'}
+                            {pedidoDetalle.factura.estado === 'error' && 'Error'}
+                          </span>
+                        )}
+                      </div>
                       {!pedidoDetalle.factura && (
                         <p className="pedido-detalle__pago">Sin factura (el pedido todavía no fue marcado como Entregado, o ARCA no está configurado).</p>
                       )}

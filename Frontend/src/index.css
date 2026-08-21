@@ -1174,17 +1174,38 @@ img { max-width: 100%; display: block; }
 .admin-table-card h2 { font-size: 1.1rem; font-weight: 700; color: var(--navy); margin-bottom: 0; }
 .admin-form-card--editando { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(26,54,93,0.12), var(--shadow); }
 
-.admin-landing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem; }
+.admin-landing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.25rem; }
 .admin-landing-card {
-  display: flex; flex-direction: column; gap: 0.5rem;
-  background: var(--white); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 1.5rem; box-shadow: var(--shadow); color: var(--text);
-  transition: border-color 0.15s, transform 0.15s;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.6rem;
+  background: var(--white); border: 1px solid var(--border); border-radius: 14px;
+  padding: 1.6rem; box-shadow: var(--shadow); color: var(--text);
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
-.admin-landing-card:hover { border-color: var(--navy); transform: translateY(-2px); }
-.admin-landing-card svg { color: var(--verde-dark); }
-.admin-landing-card h2 { font-size: 1.05rem; font-weight: 700; color: var(--navy); margin: 0; }
-.admin-landing-card p { font-size: 0.85rem; color: var(--text-light); margin: 0; }
+.admin-landing-card:hover { border-color: var(--navy); transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,45,98,0.14); }
+.admin-landing-card h2 { font-size: 1.05rem; font-weight: 700; color: var(--navy); margin: 0.15rem 0 0; }
+.admin-landing-card p { font-size: 0.85rem; color: var(--text-light); margin: 0; line-height: 1.45; }
+
+.admin-landing-card__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
+}
+.admin-landing-card__icon--blue   { background: #E3EFFC; color: #1D5DAD; }
+.admin-landing-card__icon--green  { background: #E1F7EE; color: #1F9D6C; }
+.admin-landing-card__icon--violet { background: #F1E9FB; color: #7C4FC4; }
+.admin-landing-card__icon--amber  { background: #FDF1DC; color: #B9770E; }
+.admin-landing-card__icon--red    { background: #FBE7E7; color: #C23636; }
+
+.admin-landing-card__cta {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.85rem; font-weight: 600; margin-top: auto; padding-top: 0.5rem;
+}
+.admin-landing-card__cta svg { transition: transform 0.15s; }
+.admin-landing-card:hover .admin-landing-card__cta svg { transform: translateX(3px); }
+.admin-landing-card__cta--blue   { color: #1D5DAD; }
+.admin-landing-card__cta--green  { color: #1F9D6C; }
+.admin-landing-card__cta--violet { color: #7C4FC4; }
+.admin-landing-card__cta--amber  { color: #B9770E; }
+.admin-landing-card__cta--red    { color: #C23636; }
 
 .admin-filtros-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
 .admin-filtros-toggle { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.85rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--white); font-size: 0.82rem; font-weight: 600; color: var(--text); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
@@ -1238,6 +1259,7 @@ img { max-width: 100%; display: block; }
 .btn-secondary:hover { background: var(--border); }
 
 .admin-error { background: #fff3f3; color: #c0392b; border: 1px solid #f5c6cb; border-radius: var(--radius); padding: 0.6rem 1rem; font-size: 0.9rem; margin-bottom: 0.75rem; }
+.admin-success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; border-radius: var(--radius); padding: 0.6rem 1rem; font-size: 0.9rem; margin-bottom: 0.75rem; }
 .admin-aviso { color: #b45309; font-size: 0.8rem; margin-top: 0.3rem; }
 .admin-loading { color: var(--text-light); font-size: 0.9rem; }
 .admin-empty { color: var(--text-light); font-size: 0.9rem; padding: 1rem 0; }
@@ -1256,12 +1278,19 @@ img { max-width: 100%; display: block; }
    inferior quedaba un poco desalineado justo en esta columna. Los botones
    ya son inline-flex, así que alcanza con nowrap + margin entre ellos. */
 .acciones { white-space: nowrap; }
-.btn-tabla { display: inline-flex; align-items: center; justify-content: center; padding: 0.4rem; border-radius: var(--radius); vertical-align: middle; }
-.btn-tabla + .btn-tabla { margin-left: 0.4rem; }
-.btn-editar { background: var(--azul-claro); color: var(--navy); }
-.btn-editar:hover { background: var(--azul-medio); }
-.btn-eliminar { background: #fde8e8; color: #c0392b; }
-.btn-eliminar:hover { background: #fac5c5; }
+.btn-tabla {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%; vertical-align: middle;
+  color: var(--text-light); transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.btn-tabla svg { width: 18px; height: 18px; stroke-width: 2.25; }
+.btn-tabla:hover:not(:disabled) { background: var(--bg); transform: scale(1.06); }
+.btn-tabla:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-tabla + .btn-tabla { margin-left: 0.3rem; }
+.btn-editar { color: #1C7ED6; }
+.btn-editar:hover { background: #E3EFFC; }
+.btn-eliminar { color: #E03131; }
+.btn-eliminar:hover { background: #FBE7E7; }
 
 /* Strip de miniaturas en el formulario admin */
 .imagen-strip { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
@@ -1416,11 +1445,23 @@ img { max-width: 100%; display: block; }
 .pedido-tabla { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-bottom: 1.25rem; }
 .pedido-tabla th { text-align: left; padding: 0.6rem 0.75rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: 700; color: var(--text-light); font-size: 0.78rem; text-transform: uppercase; }
 .pedido-tabla td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+.pedido-tabla tbody tr:nth-child(even) { background: #fafbfc; }
+.pedido-tabla tbody tr:hover { background: var(--bg); }
 .pedido-tabla__lista { font-size: 0.78rem; color: var(--text-light); text-decoration: line-through; margin-left: 0.3rem; }
 .pedido-tabla__descuento-2x1 { font-size: 0.78rem; color: #10b981; font-weight: 700; margin-left: 0.3rem; }
-.pedido-detalle__totales { text-align: right; font-size: 0.9rem; margin-bottom: 1.25rem; line-height: 1.8; }
+.pedido-detalle__totales {
+  text-align: right; font-size: 0.9rem; margin-bottom: 1.25rem; line-height: 1.8;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+.pedido-detalle__totales p { margin: 0; }
 .pedido-detalle__ahorro { color: #065f46; font-weight: 600; }
-.pedido-detalle__total { font-size: 1.05rem; }
+.pedido-detalle__total {
+  font-size: 1.25rem; color: var(--navy); font-weight: 700;
+  margin-top: 0.5rem; padding-top: 0.6rem; border-top: 1px dashed var(--border);
+}
+.pedido-detalle__total strong { font-weight: 800; }
+.pedido-detalle__totales .pedido-detalle__pago { display: flex; align-items: center; justify-content: flex-end; gap: 0.3rem; }
 .pedido-detalle__acciones { display: flex; justify-content: flex-end; }
 
 .pedido-tracking { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
@@ -2711,9 +2752,11 @@ img { max-width: 100%; display: block; }
 .modal-pedido-admin__cerrar:hover { background: #dc2626; }
 .pedido-detalle--admin { padding-right: 1.5rem; }
 .pedido-detalle__seccion-titulo {
+  display: flex; align-items: center; gap: 0.4rem;
   font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.02em;
   color: var(--text-light); font-weight: 700; margin: 0 0 0.4rem;
 }
+.pedido-detalle__seccion-titulo svg { color: var(--navy); flex-shrink: 0; }
 .pedido-detalle__envio-row--destacado .pedido-detalle__envio-valor { font-weight: 600; color: var(--navy); }
 .pedido-detalle__direccion-faltante {
   background: #fef9c3; border: 1px solid #ca8a04; color: #713f12;
@@ -2726,8 +2769,18 @@ img { max-width: 100%; display: block; }
 }
 .pedido-detalle__factura {
   padding-top: 1rem; border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start;
+  display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch;
 }
+.pedido-detalle__factura-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.pedido-detalle__factura-header .pedido-detalle__seccion-titulo { margin: 0; }
+.factura-badge {
+  display: inline-flex; align-items: center; padding: 0.2rem 0.65rem;
+  border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap;
+}
+.factura-badge--emitida   { background: #dcfce7; color: #166534; }
+.factura-badge--pendiente { background: #fef9c3; color: #854d0e; }
+.factura-badge--error     { background: #fee2e2; color: #991b1b; }
 
 /* Modal cancelar pedido (admin) */
 .modal-cancelar-pedido {

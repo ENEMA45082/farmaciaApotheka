@@ -160,7 +160,7 @@ export function HomePage() {
     precio_min: precioBounds && precioSeleccionado[0] > precioBounds.min ? precioSeleccionado[0] : undefined,
     precio_max: precioBounds && precioSeleccionado[1] < precioBounds.max ? precioSeleccionado[1] : undefined,
     pagina,
-    limite: 12,
+    limite: 20,
     ordenar,
   });
 
@@ -262,7 +262,7 @@ export function HomePage() {
       <div className="home-hero-wrap"><BeneficiosBar /></div>
       {esHome && <div className="home-hero-wrap"><ProductosDestacadosCarousel /></div>}
       <div className="home-hero-wrap"><MediosDePago /></div>
-      <div className="home-hero-wrap"><CategoriasMasVistas /></div>
+      {esHome && <div className="home-hero-wrap"><CategoriasMasVistas /></div>}
       <div className="page">
         {mostrarFiltros ? (
           <div className="catalog-layout">
