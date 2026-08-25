@@ -6,6 +6,7 @@ import { useCheckout } from '../context/CheckoutContext';
 import { fetchDireccion } from '../api/direcciones.api';
 import { fetchPerfil } from '../api/perfil.api';
 import { cotizarEnvio } from '../api/envio.api';
+import { CotizandoEnvioModal } from '../components/ui/CotizandoEnvioModal';
 import { formatPrecio } from '../types';
 import type { Perfil, OpcionCotizacionEnvio } from '../types';
 
@@ -169,6 +170,8 @@ export function EnvioPage() {
 
   return (
     <div className="checkout-page">
+      {cotizando && <CotizandoEnvioModal />}
+
       <h1 className="checkout-titulo">Método de envío</h1>
 
       <div className="checkout-grid">

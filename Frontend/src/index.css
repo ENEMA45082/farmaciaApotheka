@@ -3037,6 +3037,47 @@ img { max-width: 100%; display: block; }
   padding: 1rem 1.25rem 1.25rem;
 }
 
+/* ===== Cotizando Envío Modal ===== */
+.cotizando-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+  animation: error-modal-fade-in 0.15s ease;
+}
+
+.cotizando-modal {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  max-width: 340px;
+  width: 100%;
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  animation: error-modal-slide-in 0.18s ease;
+}
+
+.cotizando-modal__titulo {
+  font-weight: 700;
+  color: var(--navy);
+  font-size: 1rem;
+  margin-top: 0.25rem;
+}
+
+.cotizando-modal__texto {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .toast {
   position: fixed;
   left: 50%;
