@@ -10,15 +10,13 @@
 // PAQ.AR. Ver micorreoCotizacion.service.ts para la API pública (caché,
 // límite de concurrencia, normalización de CP, modo stub).
 //
-// ⚠️ SELECTORES SIN VALIDAR CONTRA EL SITIO REAL. Este módulo se escribió a
-// partir de capturas de pantalla del flujo autenticado (no hay credenciales
-// de la cuenta de MiCorreo disponibles en este entorno de desarrollo). Los
-// textos de labels/botones/tabs de abajo son los que aparecen en las
-// capturas, pero la estructura del DOM real (ids, clases, si el dropdown de
-// "Tipo de entrega" es un <select> nativo o un listbox custom, etc.) no se
-// pudo inspeccionar. ANTES de confiar en este módulo en producción hay que
-// correrlo en modo headed (MICORREO_HEADLESS=false) contra la cuenta real y
-// ajustar lo que haga falta — ver el paso obligatorio en el plan.
+// Validado en vivo de punta a punta (2026-08-25) contra la cuenta real
+// (APOTHEKA SRL): login → message-home → "Nuevo envío" → envioCla → medidas
+// → destino (Entrega en Domicilio, provincia, CP) → tarifas PAQ.AR reales
+// extraídas correctamente. El único paso roto era el login: MiCorreo migró
+// esa pantalla a un dominio/diseño nuevo (ver el comentario en
+// completarFormularioLogin) — el resto de esta app (envioCla en particular)
+// sigue siendo la misma app legacy de siempre, sin cambios.
 import type { Browser, Page, ElementHandle } from 'puppeteer-core';
 import { MiCorreoQuoteError } from '../errors/MiCorreoQuoteError';
 import type { TipoServicioMiCorreo } from './micorreoCotizacion.service';
@@ -146,8 +144,17 @@ function detectarMarcadorCaptcha(page: Page): Promise<boolean> {
 async function estaLogueado(page: Page): Promise<boolean> {
   // El "Nuevo envío" solo es visible/alcanzable estando logueado; si el
   // portal redirige a una URL de login, no lo vamos a encontrar.
+  //
+  // Verificado en vivo (2026-08-25): con la sesión inválida/vencida, ir a
+  // HOME_URL (message-home) redirige a "/landing" (la nueva pantalla de
+  // login en micorreo.correoargentino.com.ar) — no a una URL con
+  // login/iniciar-sesion/signin en el path, que es lo único que este check
+  // detectaba antes de la migración del login a ese dominio nuevo. Sin
+  // "landing" acá, una sesión cacheada (sessionCookies) que vence del lado
+  // del servidor antes de los 20 min de SESSION_CACHE_TTL_MS se reportaría
+  // como logueada por error.
   const url = page.url();
-  if (/login|iniciar-sesion|signin/i.test(url)) return false;
+  if (/login|iniciar-sesion|signin|\/landing/i.test(url)) return false;
   return true;
 }
 
@@ -164,12 +171,18 @@ function hayAvisoSesionActiva(page: Page): Promise<boolean> {
 }
 
 async function completarFormularioLogin(page: Page): Promise<void> {
-  // Verificado en vivo (2026-08-13): login normal en
-  // correoargentino.com.ar/MiCorreo/public/ — campos "Correo electrónico"
-  // (type="email") y "Contraseña" (type="password", con ícono de
-  // mostrar/ocultar), botón "Ingresar". Sin captcha visible en esta pantalla.
+  // Verificado en vivo (2026-08-25): MiCorreo migró el login a un dominio
+  // nuevo (correoargentino.com.ar/MiCorreo/public redirige ahora a
+  // micorreo.correoargentino.com.ar/landing, una landing MUI/React nueva).
+  // El campo de email pasó a ser <input type="text" name="email" id=":rN:">
+  // (id generado por React, no confiar en él) — el selector viejo
+  // (type="email") ya no matchea nada, y ESE era el único paso roto: una vez
+  // logueado, el resto del flujo (message-home → "Nuevo envío" → envioCla →
+  // medidas → destino → tarifas PAQ.AR) sigue siendo la misma app legacy de
+  // siempre, sin cambios. "Contraseña" (type="password", name="password")
+  // y el botón "Ingresar" no cambiaron.
   const campoUsuario = await page.waitForSelector(
-    'input[type="email"], input[name="username"], #username, #email',
+    'input[name="email"], input[type="email"], input[name="username"], #username, #email',
     { timeout: SCRAPE_TIMEOUT_MS },
   );
   const campoPassword = await page.waitForSelector('input[type="password"], input[name="password"], #password', {
