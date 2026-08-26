@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useProductosDestacados } from '../../hooks/useProductosDestacados';
 import { useCarruselScroll } from '../../hooks/useCarruselScroll';
@@ -17,7 +16,6 @@ export function ProductosDestacadosCarousel() {
       <div className="destacados-carousel__header">
         <h2 className="destacados-carousel__titulo">Los elegidos de Apotheka</h2>
         <div className="destacados-carousel__acciones">
-          <Link to="/ofertas" className="destacados-carousel__ver-todas">Ver todas las ofertas →</Link>
           <div className="destacados-carousel__flechas">
             <button
               type="button"

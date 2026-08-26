@@ -477,6 +477,7 @@ export function AdminCarteleriaPage() {
         <div className={`admin-form-card${bannerPromoEditando ? ' admin-form-card--editando' : ''}`}>
           <h2>{bannerPromoEditando ? 'Editando banner promocional' : 'Agregar banner promocional'}</h2>
           <p className="admin-subtitle">Tarjetas que aparecen debajo de "medios de pago" en la home (ej: Skincare, Cuidado Capilar, Fragancias).</p>
+          <p className="admin-subtitle">Medidas recomendadas: el primero de la lista se muestra grande a todo el ancho (1200×600px); el resto se muestra de a 2 en fila, más chico (600×500px).</p>
 
           {errorBannerPromoForm && <div className="admin-error">{errorBannerPromoForm}</div>}
 

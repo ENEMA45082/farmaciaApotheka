@@ -32,9 +32,20 @@ const LOGIN_URL = process.env.MICORREO_WEB_LOGIN_URL ?? 'https://www.correoargen
 const HOME_URL = process.env.MICORREO_WEB_HOME_URL ?? 'https://www.correoargentino.com.ar/MiCorreo/public/message-home';
 const NUEVO_ENVIO_URL =
   process.env.MICORREO_WEB_NUEVO_ENVIO_URL ?? 'https://www.correoargentino.com.ar/MiCorreo/public/envioCla';
+const LOGOUT_URL = process.env.MICORREO_WEB_LOGOUT_URL ?? 'https://www.correoargentino.com.ar/MiCorreo/public/logout';
 const USUARIO = process.env.MICORREO_WEB_USUARIO ?? '';
 const PASSWORD = process.env.MICORREO_WEB_PASSWORD ?? '';
 const SCRAPE_TIMEOUT_MS = Number(process.env.MICORREO_SCRAPE_TIMEOUT_MS ?? 45_000);
+// Verificado en vivo (2026-08-25): tras click en "Ingresar", si la
+// navegación va a pasar lo hace rápido (~2-5s). Cuando MiCorreo en cambio
+// muestra el aviso de "sesión activa" (ver hayAvisoSesionActiva) NO navega
+// nunca — esperar el SCRAPE_TIMEOUT_MS completo (45s por default) ahí es
+// tiempo puro tirado a la basura, y a esta altura pasa en CADA cotización
+// (ver LOGOUT_URL: antes de este fix nunca cerrábamos sesión, así que
+// MiCorreo siempre encontraba la sesión anterior todavía "activa"). Con el
+// presupuesto de 60s de la función serverless, ese solo wait ya alcanzaba
+// para tirar todo el request por timeout.
+const LOGIN_SUBMIT_NAV_TIMEOUT_MS = Math.min(SCRAPE_TIMEOUT_MS, 10_000);
 const HEADLESS = (process.env.MICORREO_HEADLESS ?? 'true') !== 'false';
 const CHROMIUM_EXECUTABLE_PATH_LOCAL = process.env.MICORREO_CHROMIUM_EXECUTABLE_PATH || undefined;
 
@@ -142,20 +153,22 @@ function detectarMarcadorCaptcha(page: Page): Promise<boolean> {
 }
 
 async function estaLogueado(page: Page): Promise<boolean> {
-  // El "Nuevo envío" solo es visible/alcanzable estando logueado; si el
-  // portal redirige a una URL de login, no lo vamos a encontrar.
-  //
-  // Verificado en vivo (2026-08-25): con la sesión inválida/vencida, ir a
-  // HOME_URL (message-home) redirige a "/landing" (la nueva pantalla de
-  // login en micorreo.correoargentino.com.ar) — no a una URL con
-  // login/iniciar-sesion/signin en el path, que es lo único que este check
-  // detectaba antes de la migración del login a ese dominio nuevo. Sin
-  // "landing" acá, una sesión cacheada (sessionCookies) que vence del lado
-  // del servidor antes de los 20 min de SESSION_CACHE_TTL_MS se reportaría
-  // como logueada por error.
-  const url = page.url();
-  if (/login|iniciar-sesion|signin|\/landing/i.test(url)) return false;
-  return true;
+  // Señal POSITIVA (¿está el link "Nuevo envío"?) en vez de negativa (¿la
+  // URL "parece" de login?). Verificado en vivo (2026-08-26): con sesión
+  // inválida, message-home puede redirigir a AL MENOS dos URLs distintas
+  // según el motivo — "/landing" (nunca hubo sesión) o
+  // "/sesion-expirada" (sessionCookies cacheadas acá pero ya cerradas
+  // server-side, ver cerrarPagina) — y casi seguro hay más que no vimos
+  // todavía. Bloquear por lista negra de URLs de logout es un juego perdido
+  // (justo el error que causó este mismo chequeo semanas atrás, con
+  // "/landing"); comprobar que el link a la funcionalidad que necesitamos a
+  // continuación existe de verdad es robusto a cualquier URL de logout,
+  // conocida o no.
+  return page
+    .evaluate(() =>
+      Array.from(document.querySelectorAll('a, button')).some((el) => (el.textContent || '').trim() === 'Nuevo envío'),
+    )
+    .catch(() => false);
 }
 
 // Verificado en vivo (2026-08-13): a veces (ej: sesión previa colgada de
@@ -202,7 +215,7 @@ async function completarFormularioLogin(page: Page): Promise<void> {
   await campoPassword.type(PASSWORD);
 
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: SCRAPE_TIMEOUT_MS }).catch(() => null),
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: LOGIN_SUBMIT_NAV_TIMEOUT_MS }).catch(() => null),
     clickPorTexto(page, 'button', 'Ingresar').catch(() =>
       page.keyboard.press('Enter'),
     ),
@@ -510,7 +523,22 @@ async function extraerOpcionesDeTarifa(page: Page): Promise<OpcionScrapeada[]> {
 }
 
 export async function cerrarPagina(page: Page): Promise<void> {
+  // Cerrar la sesión del lado de MiCorreo (no solo la pestaña local): si no
+  // lo hacemos, la cuenta queda con una sesión "colgada" y la PRÓXIMA
+  // cotización se topa con el aviso de "sesión activa" (hayAvisoSesionActiva)
+  // y necesita un segundo intento de login — justo el costo que
+  // LOGIN_SUBMIT_NAV_TIMEOUT_MS busca acotar. Best-effort: si la página
+  // nunca llegó a loguearse (falló antes), este goto no hace nada dañino.
+  await page.goto(LOGOUT_URL, { timeout: 8_000 }).catch(() => {});
   await page.close().catch(() => {});
+
+  // sessionCookies (si había) quedó apuntando a una sesión que ACABAMOS de
+  // cerrar nosotros mismos server-side — invalidarla acá evita que la
+  // próxima invocación "warm" pierda tiempo intentando reusarla (goto a
+  // HOME_URL, descubrir que no sirve vía estaLogueado, recién ahí loguear
+  // de cero) en vez de ir directo a un login limpio.
+  sessionCookies = null;
+  sessionExpiresAtMs = 0;
 
   // En desarrollo local (browser visible con MICORREO_HEADLESS=false) no
   // vale la pena mantener el browser "warm" entre cotizaciones — page.close()

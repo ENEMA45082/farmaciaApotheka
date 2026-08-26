@@ -140,8 +140,6 @@ img { max-width: 100%; display: block; }
 }
 .destacados-carousel__titulo { font-size: 1.35rem; font-weight: 800; color: var(--white); }
 .destacados-carousel__acciones { display: flex; align-items: center; gap: 1rem; }
-.destacados-carousel__ver-todas { font-size: 0.85rem; font-weight: 600; color: var(--white); white-space: nowrap; }
-.destacados-carousel__ver-todas:hover { text-decoration: underline; }
 .destacados-carousel__flechas { display: flex; gap: 0.5rem; }
 
 .destacados-carousel__arrow {
@@ -372,12 +370,16 @@ img { max-width: 100%; display: block; }
 
 @media (max-width: 640px) {
   .promo-banners { gap: 1rem; margin-top: 1rem; }
-  .promo-banner-card { min-height: 170px; border-radius: 14px; }
-  .promo-banner-card--full { min-height: 190px; }
-  .promo-banner-card__contenido { padding: 1.1rem 1rem; gap: 0.4rem; }
+  .promo-banner-card { flex-direction: column; min-height: 0; border-radius: 14px; }
+  .promo-banner-card--full { min-height: 0; }
+  .promo-banner-card__contenido { flex: none; width: 100%; padding: 1.1rem 1rem; gap: 0.4rem; }
   .promo-banner-card__titulo { font-size: 1.15rem; }
   .promo-banner-card--full .promo-banner-card__titulo { font-size: 1.4rem; }
   .promo-banner-card__boton { padding: 0.45rem 1.1rem; font-size: 0.7rem; }
+  /* En columna el ancho pasa a ser el de la card entera, así que la imagen se
+     ve con el mismo recorte relativo que en desktop en vez de aplastarse a
+     un recuadro casi cuadrado (que es lo que perdía info del banner). */
+  .promo-banner-card__imagen-wrap { flex: none; width: 100%; aspect-ratio: 16 / 9; }
   .promo-banner-card__badge { width: 54px; height: 54px; font-size: 0.62rem; top: 0.5rem; right: 0.5rem; }
 }
 

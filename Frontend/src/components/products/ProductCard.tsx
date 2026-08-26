@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { Producto } from '../../types';
@@ -11,14 +10,6 @@ import { cn } from '../../lib/utils';
 
 interface Props {
   producto: Producto;
-}
-
-function Badge({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[0.7rem] font-bold text-white">
-      {children}
-    </span>
-  );
 }
 
 export function ProductCard({ producto }: Props) {
@@ -91,13 +82,9 @@ export function ProductCard({ producto }: Props) {
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-lg font-bold text-red-600">${formatPrecio(precioEfectivo(producto))}</span>
               <span className="text-sm text-muted line-through">${formatPrecio(producto.precio)}</span>
-              {producto.porcentaje_oferta != null && <Badge>-{producto.porcentaje_oferta}%</Badge>}
             </div>
           ) : producto.es_2x1 ? (
-            <div className="flex flex-wrap items-baseline gap-2">
-              <p className="text-lg font-bold text-navy">${formatPrecio(producto.precio)}</p>
-              <Badge>2x1</Badge>
-            </div>
+            <p className="text-lg font-bold text-navy">${formatPrecio(producto.precio)}</p>
           ) : (
             <p className="text-lg font-bold text-navy">${formatPrecio(producto.precio)}</p>
           )}

@@ -44,6 +44,36 @@ const MODO_STUB = !process.env.MICORREO_WEB_USUARIO;
 const CACHE_TTL_MS = Number(process.env.MICORREO_QUOTE_CACHE_TTL_MS ?? 60 * 60 * 1000); // 1 hora
 const MAX_CONCURRENT = Number(process.env.MICORREO_MAX_CONCURRENT ?? 1);
 
+// La función serverless tiene un techo duro de 60s (ver vercel.json). Cada
+// paso individual del scraper ya tiene su propio timeout (MICORREO_SCRAPE_TIMEOUT_MS,
+// 45s por default), pero eso es por-paso: si UN SOLO paso tarda de más
+// (verificado en vivo 2026-08-25: el cálculo de tarifas en el propio MiCorreo
+// a veces tarda 1-2s, a veces supera los 45s — variabilidad de su backend,
+// no del scraper), la función entera se queda sin margen y Vercel la mata
+// con un 504 genérico sin body, que además no libera nada acá (turno de
+// concurrencia trabado). Este techo total corta el intento entero unos
+// segundos antes del límite de Vercel, así el error que llega al cliente es
+// un 502 con mensaje claro en vez de un timeout opaco de la plataforma.
+const SCRAPE_TOTAL_BUDGET_MS = Number(process.env.MICORREO_SCRAPE_TOTAL_BUDGET_MS ?? 45_000);
+
+function conPresupuestoTotal<T>(promesa: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new MiCorreoQuoteError('MiCorreo tardó demasiado en responder', 'TIMEOUT'));
+    }, SCRAPE_TOTAL_BUDGET_MS);
+    promesa.then(
+      (valor) => {
+        clearTimeout(timer);
+        resolve(valor);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 const OPCIONES_STUB: OpcionCotizacionMiCorreo[] = [
   { tipoServicio: 'PAQ_AR_HOY', nombre: 'PAQ.AR Hoy', precio: 6500, plazoEstimado: 'En el día' },
   { tipoServicio: 'PAQ_AR_EXPRESO', nombre: 'PAQ.AR Expreso', precio: 4800, plazoEstimado: 'De 1 a 3 días hábiles' },
@@ -129,9 +159,19 @@ export async function getShippingQuotes(
   }
 
   await adquirirTurno();
-  let page: Awaited<ReturnType<typeof scraper.iniciarSesionYObtenerPagina>> | null = null;
-  try {
-    page = await scraper.iniciarSesionYObtenerPagina();
+
+  // El scrape real (login incluido) corre acá, DESACOPLADO del techo de
+  // conPresupuestoTotal de abajo: si el timeout general gana la carrera, el
+  // cliente HTTP ya recibió su error, pero este scrape sigue en vuelo — hay
+  // que dejarlo terminar igual (para no dejar una sesión de MiCorreo a medio
+  // loguear) antes de cerrar la página y liberar el turno de concurrencia.
+  // Si liberáramos el turno apenas gana el timeout, un segundo request
+  // podría arrancar OTRO login sobre la misma cuenta mientras el primero
+  // todavía está en curso — justo lo que MAX_CONCURRENT busca evitar.
+  let pageRef: Awaited<ReturnType<typeof scraper.iniciarSesionYObtenerPagina>> | null = null;
+  const scrapePromise = (async () => {
+    const page = await scraper.iniciarSesionYObtenerPagina();
+    pageRef = page;
     await scraper.navegarANuevoEnvio(page);
     await scraper.completarPaquete(
       page,
@@ -139,7 +179,16 @@ export async function getShippingQuotes(
       params.pesoKg,
       params.valorDeclarado,
     );
-    const opcionesScrapeadas = await scraper.completarDestinoYExtraerTarifas(page, cpDestino, params.provinciaCodigo);
+    return scraper.completarDestinoYExtraerTarifas(page, cpDestino, params.provinciaCodigo);
+  })();
+
+  scrapePromise.catch(() => {}).finally(() => {
+    const paginaAbierta = pageRef;
+    (paginaAbierta ? scraper.cerrarPagina(paginaAbierta) : Promise.resolve()).finally(liberarTurno);
+  });
+
+  try {
+    const opcionesScrapeadas = await conPresupuestoTotal(scrapePromise);
 
     const resultado: ResultadoCotizacionMiCorreo = {
       opciones: opcionesScrapeadas.map(({ tipoServicio, nombre, precio, plazoEstimado }) => ({
@@ -169,8 +218,5 @@ export async function getShippingQuotes(
       `Error inesperado cotizando con MiCorreo: ${err instanceof Error ? err.message : String(err)}`,
       'TIMEOUT',
     );
-  } finally {
-    if (page) await scraper.cerrarPagina(page);
-    liberarTurno();
   }
 }
