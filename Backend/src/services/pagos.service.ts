@@ -38,7 +38,7 @@ function crearSDK() {
   const env = process.env.PAYWAY_ENVIRONMENT ?? 'developer';
   const pub = process.env.PAYWAY_PUBLIC_KEY  ?? '';
   const prv = process.env.PAYWAY_PRIVATE_KEY ?? '';
-  console.log(`[Payway] crearSDK env=${env} pub=${pub.slice(0,8)}... prv=${prv.slice(0,8)}...`);
+  console.log(`[Payway] crearSDK env=${env} pub=${pub ? 'set' : 'MISSING'} prv=${prv ? 'set' : 'MISSING'}`);
   return new sdkPayway.sdk(
     env,
     pub,
@@ -211,6 +211,18 @@ export async function generarCheckoutHosted(
     });
   }
 
+  // Igual criterio que costo_envio: pedido.total ya incluye el recargo (ver
+  // pedidos.repository.ts::crear), así que hace falta esta línea para que
+  // total_price siga cuadrando con la suma de products.
+  if (pedido.recargo_financiero > 0) {
+    productosPayway.push({
+      id:          productosPayway.length + 1,
+      value:       pedido.recargo_financiero,
+      description: `Recargo por pago en ${pedido.cuotas} cuotas`,
+      quantity:    1,
+    });
+  }
+
   const args: Record<string, unknown> = {
     origin_platform:     'SDK-Node',
     currency:            'ARS',
@@ -222,7 +234,7 @@ export async function generarCheckoutHosted(
     cancel_url:       cancelUrl,
     notifications_url: notifUrl,
     template_id:      templateId,
-    installments:     [1],
+    installments:     [pedido.cuotas],
     plan_gobierno:    false,
     public_apikey:    process.env.PAYWAY_PUBLIC_KEY ?? '',
     auth_3ds:         false,

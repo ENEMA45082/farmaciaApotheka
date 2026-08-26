@@ -17,8 +17,11 @@ function extraerNombre(meta: Record<string, unknown> | undefined): string | null
 // correcto nunca llega a ver el detalle de qué shape espera el body.
 export function verificarSecreto(req: Request, res: Response, next: NextFunction): void {
   const secretEsperado = process.env.SUPABASE_WEBHOOK_SECRET;
-  if (secretEsperado && req.query.secret !== secretEsperado) {
-    console.error('[Webhook nuevo usuario] secreto inválido o ausente — posible intento de forjado. IP:', req.ip);
+  // !secretEsperado (no secretEsperado &&): si la env var falta, rechazar TODO en
+  // vez de dejar pasar todo — la versión anterior "fail-open" saltaba el chequeo
+  // entero cuando la var no estaba seteada (deploy sin esa env, typo en el nombre).
+  if (!secretEsperado || req.query.secret !== secretEsperado) {
+    console.error('[Webhook nuevo usuario] secreto inválido, ausente o no configurado — posible intento de forjado. IP:', req.ip);
     res.status(401).json({ error: 'No autorizado' });
     return;
   }

@@ -1405,7 +1405,6 @@ $$;
 -- --------------------------------------------------------
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_codigo_barras_unico
   ON products(codigo_barras) WHERE codigo_barras IS NOT NULL;
-
 -- --------------------------------------------------------
 -- 21. Curaduría manual del carrusel "Los elegidos de Apotheka"
 --     de la home. Antes ese carrusel mostraba automáticamente
@@ -1494,5 +1493,127 @@ BEGIN
   RETURNING puntos_saldo INTO v_saldo;
 
   RETURN v_saldo;
+END;
+$$;
+
+-- --------------------------------------------------------
+-- 24. Pago en cuotas con recargo financiero (Payway). Tabla de
+--     coeficientes fija en Backend/src/config/cuotas.ts (1x, 3x, 6x) —
+--     no hay tabla en DB porque no se administra desde el panel.
+--     recargo_financiero se calcula en Node (pedidos.service.ts::crear,
+--     nunca a partir de un valor que mande el cliente) y se suma a
+--     p_total antes de llamar a esta RPC, mismo criterio que ya se usa
+--     hoy con costo_envio (ver sección 18c). cuotas=1/recargo=0 es el
+--     default para cualquier pedido que no sea tarjeta.
+-- --------------------------------------------------------
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cuotas smallint NOT NULL DEFAULT 1;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS recargo_financiero numeric NOT NULL DEFAULT 0;
+
+ALTER TABLE pedidos DROP CONSTRAINT IF EXISTS pedidos_cuotas_check;
+ALTER TABLE pedidos ADD CONSTRAINT pedidos_cuotas_check CHECK (cuotas IN (1, 3, 6));
+
+-- 24a. crear_pedido_completo: mismo contrato de siempre (18c), con
+--      p_cuotas/p_recargo_financiero nuevos al final con DEFAULT (no
+--      rompe llamadas existentes).
+CREATE OR REPLACE FUNCTION crear_pedido_completo(
+  p_user_id                    uuid,
+  p_total                      numeric,
+  p_subtotal_lista             numeric,
+  p_notas                      text,
+  p_metodo_envio               text,
+  p_costo_envio                numeric,
+  p_sucursal_correo_argentino  text,
+  p_codigo_postal_envio        text,
+  p_metodo_pago                text,
+  p_items                      jsonb,
+  p_destinatario_nombre        text DEFAULT NULL,
+  p_destinatario_dni           text DEFAULT NULL,
+  p_destinatario_cod_area      text DEFAULT NULL,
+  p_destinatario_telefono      text DEFAULT NULL,
+  p_tipo_servicio_envio        text DEFAULT NULL,
+  p_cupon_id                   uuid DEFAULT NULL,
+  p_descuento_cupon            numeric DEFAULT 0,
+  p_cuotas                     smallint DEFAULT 1,
+  p_recargo_financiero         numeric DEFAULT 0
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  nuevo_pedido     pedidos%ROWTYPE;
+  v_item           jsonb;
+  v_cupon_activo   boolean;
+  v_limite_total   integer;
+  v_limite_cliente integer;
+  v_usos_totales   integer;
+  v_usos_cliente   integer;
+BEGIN
+  IF p_cupon_id IS NOT NULL THEN
+    SELECT activo, limite_usos_total, limite_usos_por_cliente
+      INTO v_cupon_activo, v_limite_total, v_limite_cliente
+      FROM cupones WHERE id = p_cupon_id FOR UPDATE;
+
+    IF NOT FOUND OR NOT v_cupon_activo THEN
+      RAISE EXCEPTION 'cupon_invalido';
+    END IF;
+
+    IF v_limite_total IS NOT NULL THEN
+      SELECT count(*) INTO v_usos_totales FROM canjes_cupon WHERE cupon_id = p_cupon_id;
+      IF v_usos_totales >= v_limite_total THEN
+        RAISE EXCEPTION 'cupon_limite_usos_alcanzado';
+      END IF;
+    END IF;
+
+    IF v_limite_cliente IS NOT NULL THEN
+      SELECT count(*) INTO v_usos_cliente FROM canjes_cupon WHERE cupon_id = p_cupon_id AND cliente_id = p_user_id;
+      IF v_usos_cliente >= v_limite_cliente THEN
+        RAISE EXCEPTION 'cupon_limite_cliente_alcanzado';
+      END IF;
+    END IF;
+  END IF;
+
+  INSERT INTO pedidos (
+    user_id, total, subtotal_lista, notas,
+    metodo_envio, costo_envio, sucursal_correo_argentino,
+    codigo_postal_envio, metodo_pago,
+    destinatario_nombre, destinatario_dni, destinatario_cod_area, destinatario_telefono,
+    tipo_servicio_envio, cupon_id, descuento_cupon,
+    cuotas, recargo_financiero
+  ) VALUES (
+    p_user_id, p_total, p_subtotal_lista, p_notas,
+    p_metodo_envio, p_costo_envio, p_sucursal_correo_argentino,
+    p_codigo_postal_envio, p_metodo_pago,
+    p_destinatario_nombre, p_destinatario_dni, p_destinatario_cod_area, p_destinatario_telefono,
+    p_tipo_servicio_envio, p_cupon_id, p_descuento_cupon,
+    p_cuotas, p_recargo_financiero
+  )
+  RETURNING * INTO nuevo_pedido;
+
+  INSERT INTO detalles_pedido (
+    pedido_id, producto_id, nombre_producto,
+    cantidad, precio_unitario, precio_lista, descuento, subtotal
+  )
+  SELECT
+    nuevo_pedido.id,
+    (item->>'producto_id')::uuid,
+    item->>'nombre_producto',
+    (item->>'cantidad')::int,
+    (item->>'precio_unitario')::numeric,
+    (item->>'precio_lista')::numeric,
+    COALESCE((item->>'descuento')::numeric, 0),
+    (item->>'subtotal')::numeric
+  FROM jsonb_array_elements(p_items) AS item;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    PERFORM descontar_stock((v_item->>'producto_id')::uuid, (v_item->>'cantidad')::int);
+  END LOOP;
+
+  IF p_cupon_id IS NOT NULL THEN
+    INSERT INTO canjes_cupon (cupon_id, cliente_id, pedido_id, descuento_aplicado)
+    VALUES (p_cupon_id, p_user_id, nuevo_pedido.id, p_descuento_cupon);
+  END IF;
+
+  RETURN row_to_json(nuevo_pedido)::jsonb;
 END;
 $$;

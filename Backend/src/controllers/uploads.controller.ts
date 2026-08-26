@@ -7,12 +7,18 @@ const BUCKET = 'Farmacia-Apotheka';
 const MAX_SIZE_MB = 5;
 const MAX_FILES = 5;
 
+// Whitelist explícita en vez de `startsWith('image/')`: ese chequeo dejaba pasar
+// image/svg+xml, que puede llevar <script> embebido — al servirse después desde la
+// URL pública de Supabase Storage, corre en ese origen si alguien la abre directo.
+// Los formatos acá no pueden llevar script embebido.
+const MIME_PERMITIDOS = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
 const uploadImagenes = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SIZE_MB * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) {
-      cb(new AppError('Solo se permiten imágenes', 400, 'ARCHIVO_TIPO_INVALIDO'));
+    if (!MIME_PERMITIDOS.has(file.mimetype)) {
+      cb(new AppError('Solo se permiten imágenes JPG, PNG, WEBP o GIF', 400, 'ARCHIVO_TIPO_INVALIDO'));
     } else {
       cb(null, true);
     }

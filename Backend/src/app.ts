@@ -106,8 +106,16 @@ app.use('/api/envio',       envioRoutes);
 // (distintos endpoints necesitan distinto presupuesto — ver ese archivo).
 app.use('/api/pagos',       pagosRoutes);
 app.use('/api/facturas',    facturasRoutes);
-app.use('/api/test-afip',   testAfipRoutes); // TEMPORAL: eliminar antes de producción
-app.use('/api/test-afip-produccion', testAfipProduccionRoutes); // TEMPORAL: pega contra ARCA PRODUCCIÓN real, ver TEST_AFIP_PRODUCCION.md
+// TEMPORAL: eliminar antes de producción (ver TEST_AFIP.md / TEST_AFIP_PRODUCCION.md).
+// Ya están detrás de requiereAdmin + fricción extra (?confirmo=produccion, body
+// confirmoEmisionReal), pero igual no deberían quedar montados en un deploy de
+// producción sin querer — HABILITAR_TEST_AFIP=true es la vía de escape explícita
+// para el caso puntual (ver comentario en testAfipProduccion.routes.ts) de necesitar
+// pegarle a ARCA producción real desde un deploy productivo.
+if (process.env.NODE_ENV !== 'production' || process.env.HABILITAR_TEST_AFIP === 'true') {
+  app.use('/api/test-afip',   testAfipRoutes);
+  app.use('/api/test-afip-produccion', testAfipProduccionRoutes);
+}
 app.use('/api/webhooks',    webhooksRoutes);
 
 app.use(manejadorErrores);

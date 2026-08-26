@@ -88,12 +88,14 @@ export function PagoResultadoPage() {
     const totalFinal    = (pedido?.total ?? 0);
     const costoEnvio    = pedido?.costo_envio ?? 0;
     const descuentoCupon = pedido?.descuento_cupon ?? 0;
-    // pedido.total ya viene con el cupón descontado (ver pedidos.service.ts::crear),
-    // así que el subtotal "de productos" hay que reconstruirlo sumando ese
-    // descuento de vuelta — si no, esta línea mostraba el total post-cupón
-    // pero sin ninguna mención al cupón, y no coincidía con la suma de los
-    // ítems de la tabla de arriba (que sí muestran precio de catálogo).
-    const subtotal      = totalFinal - costoEnvio + descuentoCupon;
+    const recargoFinanciero = pedido?.recargo_financiero ?? 0;
+    // pedido.total ya viene con el cupón descontado y el costo de envío y el
+    // recargo financiero sumados (ver pedidos.service.ts::crear), así que el
+    // subtotal "de productos" hay que reconstruirlo sumando el descuento de
+    // vuelta y restando envío/recargo — si no, esta línea mostraba el total
+    // post-cupón pero sin ninguna mención al cupón, y no coincidía con la
+    // suma de los ítems de la tabla de arriba (que sí muestran precio de catálogo).
+    const subtotal      = totalFinal - costoEnvio - recargoFinanciero + descuentoCupon;
     const metodoEnvio   = pedido?.metodo_envio;
 
     return (
@@ -174,6 +176,12 @@ export function PagoResultadoPage() {
                 <span>Envío {metodoEnvio === 'retiro_farmacia' ? '(retiro en farmacia)' : metodoEnvio === 'domicilio' ? '(a domicilio)' : '(retiro en sucursal)'}</span>
                 <span>{costoEnvio === 0 ? <strong className="checkout-totales__gratis">GRATIS</strong> : `$${formatPrecio(costoEnvio)}`}</span>
               </div>
+              {(pedido?.cuotas ?? 1) > 1 && (
+                <div className="pedido-receipt__total-fila">
+                  <span>Recargo por {pedido?.cuotas} cuotas</span>
+                  <span>${formatPrecio(recargoFinanciero)}</span>
+                </div>
+              )}
               <div className="pedido-receipt__total-fila pedido-receipt__total-fila--final">
                 <span>Total</span>
                 <strong>${formatPrecio(totalFinal)}</strong>

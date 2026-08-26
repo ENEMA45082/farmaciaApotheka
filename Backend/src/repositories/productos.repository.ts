@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { recopilarDescendientes } from '../utils/categoriaTree';
+import { escaparPatronLike } from '../utils/escaparPatronLike';
 import type {
   Producto,
   CrearProductoDTO,
@@ -67,22 +68,37 @@ export async function encontrarTodos(filtros: FiltrosProducto): Promise<{ datos:
   }
 
   if (filtros.busqueda) {
-    const { data: cats } = await supabase
-      .from('categories')
-      .select('id')
-      .ilike('nombre', `%${filtros.busqueda}%`);
+    // "nombre ILIKE X OR categoria_id IN (...)" armado con dos lookups de
+    // ids (seguros: .ilike()/.in() como argumentos, nunca como texto
+    // interpolado) en vez de un .or(`nombre.ilike.%${busqueda}%,...`) a
+    // mano — ese string es la sintaxis de filtros de PostgREST, no SQL, y
+    // busqueda ahí adentro sin escapar dejaba inyectar condiciones nuevas
+    // con una coma/paréntesis en el texto de búsqueda (ej: "stock.gt.0"
+    // devolviendo 215 productos sin relación con la búsqueda, verificado en
+    // vivo). Acá busqueda solo se usa como argumento de .ilike(), que
+    // supabase-js sí codifica de forma segura.
+    const patronBusqueda = `%${escaparPatronLike(filtros.busqueda)}%`;
+    const [{ data: cats }, { data: prodsPorNombre }] = await Promise.all([
+      supabase.from('categories').select('id').ilike('nombre', patronBusqueda),
+      supabase.from('products').select('id').ilike('nombre', patronBusqueda),
+    ]);
 
     const catIds = (cats ?? []).map((c: { id: string }) => c.id);
+    const idsPorNombre = (prodsPorNombre ?? []).map((p: { id: string }) => p.id);
 
+    let idsPorCategoria: string[] = [];
     if (catIds.length > 0) {
-      query = query.or(`nombre.ilike.%${filtros.busqueda}%,categoria_id.in.(${catIds.join(',')})`);
-    } else {
-      query = query.ilike('nombre', `%${filtros.busqueda}%`);
+      const { data: prodsPorCategoria } = await supabase.from('products').select('id').in('categoria_id', catIds);
+      idsPorCategoria = (prodsPorCategoria ?? []).map((p: { id: string }) => p.id);
     }
+
+    // .in('id', []) devuelve correctamente 0 filas (verificado en vivo) —
+    // no hace falta un caso especial para "no matcheó nada".
+    query = query.in('id', [...new Set([...idsPorNombre, ...idsPorCategoria])]);
   }
 
   if (filtros.codigo_barras) {
-    query = query.ilike('codigo_barras', `%${filtros.codigo_barras}%`);
+    query = query.ilike('codigo_barras', `%${escaparPatronLike(filtros.codigo_barras)}%`);
   }
 
   if (filtros.en_oferta !== undefined) {

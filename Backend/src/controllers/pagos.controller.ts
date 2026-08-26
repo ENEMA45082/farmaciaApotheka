@@ -126,8 +126,11 @@ export async function retornoCheckout(req: Request, res: Response) {
 
 export async function notificacion(req: Request, res: Response) {
   const secretEsperado = process.env.PAYWAY_WEBHOOK_SECRET;
-  if (secretEsperado && req.query.secret !== secretEsperado) {
-    console.error('[Payway Notificacion] secreto inválido o ausente — posible intento de forjado. IP:', req.ip);
+  // !secretEsperado (no secretEsperado &&): si la env var falta, rechazar TODO en
+  // vez de dejar pasar todo — la versión anterior "fail-open" saltaba el chequeo
+  // entero cuando la var no estaba seteada (deploy sin esa env, typo en el nombre).
+  if (!secretEsperado || req.query.secret !== secretEsperado) {
+    console.error('[Payway Notificacion] secreto inválido, ausente o no configurado — posible intento de forjado. IP:', req.ip);
     res.status(401).json({ error: 'No autorizado' });
     return;
   }

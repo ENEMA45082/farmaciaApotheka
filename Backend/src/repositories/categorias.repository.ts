@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { escaparPatronLike } from '../utils/escaparPatronLike';
 import type { Categoria } from '../types';
 
 function mapearCategoria(row: Record<string, unknown>): Categoria {
@@ -32,7 +33,7 @@ export async function encontrarPaginadas(
     .order('nombre', { ascending: true });
 
   if (filtros.busqueda) {
-    query = query.ilike('nombre', `%${filtros.busqueda}%`);
+    query = query.ilike('nombre', `%${escaparPatronLike(filtros.busqueda)}%`);
   }
 
   const { data, error, count } = await query.range(desde, hasta);

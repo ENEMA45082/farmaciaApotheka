@@ -9,6 +9,7 @@ import * as whatsappService from './whatsapp.service';
 import * as productosService from './productos.service';
 import * as cuponesService from './cupones.service';
 import * as puntosService from './puntos.service';
+import { esCantidadCuotasValida, calcularRecargoFinanciero } from '../config/cuotas';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import { validarDocumento } from '../utils/validarDocumento';
@@ -76,6 +77,19 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
     descuentoCupon = resultado.descuento;
   }
 
+  // Cuotas solo aplica con tarjeta — cualquier otro método se fuerza a 1 sin
+  // recargo sin importar lo que mande el cliente (transferencia/efectivo son
+  // flujos manuales, no hay financiación de por medio).
+  const cuotasSolicitadas = dto.metodo_pago === 'tarjeta' ? (dto.cuotas ?? 1) : 1;
+  if (!esCantidadCuotasValida(cuotasSolicitadas)) {
+    throw new AppError(`Cantidad de cuotas inválida: ${cuotasSolicitadas}`, 400, 'CUOTAS_INVALIDAS');
+  }
+  // Recargo sobre TODO lo que se cobra por tarjeta (productos netos de cupón +
+  // costo de envío) — mismo orden de operaciones que totalFinal en
+  // PagarPage.tsx para que backend y frontend muestren el mismo número.
+  const montoBaseTarjeta = (total - descuentoCupon) + (dto.costo_envio ?? 0);
+  const recargoFinanciero = calcularRecargoFinanciero(montoBaseTarjeta, cuotasSolicitadas);
+
   // 'transferencia' y 'efectivo' son flujos manuales: el admin confirma el pago
   // cambiando el estado a 'Confirmado' via PATCH /api/pedidos/:id/estado
   //
@@ -88,6 +102,7 @@ export async function crear(userId: string, dto: CrearPedidoDTO): Promise<Pedido
   // pedido consumiendo el mismo stock o el mismo cupón justo en el medio.
   const pedido = await pedidosRepo.crear(
     userId, dto, itemsConfirmados, total - descuentoCupon, subtotalLista, cuponId, descuentoCupon,
+    cuotasSolicitadas, recargoFinanciero,
   );
 
   whatsappService.notificarNuevoPedido(pedido).catch(err => console.error('[whatsapp]', err));

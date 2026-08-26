@@ -55,6 +55,8 @@ function pedido(detalles: DetallePedido[]): Pedido {
     cupon_id: null,
     cupon_codigo: null,
     descuento_cupon: 0,
+    cuotas: 1,
+    recargo_financiero: 0,
     puntos_ganados: 0,
     detalles,
   };

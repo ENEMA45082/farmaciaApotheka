@@ -52,6 +52,8 @@ function mapearPedido(row: Record<string, unknown>): Pedido {
     // lo piden (esas vistas no muestran el código), así que ahí siempre da null.
     cupon_codigo:       (row.cupones as { codigo: string } | null)?.codigo ?? null,
     descuento_cupon:    Number(row.descuento_cupon ?? 0),
+    cuotas:             Number(row.cuotas ?? 1),
+    recargo_financiero: Number(row.recargo_financiero ?? 0),
     puntos_ganados:     Number(row.puntos_ganados ?? 0),
     detalles: Array.isArray(row.detalles_pedido)
       ? (row.detalles_pedido as Record<string, unknown>[]).map(mapearDetalle)
@@ -67,6 +69,8 @@ export async function crear(
   subtotalLista: number,
   cuponId?: string,
   descuentoCupon = 0,
+  cuotas = 1,
+  recargoFinanciero = 0,
 ): Promise<Pedido> {
   const items = itemsConfirmados.map(i => ({
     producto_id:     i.producto_id,
@@ -81,7 +85,7 @@ export async function crear(
   // RPC atómica: si falla la inserción de detalles, el pedido se revierte
   const { data: pedidoData, error } = await supabase.rpc('crear_pedido_completo', {
     p_user_id:                  userId,
-    p_total:                    total + (dto.costo_envio ?? 0),
+    p_total:                    total + (dto.costo_envio ?? 0) + recargoFinanciero,
     p_subtotal_lista:           subtotalLista,
     p_notas:                    dto.notas ?? null,
     p_metodo_envio:             dto.metodo_envio ?? 'retiro_farmacia',
@@ -97,6 +101,8 @@ export async function crear(
     p_destinatario_telefono:    dto.destinatario_telefono ?? null,
     p_cupon_id:                 cuponId ?? null,
     p_descuento_cupon:          descuentoCupon,
+    p_cuotas:                   cuotas,
+    p_recargo_financiero:       recargoFinanciero,
   });
 
   if (error || !pedidoData) {

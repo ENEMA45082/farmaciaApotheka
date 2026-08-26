@@ -155,6 +155,8 @@ export interface Pedido {
   cupon_id: string | null;
   cupon_codigo: string | null;
   descuento_cupon: number;
+  cuotas: number;
+  recargo_financiero: number;
   puntos_ganados: number;
   detalles?: DetallePedido[];
 }
@@ -223,6 +225,7 @@ export interface CrearPedidoDTO {
   destinatario_cod_area?: string;
   destinatario_telefono?: string;
   codigo_cupon?: string;
+  cuotas?: number;
 }
 
 export type TipoCupon = 'porcentaje' | 'fijo';

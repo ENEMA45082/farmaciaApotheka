@@ -2146,6 +2146,7 @@ img { max-width: 100%; display: block; }
 .checkout-totales__fila { display: flex; justify-content: space-between; font-size: 0.9rem; }
 .checkout-totales__fila--ahorro { color: #16a34a; font-weight: 600; }
 .checkout-totales__fila--total { font-size: 1.1rem; font-weight: 800; color: var(--navy); padding-top: 0.5rem; border-top: 1px solid var(--border); }
+.checkout-totales__fila--cuotas { font-size: 0.8rem; color: var(--text-light); }
 .checkout-totales__gratis { color: #16a34a; }
 
 .checkout-confirmar-btn { margin-top: 0.25rem; font-size: 1rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
@@ -2732,6 +2733,9 @@ img { max-width: 100%; display: block; }
   gap: 0.75rem;
 }
 .pago-metodo-item__detalle p { margin: 0; }
+
+.pago-cuotas { display: flex; flex-direction: column; gap: 0.4rem; }
+.pago-cuotas__label { font-weight: 600; font-size: 0.8rem; color: var(--text); }
 
 /* Bloques de info transferencia / efectivo */
 .pago-transferencia-info,

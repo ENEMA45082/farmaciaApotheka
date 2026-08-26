@@ -30,13 +30,10 @@ function responderError(res: Response, err: unknown): void {
       + 'Verificá que el payload incluya ese campo (5 = Consumidor Final).';
   }
 
-  // Se expone el error crudo de AFIP SDK (message/code/status/data) porque este
-  // endpoint es solo para debugging manual, nunca para uso en el frontend.
   res.status(statusCode).json({
     ok: false,
     error: detalle,
     ...(pista ? { pista } : {}),
-    detalleCompleto: err,
   });
 }
 

@@ -96,6 +96,8 @@ function pedidoFixture(): Pedido {
     cupon_id: null,
     cupon_codigo: null,
     descuento_cupon: 0,
+    cuotas: 1,
+    recargo_financiero: 0,
     puntos_ganados: 0,
     detalles: [],
   };
@@ -132,6 +134,8 @@ describe('crear', () => {
       1000, // subtotal_lista
       undefined, // sin cupón
       0,
+      1, // cuotas
+      0, // recargo_financiero
     );
   });
 
@@ -147,6 +151,8 @@ describe('crear', () => {
       800,
       1000,
       undefined,
+      0,
+      1,
       0,
     );
   });
@@ -164,6 +170,8 @@ describe('crear', () => {
       1000,
       undefined,
       0,
+      1,
+      0,
     );
   });
 
@@ -179,6 +187,8 @@ describe('crear', () => {
       1000, // total: 3 unidades = 1500, 1 par de descuento (500) = 1000
       1500,
       undefined,
+      0,
+      1,
       0,
     );
   });
@@ -236,7 +246,57 @@ describe('crear', () => {
       expect.any(Number),
       undefined,
       0,
+      1,
+      0,
     );
+  });
+
+  it('calcula el recargo financiero sobre productos + envío cuando el pedido es en cuotas', async () => {
+    encontrarPorId.mockResolvedValue(producto({ precio: 500 }));
+
+    // total productos = 1000 (2 * 500), + costo_envio 200 = 1200 base
+    // coeficiente 3 cuotas = 1.2123 -> recargo = 1200 * 0.2123 = 254.76
+    await crear('user-1', dto({ costo_envio: 200, cuotas: 3 }));
+
+    expect(crearPedido).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      expect.anything(),
+      1000,
+      1000,
+      undefined,
+      0,
+      3,
+      254.76,
+    );
+  });
+
+  it('fuerza cuotas=1 y recargo=0 cuando el método de pago no es tarjeta, sin importar lo que mande el cliente', async () => {
+    encontrarPorId.mockResolvedValue(producto({ precio: 500 }));
+
+    await crear('user-1', dto({ metodo_pago: 'transferencia', cuotas: 6 }));
+
+    expect(crearPedido).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      expect.anything(),
+      1000,
+      1000,
+      undefined,
+      0,
+      1,
+      0,
+    );
+  });
+
+  it('rechaza una cantidad de cuotas inválida', async () => {
+    encontrarPorId.mockResolvedValue(producto({ precio: 500 }));
+
+    await expect(crear('user-1', dto({ cuotas: 4 }))).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'CUOTAS_INVALIDAS',
+    });
+    expect(crearPedido).not.toHaveBeenCalled();
   });
 });
 

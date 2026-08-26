@@ -571,6 +571,9 @@ export function AdminPedidosPage() {
                           Cupón aplicado{pedidoDetalle.cupon_codigo && ` (${pedidoDetalle.cupon_codigo})`}: -${formatPrecio(pedidoDetalle.descuento_cupon)}
                         </p>
                       )}
+                      {pedidoDetalle.cuotas > 1 && (
+                        <p>Cuotas: {pedidoDetalle.cuotas}x (recargo ${formatPrecio(pedidoDetalle.recargo_financiero)})</p>
+                      )}
                       <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedidoDetalle.total)}</strong></p>
                       {pedidoDetalle.pw_payment_id && (
                         <p className="pedido-detalle__pago">

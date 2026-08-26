@@ -45,9 +45,7 @@ router.get('/', requiereAdmin, async (req, res) => {
   } catch (err) {
     const statusCode = err instanceof AppError ? err.statusCode : 502;
     const detalle = err instanceof Error ? err.message : String(err);
-    // Se expone el error crudo de AFIP SDK porque este endpoint es solo para
-    // debugging manual, nunca para uso en el frontend.
-    res.status(statusCode).json({ ok: false, error: detalle, detalleCompleto: err });
+    res.status(statusCode).json({ ok: false, error: detalle });
   }
 });
 
@@ -82,7 +80,7 @@ router.get('/ultimo-comprobante', requiereAdmin, async (req, res) => {
   } catch (err) {
     const statusCode = err instanceof AppError ? err.statusCode : 502;
     const detalle = err instanceof Error ? err.message : String(err);
-    res.status(statusCode).json({ ok: false, error: detalle, detalleCompleto: err });
+    res.status(statusCode).json({ ok: false, error: detalle });
   }
 });
 
@@ -131,7 +129,7 @@ router.post('/emitir', requiereAdmin, async (req, res) => {
   } catch (err) {
     const statusCode = err instanceof AppError ? err.statusCode : 502;
     const detalle = err instanceof Error ? err.message : String(err);
-    res.status(statusCode).json({ ok: false, error: detalle, detalleCompleto: err });
+    res.status(statusCode).json({ ok: false, error: detalle });
   }
 });
 
@@ -170,7 +168,7 @@ router.get('/pdf-factura-1', requiereAdmin, async (req, res) => {
   } catch (err) {
     const statusCode = err instanceof AppError ? err.statusCode : 502;
     const detalle = err instanceof Error ? err.message : String(err);
-    res.status(statusCode).json({ ok: false, error: detalle, detalleCompleto: err });
+    res.status(statusCode).json({ ok: false, error: detalle });
   }
 });
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ESTADOS_PEDIDO, MOTIVOS_CANCELACION } from '../config/estadosPedido';
+import { esCantidadCuotasValida } from '../config/cuotas';
 
 const itemPedidoSchema = z.object({
   producto_id:     z.string().uuid(),
@@ -34,6 +35,7 @@ export const crearPedidoSchema = z.object({
   destinatario_cod_area:     z.string().max(10).optional(),
   destinatario_telefono:     z.string().max(30).optional(),
   codigo_cupon:              z.string().min(1).max(50).optional(),
+  cuotas:                    z.number().int().refine(esCantidadCuotasValida, 'Cantidad de cuotas inválida').optional(),
 });
 
 export const cambiarEstadoSchema = z.object({

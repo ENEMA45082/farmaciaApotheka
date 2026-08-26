@@ -8,6 +8,8 @@ import { iniciarCheckoutHosted } from '../api/pagos.api';
 import { validarCupon } from '../api/cupones.api';
 import { precioEfectivo, subtotalLinea, formatPrecio } from '../types';
 import type { MetodoPago } from '../types';
+import { CUOTAS_DISPONIBLES, calcularRecargoFinanciero, calcularMontoPorCuota } from '../config/cuotas';
+import type { CantidadCuotas } from '../config/cuotas';
 
 const CBU_FARMACIA   = '0720066320000001483022';
 const ALIAS_FARMACIA = 'farmacia.apotheka';
@@ -25,6 +27,7 @@ export function PagarPage() {
   } = useCheckout();
 
   const [metodoPago,         setMetodoPago]         = useState<MetodoPago>('tarjeta');
+  const [cuotas,             setCuotas]              = useState<CantidadCuotas>(1);
   const [confirmando,        setConfirmando]         = useState(false);
   const [error,              setError]               = useState<string | null>(null);
   const [modalTransferencia, setModalTransferencia]  = useState(false);
@@ -36,6 +39,8 @@ export function PagarPage() {
   const hayAhorro     = subtotalLista > totalPrecio;
   const descuentoCupon = cuponAplicado?.descuento ?? 0;
   const totalFinal    = totalPrecio + costoEnvio - descuentoCupon;
+  const recargoFinanciero = metodoPago === 'tarjeta' ? calcularRecargoFinanciero(totalFinal, cuotas) : 0;
+  const totalConRecargo   = totalFinal + recargoFinanciero;
 
   async function handleAplicarCupon() {
     const codigo = codigoCuponInput.trim();
@@ -83,6 +88,13 @@ export function PagarPage() {
     }
   }, [metodo]);
 
+  // Cuotas solo tiene sentido con tarjeta — si cambian a transferencia/efectivo
+  // se resetea a 1 (el backend igual lo fuerza, esto es solo para que la UI
+  // no quede mostrando una selección que no aplica).
+  useEffect(() => {
+    if (metodoPago !== 'tarjeta') setCuotas(1);
+  }, [metodoPago]);
+
   function buildPedidoDTO(mp: MetodoPago) {
     return {
       items: items.map(i => ({
@@ -100,6 +112,7 @@ export function PagarPage() {
         ? (direccion?.codigo_postal ?? undefined)
         : (sucursalSeleccionada?.postalCode ?? undefined),
       metodo_pago: mp,
+      cuotas: mp === 'tarjeta' ? cuotas : undefined,
       destinatario_nombre:   metodo === 'domicilio' ? destinatarioNombre.trim() || undefined : undefined,
       destinatario_dni:      metodo === 'domicilio' ? destinatarioDni.trim() || undefined : undefined,
       destinatario_cod_area: metodo === 'domicilio' ? destinatarioCodArea.trim() || undefined : undefined,
@@ -162,8 +175,30 @@ export function PagarPage() {
                   </div>
                 </div>
                 {metodoPago === 'tarjeta' && (
-                  <div className="pago-metodo-item__detalle">
+                  <div className="pago-metodo-item__detalle" onClick={e => e.stopPropagation()}>
                     <p>Serás redirigido a la plataforma segura de Payway para ingresar los datos de tu tarjeta.</p>
+                    <div className="pago-cuotas">
+                      <span className="pago-cuotas__label" id="cuotas-select-label">Cantidad de cuotas</span>
+                      <select
+                        aria-labelledby="cuotas-select-label"
+                        className="input"
+                        value={cuotas}
+                        onChange={e => setCuotas(Number(e.target.value) as CantidadCuotas)}
+                      >
+                        {CUOTAS_DISPONIBLES.map(n => {
+                          const recargoOpcion = calcularRecargoFinanciero(totalFinal, n);
+                          const montoCuotaOpcion = calcularMontoPorCuota(totalFinal, n);
+                          const totalOpcion = totalFinal + recargoOpcion;
+                          return (
+                            <option key={n} value={n}>
+                              {n === 1
+                                ? `1 pago de $${formatPrecio(totalFinal)} (sin interés)`
+                                : `${n} cuotas de $${formatPrecio(montoCuotaOpcion)} — total $${formatPrecio(totalOpcion)} (interés $${formatPrecio(recargoOpcion)})`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
                   </div>
                 )}
               </label>
@@ -314,10 +349,22 @@ export function PagarPage() {
                 <span>Envío ({metodo === 'retiro_farmacia' ? 'retiro en farmacia' : metodo === 'domicilio' ? 'a domicilio' : 'retiro en sucursal'})</span>
                 <span>{metodo === 'retiro_farmacia' ? <strong className="checkout-totales__gratis">GRATIS</strong> : `$${formatPrecio(costoEnvio)}`}</span>
               </div>
+              {metodoPago === 'tarjeta' && cuotas > 1 && (
+                <div className="checkout-totales__fila">
+                  <span>Recargo por {cuotas} cuotas</span>
+                  <span>${formatPrecio(recargoFinanciero)}</span>
+                </div>
+              )}
               <div className="checkout-totales__fila checkout-totales__fila--total">
                 <span>Total</span>
-                <strong>${formatPrecio(totalFinal)}</strong>
+                <strong>${formatPrecio(totalConRecargo)}</strong>
               </div>
+              {metodoPago === 'tarjeta' && cuotas > 1 && (
+                <div className="checkout-totales__fila checkout-totales__fila--cuotas">
+                  <span>{cuotas} cuotas de</span>
+                  <span>${formatPrecio(calcularMontoPorCuota(totalFinal, cuotas))}</span>
+                </div>
+              )}
             </div>
 
             <button

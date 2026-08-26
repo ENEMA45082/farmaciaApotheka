@@ -203,6 +203,9 @@ export function DetallePedidoPage() {
               Cupón aplicado{pedido.cupon_codigo && ` (${pedido.cupon_codigo})`}: -${formatPrecio(pedido.descuento_cupon)}
             </p>
           )}
+          {pedido.cuotas > 1 && (
+            <p>Cuotas: {pedido.cuotas}x (recargo ${formatPrecio(pedido.recargo_financiero)})</p>
+          )}
           <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedido.total)}</strong></p>
           {pedido.pw_payment_id && (
             <p className="pedido-detalle__pago">
