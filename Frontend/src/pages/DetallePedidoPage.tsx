@@ -207,7 +207,7 @@ export function DetallePedidoPage() {
             <p>Cuotas: {pedido.cuotas}x (recargo ${formatPrecio(pedido.recargo_financiero)})</p>
           )}
           <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedido.total)}</strong></p>
-          {pedido.pw_payment_id && (
+          {pedido.pw_payment_id && pedido.estado !== 'PendienteDePago' && pedido.estado !== 'Cancelado' && (
             <p className="pedido-detalle__pago">
               Pago procesado · ID: {pedido.pw_payment_id}
               {pedido.pw_site_transaction_id && ` · Ref. Payway: ${pedido.pw_site_transaction_id}`}

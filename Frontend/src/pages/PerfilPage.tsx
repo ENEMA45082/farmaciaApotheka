@@ -3,18 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchPerfil, actualizarPerfil } from '../api/perfil.api';
 import { PerfilLayout } from '../components/layout/PerfilLayout';
-import type { ActualizarPerfilDTO, TipoDocumento } from '../types';
+import { esCuitValido } from '../utils/validarDocumento';
+import type { ActualizarPerfilDTO } from '../types';
 
-const LONGITUD_DOCUMENTO: Record<TipoDocumento, { min: number; max: number }> = {
-  DNI:  { min: 7, max: 8 },
-  CUIT: { min: 11, max: 11 },
-};
+const LONGITUD_CUIT = { min: 11, max: 11 };
 
 const FORM_VACIO: ActualizarPerfilDTO = {
   nombre: '',
   apellido: '',
   dni: '',
-  documento_tipo: 'DNI',
+  documento_tipo: 'CUIT',
   genero: '',
   fecha_nacimiento: '',
   telefono: '',
@@ -44,7 +42,10 @@ export function PerfilPage() {
         nombre:           p.nombre ?? '',
         apellido:         p.apellido ?? '',
         dni:              p.dni ?? '',
-        documento_tipo:   p.documento_tipo ?? 'DNI',
+        // El tipo de documento ya no se elige desde acá — todo perfil nuevo
+        // o editado guarda CUIT. Perfiles viejos con un DNI ya cargado
+        // quedan tal cual hasta que el usuario edite y guarde de nuevo.
+        documento_tipo:   'CUIT',
         genero:           p.genero ?? '',
         fecha_nacimiento: p.fecha_nacimiento ?? '',
         telefono:         p.telefono ?? '',
@@ -54,16 +55,16 @@ export function PerfilPage() {
   }, [user]);
 
   async function handleGuardar() {
-    const tipoDoc = form.documento_tipo ?? 'DNI';
-    const { min, max } = LONGITUD_DOCUMENTO[tipoDoc];
+    const { min, max } = LONGITUD_CUIT;
     const nuevosErrores: typeof errores = {};
     if (!form.nombre?.trim())             nuevosErrores.nombre   = 'El nombre es obligatorio';
     if (!form.apellido?.trim())           nuevosErrores.apellido = 'El apellido es obligatorio';
-    if (!form.dni?.trim())                nuevosErrores.dni      = `El ${tipoDoc} es obligatorio`;
-    else if (/\D/.test(form.dni))         nuevosErrores.dni      = `El ${tipoDoc} debe contener solo números`;
+    if (!form.dni?.trim())                nuevosErrores.dni      = 'El CUIT es obligatorio';
+    else if (/\D/.test(form.dni))         nuevosErrores.dni      = 'El CUIT debe contener solo números';
     else if (form.dni.length < min || form.dni.length > max) {
-      nuevosErrores.dni = `El ${tipoDoc} debe tener ${min === max ? min : `entre ${min} y ${max}`} dígitos`;
+      nuevosErrores.dni = `El CUIT debe tener ${min} dígitos`;
     }
+    else if (!esCuitValido(form.dni))     nuevosErrores.dni      = 'El CUIT no es válido (el dígito verificador no coincide)';
     if (form.telefono?.trim() && /\D/.test(form.telefono)) nuevosErrores.telefono = 'El teléfono debe contener solo números';
     if (Object.keys(nuevosErrores).length > 0) { setErrores(nuevosErrores); return; }
 
@@ -75,7 +76,7 @@ export function PerfilPage() {
       if (form.nombre)           dto.nombre           = form.nombre;
       if (form.apellido)         dto.apellido         = form.apellido;
       if (form.dni)              dto.dni              = form.dni;
-      dto.documento_tipo        = tipoDoc;
+      dto.documento_tipo        = 'CUIT';
       if (form.genero)           dto.genero           = form.genero;
       if (form.fecha_nacimiento) dto.fecha_nacimiento = form.fecha_nacimiento;
       if (form.telefono)         dto.telefono         = form.telefono;
@@ -99,7 +100,7 @@ export function PerfilPage() {
 
       {documentoRequerido && !mensaje && (
         <p className="perfil-mensaje perfil-mensaje--error">
-          Para poder comprar, completá tu DNI o CUIT.
+          Para poder comprar, completá tu CUIT.
         </p>
       )}
 
@@ -134,18 +135,7 @@ export function PerfilPage() {
             <input type="email" value={user.email ?? ''} disabled />
           </div>
           <div className="perfil-campo">
-            <label>Tipo de documento</label>
-            <select
-              value={form.documento_tipo ?? 'DNI'}
-              disabled={!editando}
-              onChange={e => setForm(f => ({ ...f, documento_tipo: e.target.value as 'DNI' | 'CUIT' }))}
-            >
-              <option value="DNI">DNI</option>
-              <option value="CUIT">CUIT</option>
-            </select>
-          </div>
-          <div className="perfil-campo">
-            <label>{form.documento_tipo === 'CUIT' ? 'CUIT' : 'DNI'}</label>
+            <label>CUIT</label>
             <input
               type="text"
               inputMode="numeric"

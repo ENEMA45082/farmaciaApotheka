@@ -55,10 +55,18 @@ export async function encontrarOCrear(
 // No hay unicidad de DNI a nivel DB, por eso devuelve una lista
 // (normalmente 0 o 1 fila) en vez de asumir un único resultado.
 export async function encontrarPorDni(dni: string): Promise<Perfil[]> {
-  const { data, error } = await supabase
-    .from('perfiles')
-    .select('*')
-    .eq('dni', dni);
+  const soloDigitos = dni.replace(/\D/g, '');
+
+  // Si buscan con un número de 7-8 dígitos, además del match exacto hay que
+  // matchear perfiles que guardaron un CUIT (11 dígitos) cuyo bloque central
+  // (posiciones 3 a 10) sea ese mismo DNI — ver extraerDniDeCuit en
+  // validarDocumento.ts. El patrón usa '_' (comodín de un solo carácter de
+  // SQL LIKE; PostgREST no lo traduce, lo pasa tal cual a Postgres) para
+  // matchear prefijo(2) + dni(8) + verificador(1).
+  const query = supabase.from('perfiles').select('*');
+  const { data, error } = soloDigitos.length >= 7 && soloDigitos.length <= 8
+    ? await query.or(`dni.eq.${soloDigitos},dni.like.__${soloDigitos.padStart(8, '0')}_`)
+    : await query.eq('dni', soloDigitos);
 
   if (error) throw error;
   return (data ?? []).map(mapearPerfil);

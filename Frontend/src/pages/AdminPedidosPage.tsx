@@ -575,7 +575,7 @@ export function AdminPedidosPage() {
                         <p>Cuotas: {pedidoDetalle.cuotas}x (recargo ${formatPrecio(pedidoDetalle.recargo_financiero)})</p>
                       )}
                       <p className="pedido-detalle__total">Total: <strong>${formatPrecio(pedidoDetalle.total)}</strong></p>
-                      {pedidoDetalle.pw_payment_id && (
+                      {pedidoDetalle.pw_payment_id && pedidoDetalle.estado !== 'PendienteDePago' && pedidoDetalle.estado !== 'Cancelado' && (
                         <p className="pedido-detalle__pago">
                           <CreditCard size={13} strokeWidth={2.25} />
                           Pago procesado · ID: {pedidoDetalle.pw_payment_id}

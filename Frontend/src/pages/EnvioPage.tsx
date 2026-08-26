@@ -7,6 +7,7 @@ import { fetchDireccion } from '../api/direcciones.api';
 import { fetchPerfil } from '../api/perfil.api';
 import { cotizarEnvio } from '../api/envio.api';
 import { CotizandoEnvioModal } from '../components/ui/CotizandoEnvioModal';
+import { extraerDniDeCuit } from '../utils/validarDocumento';
 import { formatPrecio } from '../types';
 import type { Perfil, OpcionCotizacionEnvio } from '../types';
 
@@ -134,7 +135,11 @@ export function EnvioPage() {
     setDestiEsYo(nuevo);
     if (nuevo && perfil) {
       setDestinatarioNombre([perfil.nombre, perfil.apellido].filter(Boolean).join(' '));
-      setDestinatarioDni(perfil.dni ?? '');
+      // Correo Argentino pide el DNI real del destinatario — si el perfil
+      // guardó un CUIT (caso normal desde que "Mis datos" solo pide CUIT),
+      // hay que extraer el DNI embebido en vez de mandar el CUIT tal cual
+      // (pedidos.service.ts valida destinatario_dni específicamente como DNI).
+      setDestinatarioDni(perfil.documento_tipo === 'CUIT' ? extraerDniDeCuit(perfil.dni ?? '') : perfil.dni ?? '');
       setDestinatarioCodArea('');
       setDestinatarioTelefono(perfil.telefono ?? '');
     } else {

@@ -6,8 +6,11 @@ import { Spinner } from '../ui/Spinner';
 import type { Perfil } from '../../types';
 
 // Bloquea el checkout (rutas /envio y /pagar) si el usuario todavía no cargó
-// su DNI/CUIT en "Mi Perfil" — la facturación electrónica SIEMPRE necesita un
-// documento real del comprador, nunca Consumidor Final genérico.
+// su documento en "Mi Perfil" — la facturación electrónica SIEMPRE necesita un
+// documento real del comprador, nunca Consumidor Final genérico. También
+// bloquea a quien tiene un DNI viejo (documento_tipo === 'DNI', de antes de
+// que "Mis datos" pasara a pedir solo CUIT) para forzar la migración antes de
+// la próxima compra — ver PerfilPage.tsx.
 export function RequiereDocumentoRoute({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const [perfil, setPerfil] = useState<Perfil | null>(null);
@@ -26,7 +29,9 @@ export function RequiereDocumentoRoute({ children }: { children: React.ReactNode
   // cuenta (preservando el "next" de vuelta al checkout) — duplicarlo acá con
   // un <Navigate> genérico pisaría ese comportamiento.
   if (!user) return <>{children}</>;
-  if (!perfil?.dni?.trim()) return <Navigate to="/perfil?motivo=documento-requerido" replace />;
+  if (!perfil?.dni?.trim() || perfil.documento_tipo === 'DNI') {
+    return <Navigate to="/perfil?motivo=documento-requerido" replace />;
+  }
 
   return <>{children}</>;
 }
