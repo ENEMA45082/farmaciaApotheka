@@ -186,14 +186,12 @@ export function PagarPage() {
                         onChange={e => setCuotas(Number(e.target.value) as CantidadCuotas)}
                       >
                         {CUOTAS_DISPONIBLES.map(n => {
-                          const recargoOpcion = calcularRecargoFinanciero(totalFinal, n);
                           const montoCuotaOpcion = calcularMontoPorCuota(totalFinal, n);
-                          const totalOpcion = totalFinal + recargoOpcion;
                           return (
                             <option key={n} value={n}>
                               {n === 1
-                                ? `1 pago de $${formatPrecio(totalFinal)} (sin interés)`
-                                : `${n} cuotas de $${formatPrecio(montoCuotaOpcion)} — total $${formatPrecio(totalOpcion)} (interés $${formatPrecio(recargoOpcion)})`}
+                                ? `1 pago de $${formatPrecio(totalFinal)}`
+                                : `${n} cuotas de $${formatPrecio(montoCuotaOpcion)}`}
                             </option>
                           );
                         })}
@@ -349,12 +347,6 @@ export function PagarPage() {
                 <span>Envío ({metodo === 'retiro_farmacia' ? 'retiro en farmacia' : metodo === 'domicilio' ? 'a domicilio' : 'retiro en sucursal'})</span>
                 <span>{metodo === 'retiro_farmacia' ? <strong className="checkout-totales__gratis">GRATIS</strong> : `$${formatPrecio(costoEnvio)}`}</span>
               </div>
-              {metodoPago === 'tarjeta' && cuotas > 1 && (
-                <div className="checkout-totales__fila">
-                  <span>Recargo por {cuotas} cuotas</span>
-                  <span>${formatPrecio(recargoFinanciero)}</span>
-                </div>
-              )}
               <div className="checkout-totales__fila checkout-totales__fila--total">
                 <span>Total</span>
                 <strong>${formatPrecio(totalConRecargo)}</strong>
