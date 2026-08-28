@@ -85,10 +85,22 @@ export function Footer() {
           © {new Date().getFullYear()} Farmacia Apotheka S.A. Todos los derechos reservados.
         </p>
 
+        <p className="footer__legal">
+          Las fotos son a modo ilustrativo. La venta de los productos publicados está sujeta a la verificación de stock.
+        </p>
+
         <p className="footer__trust">
           <ShieldCheck size={16} aria-hidden="true" />
           Gracias por elegirnos todos los días
         </p>
+
+        <div className="footer__sellos">
+          {/* Código provisto por AFIP/ARCA para el régimen Data Fiscal (F960/D) — no
+              modificar las URLs, son las que AFIP valida para mostrar el sello. */}
+          <a href="http://qr.afip.gob.ar/?qr=oOYxv5DMWgKL4pjJNmzmlA,," target="_F960AFIPInfo" rel="noopener noreferrer">
+            <img src="http://www.afip.gob.ar/images/f960/DATAWEB.jpg" alt="Data Fiscal AFIP" />
+          </a>
+        </div>
 
       </div>
     </footer>

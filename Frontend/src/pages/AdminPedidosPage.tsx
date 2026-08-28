@@ -7,6 +7,7 @@ import { formatPrecio } from '../types';
 import { ESTADOS_FINALES, puedeTransicionar } from '../utils/estadosPedido';
 import { AdminLayout } from '../components/admin/AdminLayout';
 import { CancelarPedidoModal } from '../components/admin/CancelarPedidoModal';
+import { MarcarEnviadoModal } from '../components/admin/MarcarEnviadoModal';
 
 const ESTADOS_PEDIDO: { value: Pedido['estado']; label: string }[] = [
   { value: 'PendienteDePago',  label: 'Pendiente de pago' },
@@ -123,6 +124,7 @@ export function AdminPedidosPage() {
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
   const [pedidoACancelar, setPedidoACancelar] = useState<Pedido | null>(null);
+  const [pedidoAEnviar, setPedidoAEnviar] = useState<Pedido | null>(null);
 
   const [filtroPedidoAbierto,    setFiltroPedidoAbierto]    = useState(false);
   const [filtroPedidoBusqueda,   setFiltroPedidoBusqueda]   = useState('');
@@ -177,6 +179,11 @@ export function AdminPedidosPage() {
   }, []);
 
   async function handleCambiarEstado(pedidoId: string, nuevoEstado: string) {
+    if (nuevoEstado === 'Enviado') {
+      const pedido = pedidosAdmin.find(p => p.id === pedidoId);
+      if (pedido) setPedidoAEnviar(pedido);
+      return;
+    }
     setCambiandoEstado(pedidoId);
     try {
       const actualizado = await cambiarEstadoPedido(pedidoId, nuevoEstado);
@@ -652,6 +659,18 @@ export function AdminPedidosPage() {
               onClose={() => setPedidoACancelar(null)}
               onCancelado={actualizado => {
                 setPedidoACancelar(null);
+                setPedidosAdmin(prev => prev.map(p => p.id === actualizado.id ? actualizado : p));
+                setPedidoDetalle(prev => prev && prev.id === actualizado.id ? { ...prev, ...actualizado } : prev);
+              }}
+            />
+          )}
+
+          {pedidoAEnviar && (
+            <MarcarEnviadoModal
+              pedido={pedidoAEnviar}
+              onClose={() => setPedidoAEnviar(null)}
+              onEnviado={actualizado => {
+                setPedidoAEnviar(null);
                 setPedidosAdmin(prev => prev.map(p => p.id === actualizado.id ? actualizado : p));
                 setPedidoDetalle(prev => prev && prev.id === actualizado.id ? { ...prev, ...actualizado } : prev);
               }}

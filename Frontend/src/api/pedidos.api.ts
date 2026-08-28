@@ -50,8 +50,10 @@ export async function fetchPedidoAdminPorId(id: string): Promise<PedidoDetalleAd
   return data;
 }
 
-export async function cambiarEstadoPedido(id: string, estado: string): Promise<Pedido> {
-  const { data } = await api.patch<Pedido>(`/pedidos/${id}/estado`, { estado });
+export async function cambiarEstadoPedido(id: string, estado: string, shippingTrackingNumber?: string): Promise<Pedido> {
+  const body: { estado: string; shipping_tracking_number?: string } = { estado };
+  if (shippingTrackingNumber) body.shipping_tracking_number = shippingTrackingNumber;
+  const { data } = await api.patch<Pedido>(`/pedidos/${id}/estado`, body);
   return data;
 }
 

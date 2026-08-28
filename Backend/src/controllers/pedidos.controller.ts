@@ -61,8 +61,8 @@ export async function listarAdmin(req: Request, res: Response, next: NextFunctio
 export async function cambiarEstadoAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const adminUserId = (req as AuthRequest).user.id;
-    const { estado } = req.body as { estado: string };
-    const pedido = await pedidosService.cambiarEstado(req.params.id, estado as never, adminUserId);
+    const { estado, shipping_tracking_number } = req.body as { estado: string; shipping_tracking_number?: string };
+    const pedido = await pedidosService.cambiarEstado(req.params.id, estado as never, adminUserId, shipping_tracking_number);
     res.json(pedido);
   } catch (err) { next(err); }
 }

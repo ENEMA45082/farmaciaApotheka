@@ -5,11 +5,12 @@ const { encontrarPorId } = vi.hoisted(() => ({
   encontrarPorId: vi.fn(),
 }));
 
-const { crearPedido, pedidosEncontrarPorId, cancelarCliente, cancelarSinRestricciones } = vi.hoisted(() => ({
+const { crearPedido, pedidosEncontrarPorId, cancelarCliente, cancelarSinRestricciones, actualizarEstado } = vi.hoisted(() => ({
   crearPedido: vi.fn(),
   pedidosEncontrarPorId: vi.fn(),
   cancelarCliente: vi.fn(),
   cancelarSinRestricciones: vi.fn(),
+  actualizarEstado: vi.fn(),
 }));
 const { registrarHistorial } = vi.hoisted(() => ({ registrarHistorial: vi.fn() }));
 
@@ -19,10 +20,11 @@ vi.mock('../repositories/pedidos.repository', () => ({
   encontrarPorId:            pedidosEncontrarPorId,
   cancelar:                  cancelarCliente,
   cancelarSinRestricciones:  cancelarSinRestricciones,
+  actualizarEstado:          actualizarEstado,
 }));
 vi.mock('../repositories/pedidoHistorial.repository', () => ({ registrar: registrarHistorial }));
 
-import { crear, obtenerPorId, cancelar, cancelarPedido } from './pedidos.service';
+import { crear, obtenerPorId, cancelar, cancelarPedido, cambiarEstado } from './pedidos.service';
 
 function producto(overrides: Partial<Producto> = {}): Producto {
   return {
@@ -110,6 +112,7 @@ beforeEach(() => {
   pedidosEncontrarPorId.mockReset();
   cancelarCliente.mockReset();
   cancelarSinRestricciones.mockReset();
+  actualizarEstado.mockReset();
   registrarHistorial.mockReset();
 });
 
@@ -373,5 +376,75 @@ describe('cancelarPedido (admin)', () => {
       motivo: 'sin_stock',
       changed_by: 'admin-1',
     }));
+  });
+});
+
+describe('cambiarEstado (admin)', () => {
+  const ID = '11111111-1111-1111-1111-111111111111';
+
+  it('rechaza un estado que no existe en ESTADOS_PEDIDO', async () => {
+    await expect(cambiarEstado(ID, 'Inventado' as never, 'admin-1'))
+      .rejects.toMatchObject({ statusCode: 400, code: 'ESTADO_INVALIDO' });
+  });
+
+  it('rechaza pasar a Cancelado por esta vía', async () => {
+    await expect(cambiarEstado(ID, 'Cancelado', 'admin-1'))
+      .rejects.toMatchObject({ statusCode: 400, code: 'CANCELACION_REQUIERE_MOTIVO' });
+  });
+
+  it('rechaza una transición que la máquina de estados no permite', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), estado: 'PendienteDePago' });
+
+    await expect(cambiarEstado(ID, 'Enviado', 'admin-1', 'CA123'))
+      .rejects.toMatchObject({ statusCode: 400, code: 'TRANSICION_INVALIDA' });
+    expect(actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  it('rechaza "Enviado" para un pedido de retiro en farmacia', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), estado: 'EnPreparacion', metodo_envio: 'retiro_farmacia' });
+
+    await expect(cambiarEstado(ID, 'Enviado', 'admin-1', 'CA123'))
+      .rejects.toMatchObject({ statusCode: 400, code: 'ENVIO_METODO_INCOMPATIBLE' });
+    expect(actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  it('rechaza "Enviado" sin código de seguimiento para un envío a domicilio', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), estado: 'EnPreparacion', metodo_envio: 'domicilio' });
+
+    await expect(cambiarEstado(ID, 'Enviado', 'admin-1'))
+      .rejects.toMatchObject({ statusCode: 400, code: 'TRACKING_REQUERIDO' });
+    expect(actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  it('rechaza "Enviado" con un código en blanco', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), estado: 'EnPreparacion', metodo_envio: 'domicilio' });
+
+    await expect(cambiarEstado(ID, 'Enviado', 'admin-1', '   '))
+      .rejects.toMatchObject({ statusCode: 400, code: 'TRACKING_REQUERIDO' });
+  });
+
+  it('marca "Enviado" con tracking: actualiza el pedido y registra el historial', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), estado: 'EnPreparacion', metodo_envio: 'domicilio' });
+
+    await cambiarEstado(ID, 'Enviado', 'admin-1', ' CA123456789AR ');
+
+    expect(actualizarEstado).toHaveBeenCalledWith(ID, 'Enviado', {
+      shipping_tracking_number: 'CA123456789AR',
+      shipping_fecha_envio: expect.any(String),
+    });
+    expect(registrarHistorial).toHaveBeenCalledWith(expect.objectContaining({
+      estado_anterior: 'EnPreparacion',
+      estado_nuevo: 'Enviado',
+      motivo: 'Tracking: CA123456789AR',
+      changed_by: 'admin-1',
+    }));
+  });
+
+  it('no manda extras de shipping para transiciones que no son "Enviado"', async () => {
+    pedidosEncontrarPorId.mockResolvedValue({ ...pedidoFixture(), estado: 'Confirmado', metodo_envio: 'domicilio' });
+
+    await cambiarEstado(ID, 'EnPreparacion', 'admin-1');
+
+    expect(actualizarEstado).toHaveBeenCalledWith(ID, 'EnPreparacion', undefined);
   });
 });

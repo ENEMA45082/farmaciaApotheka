@@ -165,7 +165,12 @@ export async function listarTodos(
   return { datos, total, pagina: p, limite: l, totalPaginas: Math.ceil(total / l) };
 }
 
-export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserId: string): Promise<Pedido> {
+export async function cambiarEstado(
+  id: string,
+  estado: EstadoPedido,
+  adminUserId: string,
+  shippingTrackingNumber?: string,
+): Promise<Pedido> {
   validarUUID(id, 'pedido');
   if (!ESTADOS_PEDIDO.includes(estado)) {
     throw new AppError(
@@ -198,6 +203,12 @@ export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserI
     throw new AppError('Solo los pedidos con retiro en farmacia pueden marcarse como "Listo para retirar"', 400, 'ENVIO_METODO_INCOMPATIBLE');
   }
 
+  // Correo Argentino: en modo manual, el código de seguimiento es obligatorio
+  // para poder mostrárselo al cliente en el detalle de su pedido.
+  if (estado === 'Enviado' && !shippingTrackingNumber?.trim()) {
+    throw new AppError('Para marcar el pedido como enviado hace falta cargar el código de seguimiento de Correo Argentino', 400, 'TRACKING_REQUERIDO');
+  }
+
   // La creación automática del envío real (vía la API oficial de Correo
   // Argentino) sigue desactivada mientras esa API está demorada. Ahora se
   // cotiza automatizando el portal web de MiCorreo (ver
@@ -206,13 +217,21 @@ export async function cambiarEstado(id: string, estado: EstadoPedido, adminUserI
   // envío real) que no se hizo acá a propósito. Modo manual: el admin crea
   // el envío a mano en el courier que corresponda y carga
   // shipping_tracking_number directamente.
-  await pedidosRepo.actualizarEstado(id, estado);
+  await pedidosRepo.actualizarEstado(
+    id,
+    estado,
+    estado === 'Enviado'
+      ? { shipping_tracking_number: shippingTrackingNumber!.trim(), shipping_fecha_envio: new Date().toISOString() }
+      : undefined,
+  );
 
   await pedidoHistorialRepo.registrar({
     pedido_id: id,
     estado_anterior: pedidoActual.estado,
     estado_nuevo: estado,
-    motivo: null,
+    // Registrado acá (no hay forma de editar el tracking después de cargado)
+    // para tener rastro de qué código se ingresó originalmente.
+    motivo: estado === 'Enviado' ? `Tracking: ${shippingTrackingNumber!.trim()}` : null,
     changed_by: adminUserId,
   });
 

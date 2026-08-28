@@ -40,6 +40,9 @@ export const crearPedidoSchema = z.object({
 
 export const cambiarEstadoSchema = z.object({
   estado: z.enum(ESTADOS_PEDIDO as [string, ...string[]]),
+  // Obligatorio cuando estado === 'Enviado' (chequeado en pedidos.service.ts::cambiarEstado,
+  // no acá — misma regla de negocio cross-cutting que ENVIO_METODO_INCOMPATIBLE).
+  shipping_tracking_number: z.string().trim().min(1).max(100).optional(),
 });
 
 export const cancelarPedidoAdminSchema = z.object({

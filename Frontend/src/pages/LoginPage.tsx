@@ -5,6 +5,25 @@ import { useAuth } from '../context/AuthContext';
 import { staggerContainer, staggerItem } from '../components/ui/motion';
 import { Card } from '../components/ui/card';
 
+// Nombres cortos usados por los redirects a /login?next=... antes de llegar acá
+// (EnvioPage, PagarPage, CartSummary). Cualquier otro valor se trata como un
+// path propio (ver resolverDestino) — nunca una URL externa, para no abrir la
+// puerta a un open redirect.
+const DESTINOS_NEXT: Record<string, string> = {
+  checkout: '/envio',
+  envio:    '/envio',
+  pagar:    '/pagar',
+};
+
+function resolverDestino(next: string | null): string {
+  if (!next) return '/';
+  if (DESTINOS_NEXT[next]) return DESTINOS_NEXT[next];
+  // Path relativo propio (p.ej. lo que manda LoginPromptBanner con la página
+  // actual) — solo si empieza con "/" y no "//" (protocol-relative a otro host).
+  if (next.startsWith('/') && !next.startsWith('//')) return next;
+  return '/';
+}
+
 export function LoginPage() {
   const { user, loading, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -12,8 +31,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      const next = searchParams.get('next');
-      navigate(next === 'cart' ? '/' : '/', { replace: true });
+      navigate(resolverDestino(searchParams.get('next')), { replace: true });
     }
   }, [user, loading, navigate, searchParams]);
 

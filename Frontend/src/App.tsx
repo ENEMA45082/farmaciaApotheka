@@ -8,6 +8,7 @@ import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { CartDrawer } from './components/cart/CartDrawer';
 import { WhatsAppButton } from './components/ui/WhatsAppButton';
+import { LoginPromptBanner } from './components/ui/LoginPromptBanner';
 import { Spinner } from './components/ui/Spinner';
 import { HomePage } from './pages/HomePage';
 import { FavoritosProvider } from './context/FavoritosContext';
@@ -180,6 +181,7 @@ function App() {
                   </main>
                   <Footer />
                   <WhatsAppButton />
+                  <LoginPromptBanner />
                 </FavoritosProvider>
               </CheckoutProvider>
             </BrowserRouter>

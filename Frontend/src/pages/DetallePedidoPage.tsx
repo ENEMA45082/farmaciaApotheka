@@ -227,7 +227,24 @@ export function DetallePedidoPage() {
         )}
 
         {(pedido.estado === 'Enviado' || pedido.estado === 'Entregado') && pedido.shipping_tracking_number && (
-          <TrackingSection pedidoId={pedido.id} />
+          <>
+            <div className="pedido-envio-aviso">
+              <p className="pedido-envio-aviso__texto">
+                Tu pedido se envió con Correo Argentino. Este es tu código de seguimiento:{' '}
+                <strong className="pedido-envio-aviso__codigo">{pedido.shipping_tracking_number}</strong>.
+                Entrá a la página de Correo Argentino y cargalo para ver el estado de tu envío.
+              </p>
+              <a
+                href="https://www.correoargentino.com.ar/formularios/e-commerce"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn--primary btn--sm"
+              >
+                Ir a Correo Argentino
+              </a>
+            </div>
+            <TrackingSection pedidoId={pedido.id} />
+          </>
         )}
       </div>
     </PerfilLayout>
