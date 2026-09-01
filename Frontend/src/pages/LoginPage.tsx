@@ -85,7 +85,11 @@ export function LoginPage() {
             </motion.button>
 
             <motion.p className="text-xs leading-relaxed text-muted" variants={staggerItem}>
-              Al continuar, aceptás nuestros términos de uso y{' '}
+              Al continuar, aceptás nuestros{' '}
+              <Link to="/terminos" className="text-navy underline underline-offset-2">
+                términos de uso
+              </Link>{' '}
+              y{' '}
               <Link to="/privacidad" className="text-navy underline underline-offset-2">
                 política de privacidad
               </Link>
