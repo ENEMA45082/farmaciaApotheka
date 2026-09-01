@@ -436,6 +436,15 @@ export interface ClienteBusquedaDNI {
   apellido: string | null;
   dni: string | null;
   puntos_saldo: number;
+  es_cliente_fisico: boolean;
+}
+
+export interface CrearClienteFisicoDTO {
+  nombre: string;
+  apellido: string;
+  dni: string;
+  telefono: string;
+  email?: string | null;
 }
 
 export interface CanjePremio {

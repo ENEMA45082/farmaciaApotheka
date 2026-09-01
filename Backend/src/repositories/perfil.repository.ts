@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase';
-import type { Perfil, ActualizarPerfilDTO } from '../types';
+import type { Perfil, ActualizarPerfilDTO, CrearClienteFisicoDTO } from '../types';
 
 function mapearPerfil(row: Record<string, unknown>): Perfil {
   return {
@@ -14,6 +14,7 @@ function mapearPerfil(row: Record<string, unknown>): Perfil {
     foto_url:         row.foto_url as string | null,
     creado_en:        row.creado_en as string,
     actualizado_en:   row.actualizado_en as string,
+    es_cliente_fisico: Boolean(row.es_cliente_fisico),
   };
 }
 
@@ -54,6 +55,9 @@ export async function encontrarOCrear(
 
 // No hay unicidad de DNI a nivel DB, por eso devuelve una lista
 // (normalmente 0 o 1 fila) en vez de asumir un único resultado.
+// Excluye perfiles físicos ya fusionados (fusionado_en IS NULL): una vez
+// fusionado, el CUIT solo debe encontrarse en la cuenta real que absorbió
+// sus puntos — ver fusionarClienteFisico.
 export async function encontrarPorDni(dni: string): Promise<Perfil[]> {
   const soloDigitos = dni.replace(/\D/g, '');
 
@@ -63,7 +67,7 @@ export async function encontrarPorDni(dni: string): Promise<Perfil[]> {
   // validarDocumento.ts. El patrón usa '_' (comodín de un solo carácter de
   // SQL LIKE; PostgREST no lo traduce, lo pasa tal cual a Postgres) para
   // matchear prefijo(2) + dni(8) + verificador(1).
-  const query = supabase.from('perfiles').select('*');
+  const query = supabase.from('perfiles').select('*').is('fusionado_en', null);
   const { data, error } = soloDigitos.length >= 7 && soloDigitos.length <= 8
     ? await query.or(`dni.eq.${soloDigitos},dni.like.__${soloDigitos.padStart(8, '0')}_`)
     : await query.eq('dni', soloDigitos);
@@ -82,4 +86,48 @@ export async function actualizar(userId: string, dto: ActualizarPerfilDTO): Prom
 
   if (error || !data) throw error ?? new Error('Error al actualizar el perfil');
   return mapearPerfil(data);
+}
+
+// Alta manual de un cliente sin cuenta propia (compra física) — userId ya
+// corresponde a un usuario real de Auth creado por
+// puntos.service.ts::crearClienteFisico antes de llamar acá.
+export async function crearClienteFisico(
+  userId: string,
+  dto: CrearClienteFisicoDTO & { creadoPorAdminId: string },
+): Promise<Perfil> {
+  const { data, error } = await supabase
+    .from('perfiles')
+    .insert({
+      user_id:             userId,
+      nombre:              dto.nombre,
+      apellido:            dto.apellido,
+      dni:                 dto.dni,
+      documento_tipo:      'CUIT',
+      telefono:            dto.telefono,
+      email_contacto:      dto.email ?? null,
+      es_cliente_fisico:   true,
+      creado_por_admin_id: dto.creadoPorAdminId,
+    })
+    .select('*')
+    .single();
+
+  if (error || !data) throw error ?? new Error('Error al crear el cliente físico');
+  return mapearPerfil(data);
+}
+
+// Si existe un cliente físico sin reclamar con este mismo CUIT, le transfiere
+// el saldo y todo su historial de puntos a userIdReal (ver
+// supabase_migrations.sql, sección 25a) y lo marca como fusionado. Devuelve
+// null si no había nada para fusionar.
+export async function fusionarClienteFisico(
+  userIdReal: string,
+  dni: string,
+): Promise<{ fusiono: boolean; puntos_sumados: number; saldo_total: number } | null> {
+  const { data, error } = await supabase.rpc('fusionar_cliente_fisico', {
+    p_user_id_real: userIdReal,
+    p_dni:          dni,
+  });
+
+  if (error) throw error;
+  return data as { fusiono: boolean; puntos_sumados: number; saldo_total: number } | null;
 }

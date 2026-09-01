@@ -4,6 +4,7 @@ import { supabase } from '../config/supabase';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import { calcularPuntosPorPedido } from '../config/puntosConfig';
+import { validarDocumento } from '../utils/validarDocumento';
 import type {
   Pedido,
   SaldoPuntos,
@@ -14,6 +15,7 @@ import type {
   CanjePremioConDetalle,
   ClienteBusquedaDNI,
   AcreditarPuntosManualDTO,
+  CrearClienteFisicoDTO,
 } from '../types';
 
 // Se llama desde pedidos.service.ts::cambiarEstado al marcar 'Entregado'.
@@ -98,14 +100,20 @@ export async function buscarClientePorDni(dni: string): Promise<ClienteBusquedaD
   }
 
   return Promise.all(perfiles.map(async perfil => {
-    const userResult = await supabase.auth.admin.getUserById(perfil.user_id).catch(() => null);
+    // El "email" de un cliente físico es el sintético usado solo para poder
+    // crear la cuenta de Auth (ver crearClienteFisico) — no tiene sentido
+    // mostrárselo al admin como si fuera un contacto real.
+    const email = perfil.es_cliente_fisico
+      ? null
+      : (await supabase.auth.admin.getUserById(perfil.user_id).catch(() => null))?.data?.user?.email ?? null;
     return {
-      user_id:      perfil.user_id,
-      email:        userResult?.data?.user?.email ?? null,
-      nombre:       perfil.nombre,
-      apellido:     perfil.apellido,
-      dni:          perfil.dni,
-      puntos_saldo: await puntosRepo.obtenerSaldo(perfil.user_id),
+      user_id:           perfil.user_id,
+      email,
+      nombre:            perfil.nombre,
+      apellido:          perfil.apellido,
+      dni:               perfil.dni,
+      puntos_saldo:      await puntosRepo.obtenerSaldo(perfil.user_id),
+      es_cliente_fisico: perfil.es_cliente_fisico,
     };
   }));
 }
@@ -117,4 +125,70 @@ export async function acreditarManual(dto: AcreditarPuntosManualDTO): Promise<nu
   }
 
   return puntosRepo.acreditarManual(dto.cliente_id, dto.puntos, dto.motivo?.trim() || null);
+}
+
+// Alta manual de un cliente que compró en el local y no tiene cuenta online.
+// Crea un usuario real de Supabase Auth por detrás (sin contraseña, con un
+// email sintético derivado del CUIT — nunca real, nunca se le manda nada) para
+// poder reusar toda la infraestructura de puntos existente, que exige
+// cliente_id NOT NULL REFERENCES auth.users(id). Si esta persona se registra
+// de verdad más adelante con el mismo CUIT, perfil.service.ts::actualizar
+// fusiona automáticamente este perfil con la cuenta real.
+export async function crearClienteFisico(dto: CrearClienteFisicoDTO, adminUserId: string): Promise<ClienteBusquedaDNI> {
+  if (!dto.nombre?.trim())   throw new AppError('El nombre es obligatorio', 400, 'CLIENTE_FISICO_NOMBRE_REQUERIDO');
+  if (!dto.apellido?.trim()) throw new AppError('El apellido es obligatorio', 400, 'CLIENTE_FISICO_APELLIDO_REQUERIDO');
+  if (!dto.telefono?.trim()) throw new AppError('El teléfono es obligatorio', 400, 'CLIENTE_FISICO_TELEFONO_REQUERIDO');
+  validarDocumento('CUIT', dto.dni);
+  const cuit = dto.dni.replace(/\D/g, '');
+
+  // Re-chequeo server-side: el frontend solo ofrece este alta después de una
+  // búsqueda que ya dio negativo, pero no hay que confiar solo en eso — el
+  // índice único parcial de la DB es la garantía real ante una carrera.
+  const existentes = await perfilRepo.encontrarPorDni(cuit);
+  if (existentes.length > 0) {
+    throw new AppError('Ya existe un cliente con ese CUIT.', 409, 'CLIENTE_FISICO_CUIT_DUPLICADO');
+  }
+
+  const emailSintetico = `cliente-fisico-${cuit}@apotheka.invalid`;
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email: emailSintetico,
+    email_confirm: true,
+    user_metadata: { es_cliente_fisico: true, cuit, creado_por_admin_id: adminUserId },
+  });
+
+  if (authError || !authData?.user) {
+    throw new AppError('No se pudo crear el cliente físico. Intentá de nuevo.', 502, 'CLIENTE_FISICO_AUTH_ERROR');
+  }
+
+  try {
+    const perfil = await perfilRepo.crearClienteFisico(authData.user.id, {
+      nombre:   dto.nombre.trim(),
+      apellido: dto.apellido.trim(),
+      dni:      cuit,
+      telefono: dto.telefono.trim(),
+      email:    dto.email?.trim() || null,
+      creadoPorAdminId: adminUserId,
+    });
+
+    return {
+      user_id:           perfil.user_id,
+      email:             null,
+      nombre:            perfil.nombre,
+      apellido:          perfil.apellido,
+      dni:               perfil.dni,
+      puntos_saldo:      0,
+      es_cliente_fisico: true,
+    };
+  } catch (err) {
+    // No hay transacción real posible entre Auth (GoTrue) y la tabla
+    // perfiles — si el insert falla después de crear la cuenta, hay que
+    // compensar a mano para no dejar un usuario de Auth huérfano.
+    await supabase.auth.admin.deleteUser(authData.user.id).catch(rollbackErr => {
+      console.error('[crearClienteFisico] usuario de Auth huérfano, requiere borrado manual:', authData.user.id, rollbackErr);
+    });
+    if ((err as { code?: string })?.code === '23505') {
+      throw new AppError('Ya existe un cliente con ese CUIT.', 409, 'CLIENTE_FISICO_CUIT_DUPLICADO');
+    }
+    throw new AppError('Error al crear el cliente físico. Intentá de nuevo.', 500, 'CLIENTE_FISICO_ERROR');
+  }
 }

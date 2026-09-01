@@ -7,6 +7,7 @@ import type {
   CanjePremio,
   CanjePremioConDetalle,
   ClienteBusquedaDNI,
+  CrearClienteFisicoDTO,
 } from '../types';
 import { supabase } from '../lib/supabase';
 import { addErrorInterceptor } from './apiClient';
@@ -73,6 +74,15 @@ export async function acreditarPuntosManual(clienteId: string, puntos: number, m
     cliente_id: clienteId,
     puntos,
     motivo: motivo.trim() || null,
+  });
+  return data;
+}
+
+// Igual que buscarClientePorDni, el CUIT duplicado (409) lo maneja el propio
+// formulario, por eso no dispara el ErrorModal genérico.
+export async function crearClienteFisico(dto: CrearClienteFisicoDTO): Promise<ClienteBusquedaDNI> {
+  const { data } = await api.post<ClienteBusquedaDNI>('/puntos/clientes', dto, {
+    suppressGlobalError: true,
   });
   return data;
 }

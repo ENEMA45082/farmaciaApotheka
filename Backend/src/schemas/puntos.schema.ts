@@ -31,3 +31,15 @@ export const acreditarManualSchema = z.object({
   puntos:     z.number().int().positive(),
   motivo:     z.string().max(300).nullable().optional(),
 });
+
+export const crearClienteFisicoSchema = z.object({
+  nombre:   z.string().trim().min(1).max(200),
+  apellido: z.string().trim().min(1).max(200),
+  // Solo dígitos + separadores comunes; la validación real (11 dígitos +
+  // dígito verificador) la hace validarDocumento en el service.
+  dni:      z.string().trim().min(11).max(13),
+  telefono: z.string().trim().min(1).max(30),
+  // '' del formulario -> undefined, para que z.string().email() no la rechace
+  // cuando el campo se dejó vacío en vez de omitirse.
+  email:    z.preprocess(v => (v === '' ? undefined : v), z.string().trim().email().max(300).optional()),
+});

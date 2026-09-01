@@ -9,6 +9,7 @@ import {
   canjearPremioSchema,
   buscarClienteDniSchema,
   acreditarManualSchema,
+  crearClienteFisicoSchema,
 } from '../schemas/puntos.schema';
 
 const router = Router();
@@ -23,6 +24,7 @@ router.patch('/premios/:id', requiereAdmin, validar(actualizarPremioSchema), pun
 router.get('/canjes/admin',  requiereAdmin, puntosController.listarCanjesAdmin);
 
 router.get('/clientes',   requiereAdmin, validar(buscarClienteDniSchema, 'query'), puntosController.buscarClientePorDni);
+router.post('/clientes',  requiereAdmin, validar(crearClienteFisicoSchema), puntosController.crearClienteFisico);
 router.post('/acreditar', requiereAdmin, validar(acreditarManualSchema), puntosController.acreditarManual);
 
 export default router;

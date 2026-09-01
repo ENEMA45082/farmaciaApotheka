@@ -78,6 +78,7 @@ function perfil(overrides: Partial<Perfil> = {}): Perfil {
     foto_url: null,
     creado_en: '2026-01-01T00:00:00.000Z',
     actualizado_en: '2026-01-01T00:00:00.000Z',
+    es_cliente_fisico: false,
     ...overrides,
   };
 }

@@ -34,6 +34,15 @@ export function verificarSecreto(req: Request, res: Response, next: NextFunction
 // reintenta si no recibe 2xx).
 export async function nuevoUsuario(req: Request, res: Response): Promise<void> {
   const { record } = req.body as NuevoUsuarioBody;
+
+  // Alta administrativa de un "cliente físico" (puntos.service.ts::
+  // crearClienteFisico) — no es una adquisición real de cliente, no
+  // corresponde mandarle un cupón de bienvenida a un email sintético.
+  if (record.raw_user_meta_data?.es_cliente_fisico) {
+    res.status(200).json({ ok: true });
+    return;
+  }
+
   const nombre = extraerNombre(record.raw_user_meta_data);
 
   try {

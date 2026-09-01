@@ -1617,3 +1617,88 @@ BEGIN
   RETURN row_to_json(nuevo_pedido)::jsonb;
 END;
 $$;
+
+-- --------------------------------------------------------
+-- 25. Alta de "cliente físico" (compra en el local, sin cuenta online) desde
+--     el panel de puntos del admin, con fusión automática de puntos si esa
+--     persona se registra de verdad más adelante y carga el mismo CUIT en
+--     "Mis Datos". El cliente físico SIGUE SIENDO un usuario real de
+--     auth.users (creado vía supabase.auth.admin.createUser desde Node, sin
+--     contraseña, con un email sintético derivado del CUIT) — no una tabla
+--     aparte — porque puntos_movimientos/canjes_premio/canjes_cupon ya
+--     exigen NOT NULL REFERENCES auth.users(id) en cliente_id.
+-- --------------------------------------------------------
+ALTER TABLE perfiles ADD COLUMN IF NOT EXISTS es_cliente_fisico     boolean NOT NULL DEFAULT false;
+ALTER TABLE perfiles ADD COLUMN IF NOT EXISTS creado_por_admin_id   uuid REFERENCES auth.users(id);
+ALTER TABLE perfiles ADD COLUMN IF NOT EXISTS email_contacto        text;
+ALTER TABLE perfiles ADD COLUMN IF NOT EXISTS fusionado_en          timestamptz;
+ALTER TABLE perfiles ADD COLUMN IF NOT EXISTS fusionado_con_user_id uuid REFERENCES auth.users(id);
+
+ALTER TABLE perfiles DROP CONSTRAINT IF EXISTS perfiles_fusion_solo_fisico_check;
+ALTER TABLE perfiles ADD CONSTRAINT perfiles_fusion_solo_fisico_check
+  CHECK (fusionado_en IS NULL OR es_cliente_fisico);
+
+-- Evita a nivel DB que dos altas del mismo CUIT convivan sin reclamar (el
+-- pre-chequeo en Node es la primera defensa; esto es la garantía real ante
+-- una carrera de dos requests — mismo criterio que idx_products_codigo_barras_unico).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_perfiles_cliente_fisico_dni_unico
+  ON perfiles(dni) WHERE es_cliente_fisico AND fusionado_en IS NULL;
+
+-- 25a. fusionar_cliente_fisico: se llama desde perfil.service.ts::actualizar
+--      cuando alguien guarda un CUIT en su perfil real. Si existe un cliente
+--      físico sin reclamar con ese mismo CUIT, le transfiere el saldo y
+--      reasigna todo su historial (puntos_movimientos, canjes_premio,
+--      canjes_cupon) a la cuenta real, y lo marca como fusionado (no se
+--      borra — queda como rastro de auditoría). Devuelve NULL si no hay
+--      nada para fusionar.
+--
+--      No hace falta lockear el perfil real por separado: los UPDATE ya
+--      serializan vía MVCC, y un perfil cliente_fisico (sin contraseña)
+--      nunca puede ser el lado autenticado de una llamada concurrente — el
+--      escenario de deadlock cruzado no existe acá.
+CREATE OR REPLACE FUNCTION fusionar_cliente_fisico(
+  p_user_id_real uuid,
+  p_dni          text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_fisico      perfiles%ROWTYPE;
+  v_nuevo_saldo integer;
+BEGIN
+  IF p_dni IS NULL OR length(trim(p_dni)) = 0 THEN
+    RETURN NULL;
+  END IF;
+
+  -- Si dos requests concurrentes compiten por el mismo perfil físico, la
+  -- segunda espera acá y, al reevaluar el WHERE tras el lock, ya no lo
+  -- encuentra (la primera ya seteó fusionado_en) — no hace falta más lógica.
+  SELECT * INTO v_fisico
+    FROM perfiles
+    WHERE dni = p_dni
+      AND documento_tipo = 'CUIT'
+      AND es_cliente_fisico
+      AND fusionado_en IS NULL
+      AND user_id <> p_user_id_real
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  UPDATE puntos_movimientos SET cliente_id = p_user_id_real WHERE cliente_id = v_fisico.user_id;
+  UPDATE canjes_premio      SET cliente_id = p_user_id_real WHERE cliente_id = v_fisico.user_id;
+  UPDATE canjes_cupon       SET cliente_id = p_user_id_real WHERE cliente_id = v_fisico.user_id;
+
+  UPDATE perfiles SET puntos_saldo = puntos_saldo + v_fisico.puntos_saldo
+    WHERE user_id = p_user_id_real
+    RETURNING puntos_saldo INTO v_nuevo_saldo;
+
+  UPDATE perfiles
+    SET fusionado_en = now(), fusionado_con_user_id = p_user_id_real, puntos_saldo = 0
+    WHERE user_id = v_fisico.user_id;
+
+  RETURN jsonb_build_object('fusiono', true, 'puntos_sumados', v_fisico.puntos_saldo, 'saldo_total', v_nuevo_saldo);
+END;
+$$;

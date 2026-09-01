@@ -357,6 +357,22 @@ export interface ClienteBusquedaDNI {
   apellido: string | null;
   dni: string | null;
   puntos_saldo: number;
+  // true cuando este "cliente" es un alta manual del admin (compra física,
+  // nunca creó cuenta) — ver CrearClienteFisicoDTO.
+  es_cliente_fisico: boolean;
+}
+
+// Alta manual de un cliente que compró en el local y no tiene cuenta online.
+// Crea un usuario real de Supabase Auth por detrás (ver puntos.service.ts::
+// crearClienteFisico) para poder cargarle puntos con la infraestructura ya
+// existente; si más adelante esa persona se registra de verdad con el mismo
+// CUIT, sus puntos se fusionan automáticamente (perfil.service.ts::actualizar).
+export interface CrearClienteFisicoDTO {
+  nombre: string;
+  apellido: string;
+  dni: string;
+  telefono: string;
+  email?: string | null;
 }
 
 export interface AcreditarPuntosManualDTO {
@@ -482,6 +498,9 @@ export interface Perfil {
   foto_url: string | null;
   creado_en: string;
   actualizado_en: string;
+  // true para un alta manual del admin (compra física, sin cuenta propia)
+  // que todavía no fue reclamada por un registro real — ver CrearClienteFisicoDTO.
+  es_cliente_fisico: boolean;
 }
 
 export interface ActualizarPerfilDTO {

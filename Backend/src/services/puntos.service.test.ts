@@ -8,13 +8,40 @@ const { acreditarPuntos, crearPremioRepo, actualizarPremioRepo } = vi.hoisted(()
   actualizarPremioRepo: vi.fn(),
 }));
 
+const { encontrarPorDniPerfil, crearClienteFisicoRepo } = vi.hoisted(() => ({
+  encontrarPorDniPerfil: vi.fn(),
+  crearClienteFisicoRepo: vi.fn(),
+}));
+
+const { createUser, deleteUser } = vi.hoisted(() => ({
+  createUser: vi.fn(),
+  deleteUser: vi.fn(),
+}));
+
 vi.mock('../repositories/puntos.repository', () => ({
   acreditarPuntos,
   crearPremio: crearPremioRepo,
   actualizarPremio: actualizarPremioRepo,
 }));
 
-import { acreditarPorPedido, crearPremio, actualizarPremio } from './puntos.service';
+vi.mock('../repositories/perfil.repository', () => ({
+  encontrarPorDni:    encontrarPorDniPerfil,
+  crearClienteFisico: crearClienteFisicoRepo,
+}));
+
+vi.mock('../config/supabase', () => ({
+  supabase: {
+    auth: {
+      admin: {
+        createUser,
+        deleteUser,
+        getUserById: vi.fn(),
+      },
+    },
+  },
+}));
+
+import { acreditarPorPedido, crearPremio, actualizarPremio, crearClienteFisico } from './puntos.service';
 
 function pedido(overrides: Partial<Pedido> = {}): Pedido {
   return {
@@ -71,10 +98,27 @@ function premio(overrides: Partial<Premio> = {}): Premio {
   };
 }
 
+function clienteFisicoDTO(overrides: Partial<{ nombre: string; apellido: string; dni: string; telefono: string; email: string | null }> = {}) {
+  return {
+    nombre:   'Juan',
+    apellido: 'Pérez',
+    dni:      '20-12345678-6', // válido: ver Backend/src/utils/validarDocumento.test.ts
+    telefono: '3511234567',
+    email:    null,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   acreditarPuntos.mockReset();
   crearPremioRepo.mockReset();
   actualizarPremioRepo.mockReset();
+  encontrarPorDniPerfil.mockReset();
+  encontrarPorDniPerfil.mockResolvedValue([]);
+  crearClienteFisicoRepo.mockReset();
+  createUser.mockReset();
+  deleteUser.mockReset();
+  deleteUser.mockResolvedValue({ data: {}, error: null });
 });
 
 describe('calcularPuntosPorPedido', () => {
@@ -142,5 +186,78 @@ describe('actualizarPremio', () => {
     actualizarPremioRepo.mockResolvedValue(premio({ activo: false }));
     await actualizarPremio(ID, { activo: false });
     expect(actualizarPremioRepo).toHaveBeenCalledWith(ID, { activo: false });
+  });
+});
+
+describe('crearClienteFisico', () => {
+  const ADMIN_ID = 'admin-1';
+
+  it('rechaza sin nombre', async () => {
+    await expect(crearClienteFisico(clienteFisicoDTO({ nombre: '  ' }), ADMIN_ID))
+      .rejects.toMatchObject({ statusCode: 400, code: 'CLIENTE_FISICO_NOMBRE_REQUERIDO' });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('rechaza sin apellido', async () => {
+    await expect(crearClienteFisico(clienteFisicoDTO({ apellido: '' }), ADMIN_ID))
+      .rejects.toMatchObject({ statusCode: 400, code: 'CLIENTE_FISICO_APELLIDO_REQUERIDO' });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('rechaza sin teléfono', async () => {
+    await expect(crearClienteFisico(clienteFisicoDTO({ telefono: '   ' }), ADMIN_ID))
+      .rejects.toMatchObject({ statusCode: 400, code: 'CLIENTE_FISICO_TELEFONO_REQUERIDO' });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un CUIT con dígito verificador inválido', async () => {
+    await expect(crearClienteFisico(clienteFisicoDTO({ dni: '20123456780' }), ADMIN_ID))
+      .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_DOCUMENTO' });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('rechaza si ya existe un perfil con ese CUIT', async () => {
+    encontrarPorDniPerfil.mockResolvedValue([{ user_id: 'existente' }]);
+
+    await expect(crearClienteFisico(clienteFisicoDTO(), ADMIN_ID))
+      .rejects.toMatchObject({ statusCode: 409, code: 'CLIENTE_FISICO_CUIT_DUPLICADO' });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('si falla la creación del usuario de Auth, no intenta crear el perfil', async () => {
+    createUser.mockResolvedValue({ data: null, error: { message: 'boom' } });
+
+    await expect(crearClienteFisico(clienteFisicoDTO(), ADMIN_ID))
+      .rejects.toMatchObject({ statusCode: 502, code: 'CLIENTE_FISICO_AUTH_ERROR' });
+    expect(crearClienteFisicoRepo).not.toHaveBeenCalled();
+  });
+
+  it('si falla el insert del perfil después de crear el usuario de Auth, revierte con deleteUser', async () => {
+    createUser.mockResolvedValue({ data: { user: { id: 'auth-user-1' } }, error: null });
+    crearClienteFisicoRepo.mockRejectedValue(new Error('insert falló'));
+
+    await expect(crearClienteFisico(clienteFisicoDTO(), ADMIN_ID))
+      .rejects.toMatchObject({ statusCode: 500, code: 'CLIENTE_FISICO_ERROR' });
+    expect(deleteUser).toHaveBeenCalledWith('auth-user-1');
+  });
+
+  it('camino feliz: crea el usuario de Auth con el email sintético derivado del CUIT y el perfil', async () => {
+    createUser.mockResolvedValue({ data: { user: { id: 'auth-user-1' } }, error: null });
+    crearClienteFisicoRepo.mockResolvedValue({
+      user_id: 'auth-user-1', nombre: 'Juan', apellido: 'Pérez', dni: '20123456786',
+      documento_tipo: 'CUIT', genero: null, fecha_nacimiento: null, telefono: '3511234567',
+      foto_url: null, creado_en: '', actualizado_en: '', es_cliente_fisico: true,
+    });
+
+    const resultado = await crearClienteFisico(clienteFisicoDTO(), ADMIN_ID);
+
+    expect(createUser).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'cliente-fisico-20123456786@apotheka.invalid',
+      user_metadata: expect.objectContaining({ es_cliente_fisico: true, cuit: '20123456786', creado_por_admin_id: ADMIN_ID }),
+    }));
+    expect(crearClienteFisicoRepo).toHaveBeenCalledWith('auth-user-1', expect.objectContaining({
+      nombre: 'Juan', apellido: 'Pérez', dni: '20123456786', telefono: '3511234567', creadoPorAdminId: ADMIN_ID,
+    }));
+    expect(resultado).toMatchObject({ user_id: 'auth-user-1', es_cliente_fisico: true, puntos_saldo: 0 });
   });
 });

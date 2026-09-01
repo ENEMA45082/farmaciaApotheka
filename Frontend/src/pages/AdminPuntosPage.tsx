@@ -8,9 +8,11 @@ import {
   listarCanjesAdmin,
   buscarClientePorDni,
   acreditarPuntosManual,
+  crearClienteFisico,
 } from '../api/puntos.api';
 import type { Premio, CanjePremioConDetalle, ClienteBusquedaDNI } from '../types';
 import { AdminLayout } from '../components/admin/AdminLayout';
+import { esCuitValido } from '../utils/validarDocumento';
 
 function nombreCliente(c: ClienteBusquedaDNI): string {
   const partes = [c.nombre, c.apellido].filter(Boolean);
@@ -23,6 +25,14 @@ const FORM_VACIO = {
   imagen_url: '',
   costo_puntos: '',
   stock: '',
+};
+
+const FORM_ALTA_VACIO = {
+  nombre: '',
+  apellido: '',
+  dni: '',
+  telefono: '',
+  email: '',
 };
 
 // Vacío o inválido -> null (ilimitado); número -> el valor.
@@ -50,6 +60,12 @@ export function AdminPuntosPage() {
   const [errorBusqueda, setErrorBusqueda]       = useState<string | null>(null);
   const [clientesEncontrados, setClientesEncontrados] = useState<ClienteBusquedaDNI[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteBusquedaDNI | null>(null);
+
+  // Alta de "cliente físico" — cuando la búsqueda no encuentra a nadie.
+  const [clienteNoEncontrado, setClienteNoEncontrado] = useState(false);
+  const [formAlta, setFormAlta]           = useState(FORM_ALTA_VACIO);
+  const [errorAlta, setErrorAlta]         = useState<string | null>(null);
+  const [creandoCliente, setCreandoCliente] = useState(false);
 
   const [puntosACargar, setPuntosACargar] = useState('');
   const [motivoCarga, setMotivoCarga]     = useState('');
@@ -93,6 +109,9 @@ export function AdminPuntosPage() {
     setMotivoCarga('');
     setErrorAcreditar(null);
     setMensajeExito(null);
+    setClienteNoEncontrado(false);
+    setFormAlta(FORM_ALTA_VACIO);
+    setErrorAlta(null);
   }
 
   function seleccionarCliente(c: ClienteBusquedaDNI) {
@@ -107,9 +126,11 @@ export function AdminPuntosPage() {
     setMensajeExito(null);
     setClientesEncontrados([]);
     setClienteSeleccionado(null);
+    setClienteNoEncontrado(false);
+    setErrorAlta(null);
 
     if (!dniBusqueda.trim()) {
-      setErrorBusqueda('Ingresá un DNI para buscar.');
+      setErrorBusqueda('Ingresá un CUIT para buscar.');
       return;
     }
 
@@ -119,10 +140,51 @@ export function AdminPuntosPage() {
       setClientesEncontrados(clientes);
       if (clientes.length === 1) setClienteSeleccionado(clientes[0]);
     } catch (err) {
-      const mensaje = axios.isAxiosError(err) ? err.response?.data?.error : null;
-      setErrorBusqueda(mensaje ?? 'Error al buscar el cliente.');
+      const data = axios.isAxiosError(err) ? err.response?.data : null;
+      setErrorBusqueda(data?.error ?? 'Error al buscar el cliente.');
+      if (data?.code === 'CLIENTE_NOT_FOUND') {
+        setClienteNoEncontrado(true);
+        setFormAlta(f => ({ ...f, dni: dniBusqueda.trim() }));
+      }
     } finally {
       setBuscandoCliente(false);
+    }
+  }
+
+  async function handleCrearClienteFisico(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorAlta(null);
+
+    if (!formAlta.nombre.trim() || !formAlta.apellido.trim() || !formAlta.telefono.trim()) {
+      setErrorAlta('Nombre, apellido y teléfono son obligatorios.');
+      return;
+    }
+    if (!esCuitValido(formAlta.dni)) {
+      setErrorAlta('El CUIT no es válido (tiene que tener 11 dígitos y el dígito verificador correcto).');
+      return;
+    }
+
+    setCreandoCliente(true);
+    try {
+      const nuevo = await crearClienteFisico({
+        nombre:   formAlta.nombre.trim(),
+        apellido: formAlta.apellido.trim(),
+        dni:      formAlta.dni.trim(),
+        telefono: formAlta.telefono.trim(),
+        email:    formAlta.email.trim() || null,
+      });
+      // Tratarlo igual que si la búsqueda lo hubiera encontrado — reusa el
+      // formulario de "Acreditar puntos" de más abajo sin ningún cambio ahí.
+      setClientesEncontrados([nuevo]);
+      setClienteSeleccionado(nuevo);
+      setClienteNoEncontrado(false);
+      setFormAlta(FORM_ALTA_VACIO);
+      setErrorBusqueda(null);
+    } catch (err) {
+      const data = axios.isAxiosError(err) ? err.response?.data : null;
+      setErrorAlta(data?.error ?? 'Error al crear el cliente. Intentá de nuevo.');
+    } finally {
+      setCreandoCliente(false);
     }
   }
 
@@ -222,20 +284,20 @@ export function AdminPuntosPage() {
         <div className="admin-form-card">
           <h2>Cargar puntos a un cliente</h2>
           <p style={{ color: 'var(--text-light)', fontSize: '0.85rem', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-            Buscá al cliente por DNI para acreditarle puntos a mano — por ejemplo, cuando compra en el local y quiere registrar sus puntos.
+            Buscá al cliente por CUIT para acreditarle puntos a mano — por ejemplo, cuando compra en el local y quiere registrar sus puntos.
           </p>
 
           <form onSubmit={handleBuscarCliente} className="admin-form">
             <div className="admin-form-grid">
               <div className="form-group">
-                <label htmlFor="cliente-dni">DNI del cliente</label>
+                <label htmlFor="cliente-dni">CUIT del cliente</label>
                 <input
                   id="cliente-dni"
                   type="text"
                   inputMode="numeric"
                   value={dniBusqueda}
                   onChange={e => setDniBusqueda(e.target.value)}
-                  placeholder="Ej: 30123456"
+                  placeholder="Ej: 30712345678"
                 />
               </div>
             </div>
@@ -254,9 +316,80 @@ export function AdminPuntosPage() {
             </div>
           </form>
 
+          {clienteNoEncontrado && !clienteSeleccionado && (
+            <form onSubmit={handleCrearClienteFisico} className="admin-form" style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+              <p style={{ marginTop: 0 }}>
+                No hay ninguna cuenta con ese CUIT. Si compró en el local, registralo acá para poder cargarle puntos.
+              </p>
+
+              {errorAlta && <div className="admin-error">{errorAlta}</div>}
+
+              <div className="admin-form-grid">
+                <div className="form-group">
+                  <label htmlFor="alta-nombre">Nombre *</label>
+                  <input
+                    id="alta-nombre"
+                    type="text"
+                    value={formAlta.nombre}
+                    onChange={e => setFormAlta(f => ({ ...f, nombre: e.target.value }))}
+                    disabled={creandoCliente}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="alta-apellido">Apellido *</label>
+                  <input
+                    id="alta-apellido"
+                    type="text"
+                    value={formAlta.apellido}
+                    onChange={e => setFormAlta(f => ({ ...f, apellido: e.target.value }))}
+                    disabled={creandoCliente}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="alta-cuit">CUIT *</label>
+                  <input
+                    id="alta-cuit"
+                    type="text"
+                    inputMode="numeric"
+                    value={formAlta.dni}
+                    onChange={e => setFormAlta(f => ({ ...f, dni: e.target.value.replace(/\D/g, '') }))}
+                    disabled={creandoCliente}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="alta-telefono">Teléfono *</label>
+                  <input
+                    id="alta-telefono"
+                    type="text"
+                    inputMode="numeric"
+                    value={formAlta.telefono}
+                    onChange={e => setFormAlta(f => ({ ...f, telefono: e.target.value }))}
+                    disabled={creandoCliente}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="alta-email">Email (opcional)</label>
+                  <input
+                    id="alta-email"
+                    type="email"
+                    value={formAlta.email}
+                    onChange={e => setFormAlta(f => ({ ...f, email: e.target.value }))}
+                    disabled={creandoCliente}
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form-actions">
+                <button type="submit" className="btn btn-primary" disabled={creandoCliente}>
+                  {creandoCliente ? 'Registrando...' : 'Registrar cliente'}
+                </button>
+              </div>
+            </form>
+          )}
+
           {clientesEncontrados.length > 1 && !clienteSeleccionado && (
             <div className="admin-table-wrapper" style={{ marginTop: '1rem' }}>
-              <p>Se encontró más de un cliente con ese DNI. Elegí a cuál cargarle los puntos:</p>
+              <p>Se encontró más de un cliente con ese CUIT. Elegí a cuál cargarle los puntos:</p>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -289,7 +422,12 @@ export function AdminPuntosPage() {
               <p style={{ marginTop: 0 }}>
                 Cliente: <strong>{nombreCliente(clienteSeleccionado)}</strong>
                 {clienteSeleccionado.email && ` (${clienteSeleccionado.email})`}
-                {clienteSeleccionado.dni && ` — DNI ${clienteSeleccionado.dni}`}
+                {clienteSeleccionado.dni && ` — CUIT ${clienteSeleccionado.dni}`}
+                {clienteSeleccionado.es_cliente_fisico && (
+                  <span style={{ marginLeft: '0.5rem', color: 'var(--text-light)', fontSize: '0.8rem' }}>
+                    (cliente físico — sin cuenta online)
+                  </span>
+                )}
                 <br />
                 Saldo actual: <strong>{clienteSeleccionado.puntos_saldo} pts</strong>
               </p>
