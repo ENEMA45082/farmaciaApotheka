@@ -6,6 +6,7 @@ import { crearProducto, actualizarProducto, subirImagenes } from '../api/product
 import type { Producto, CrearProductoDTO, ActualizarProductoDTO } from '../types';
 import { AdminLayout } from '../components/admin/AdminLayout';
 import { EliminarProductoModal } from '../components/admin/EliminarProductoModal';
+import { ComboItemsManager } from '../components/admin/ComboItemsManager';
 
 const MAX_IMAGENES = 5;
 
@@ -46,6 +47,7 @@ const FORM_PRODUCTO_VACIO = {
   precio_oferta: '',
   porcentaje_oferta: '',
   es_2x1: false,
+  es_combo: false,
   es_venta_libre: true,
   peso_gramos: '',
   alicuota_iva: '21',
@@ -165,6 +167,7 @@ export function AdminProductosPage() {
       precio_oferta: p.precio_oferta != null ? String(p.precio_oferta) : '',
       porcentaje_oferta: p.porcentaje_oferta != null ? String(p.porcentaje_oferta) : '',
       es_2x1: p.es_2x1,
+      es_combo: p.es_combo,
       es_venta_libre: p.es_venta_libre,
       peso_gramos: p.peso_gramos ? String(p.peso_gramos) : '',
       alicuota_iva: String(p.alicuota_iva ?? 21),
@@ -246,8 +249,9 @@ export function AdminProductosPage() {
         precio_oferta:     formProducto.en_oferta && !formProducto.es_2x1 ? precioOferta : null,
         porcentaje_oferta: formProducto.en_oferta && !formProducto.es_2x1 ? pctOferta    : null,
         es_2x1:            formProducto.en_oferta && formProducto.es_2x1,
+        es_combo: formProducto.es_combo,
         descripcion: formProducto.descripcion.trim() || undefined,
-        stock,
+        stock: formProducto.es_combo ? 0 : stock,
         categoria_id: formProducto.categoria_id || undefined,
         imagen_url: todasLasImagenes[0] ?? undefined,
         imagenes: todasLasImagenes,
@@ -327,14 +331,15 @@ export function AdminProductosPage() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="p-stock">Stock</label>
+                <label htmlFor="p-stock">Stock{formProducto.es_combo ? ' (automático)' : ''}</label>
                 <input
                   id="p-stock"
                   type="number"
                   min="0"
-                  value={formProducto.stock}
+                  value={formProducto.es_combo ? '' : formProducto.stock}
                   onChange={e => setFormProducto(f => ({ ...f, stock: e.target.value }))}
-                  placeholder="0"
+                  placeholder={formProducto.es_combo ? 'Se calcula según los componentes' : '0'}
+                  disabled={formProducto.es_combo}
                 />
               </div>
 
@@ -415,6 +420,18 @@ export function AdminProductosPage() {
                   onChange={e => setFormProducto(f => ({ ...f, es_venta_libre: e.target.checked }))}
                 />
                 ¿Venta libre? <span style={{ fontSize: '0.8rem', color: 'var(--text-light)', fontWeight: 400 }}>(si no está activado, el producto no se muestra en la tienda)</span>
+              </label>
+            </div>
+
+            {/* Combo */}
+            <div className="oferta-section">
+              <label className="oferta-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={formProducto.es_combo}
+                  onChange={e => setFormProducto(f => ({ ...f, es_combo: e.target.checked }))}
+                />
+                ¿Es un combo? <span style={{ fontSize: '0.8rem', color: 'var(--text-light)', fontWeight: 400 }}>(bundle de 2+ productos existentes — el stock se calcula solo)</span>
               </label>
             </div>
 
@@ -581,6 +598,8 @@ export function AdminProductosPage() {
             </div>
           </form>
         </div>
+
+        {productoEditando?.es_combo && <ComboItemsManager combo={productoEditando} />}
 
         <div className="admin-table-card">
           <div className="admin-filtros-header">

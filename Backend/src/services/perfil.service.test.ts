@@ -52,12 +52,12 @@ describe('actualizar', () => {
     expect(actualizarRepo).toHaveBeenCalledWith('user-1', { nombre: 'Nuevo nombre' });
   });
 
-  it('no intenta fusionar si el documento sigue siendo DNI', async () => {
+  it('intenta fusionar también cuando el documento es DNI (no solo CUIT)', async () => {
     encontrarOCrear.mockResolvedValue(perfil({ documento_tipo: 'DNI', dni: '12345678' }));
 
     await actualizar('user-1', { dni: '87654321' } as ActualizarPerfilDTO);
 
-    expect(fusionarClienteFisico).not.toHaveBeenCalled();
+    expect(fusionarClienteFisico).toHaveBeenCalledWith('user-1', '87654321');
   });
 
   it('no intenta fusionar si el CUIT es inválido (validarDocumento rechaza antes)', async () => {
@@ -68,11 +68,11 @@ describe('actualizar', () => {
     expect(actualizarRepo).not.toHaveBeenCalled();
   });
 
-  it('fusiona con el CUIT normalizado (sin guiones) cuando el documento es CUIT', async () => {
+  it('fusiona con el DNI extraído del CUIT (no el CUIT completo) cuando el documento es CUIT', async () => {
     await actualizar('user-1', { dni: '20-12345678-6', documento_tipo: 'CUIT' } as ActualizarPerfilDTO);
 
-    expect(fusionarClienteFisico).toHaveBeenCalledWith('user-1', CUIT_VALIDO);
-    expect(actualizarRepo).toHaveBeenCalledWith('user-1', expect.objectContaining({ dni: CUIT_VALIDO }));
+    expect(fusionarClienteFisico).toHaveBeenCalledWith('user-1', '12345678'); // DNI embebido en el CUIT
+    expect(actualizarRepo).toHaveBeenCalledWith('user-1', expect.objectContaining({ dni: CUIT_VALIDO })); // el perfil real sigue guardando el CUIT completo
   });
 
   it('si la fusión no encuentra nada para fusionar (devuelve null), igual actualiza el perfil con normalidad', async () => {

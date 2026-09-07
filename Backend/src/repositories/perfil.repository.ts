@@ -90,7 +90,9 @@ export async function actualizar(userId: string, dto: ActualizarPerfilDTO): Prom
 
 // Alta manual de un cliente sin cuenta propia (compra física) — userId ya
 // corresponde a un usuario real de Auth creado por
-// puntos.service.ts::crearClienteFisico antes de llamar acá.
+// puntos.service.ts::crearClienteFisico antes de llamar acá. Se guarda con
+// documento_tipo 'DNI' porque eso es lo que puntos.service.ts::
+// crearClienteFisico ya validó y normalizó.
 export async function crearClienteFisico(
   userId: string,
   dto: CrearClienteFisicoDTO & { creadoPorAdminId: string },
@@ -102,7 +104,7 @@ export async function crearClienteFisico(
       nombre:              dto.nombre,
       apellido:            dto.apellido,
       dni:                 dto.dni,
-      documento_tipo:      'CUIT',
+      documento_tipo:      'DNI',
       telefono:            dto.telefono,
       email_contacto:      dto.email ?? null,
       es_cliente_fisico:   true,

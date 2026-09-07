@@ -1702,3 +1702,346 @@ BEGIN
   RETURN jsonb_build_object('fusiono', true, 'puntos_sumados', v_fisico.puntos_saldo, 'saldo_total', v_nuevo_saldo);
 END;
 $$;
+
+
+-- --------------------------------------------------------
+-- 26. Combos: producto "bundle" de 2+ productos reales, con stock atado
+--     al stock real de sus componentes (no un stock propio independiente).
+--     products.es_combo marca qué filas son combos — siguen siendo filas
+--     normales de products (precio/oferta/es_2x1/es_venta_libre/imagenes
+--     de siempre), pero:
+--       - su stock NUNCA se descuenta directamente (nunca aparecen como
+--         producto_id real en un pedido — ver resolverItemsCarrito en
+--         productos.service.ts, que los "explota" en sus componentes
+--         reales antes de llegar a crear_pedido_completo).
+--       - su stock visible se CALCULA al leer (productos.repository.ts),
+--         no se guarda sincronizado: MIN(FLOOR(stock_componente /
+--         cantidad_en_combo)) sobre todos sus combo_items.
+--
+--     combo_items.producto_id usa ON DELETE RESTRICT (a diferencia de
+--     productos_destacados, que usa CASCADE): borrar sin querer un
+--     producto real que es componente de un combo rompería el combo en
+--     silencio. productos.service.ts::eliminar chequea antes de borrar y
+--     devuelve 409 nombrando qué combo(s) lo usan (mismo patrón que
+--     categorias.service.ts::eliminar con CATEGORIA_CON_PRODUCTOS).
+--     combo_items.combo_id usa ON DELETE CASCADE: borrar el
+--     producto-combo borra su composición sin pérdida real.
+-- --------------------------------------------------------
+ALTER TABLE products ADD COLUMN IF NOT EXISTS es_combo boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS combo_items (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  combo_id    uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  producto_id uuid NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+  cantidad    integer NOT NULL CHECK (cantidad > 0),
+  creado_en   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (combo_id, producto_id)
+);
+
+-- Lookup "¿este producto es componente de algún combo?" (chequeo de
+-- borrado en productos.service.ts::eliminar).
+CREATE INDEX IF NOT EXISTS idx_combo_items_producto_id ON combo_items(producto_id);
+
+-- 26a. detalles_pedido: combo_id + combo_nombre, snapshot igual que
+--      nombre_producto (sobrevive aunque el combo se borre después).
+--      Puramente informativo para mostrar "parte del combo: X" — no
+--      participa en stock ni en IVA.
+ALTER TABLE detalles_pedido ADD COLUMN IF NOT EXISTS combo_id uuid REFERENCES products(id) ON DELETE SET NULL;
+ALTER TABLE detalles_pedido ADD COLUMN IF NOT EXISTS combo_nombre text;
+
+-- 26b. crear_pedido_completo: mismo contrato de siempre (24a), threadea
+--      combo_id/combo_nombre (nullable) desde cada item de p_items.
+--      NO participa en el loop de descontar_stock: para un item que vino
+--      de un combo ya explotado, (item->>'producto_id')::uuid es el id
+--      del COMPONENTE real (ver productos.service.ts::resolverItemsCarrito)
+--      — descontar_stock ve exactamente lo mismo que veía antes de esta
+--      migración. descontar_stock/restaurar_stock NO se tocan.
+CREATE OR REPLACE FUNCTION crear_pedido_completo(
+  p_user_id                    uuid,
+  p_total                      numeric,
+  p_subtotal_lista             numeric,
+  p_notas                      text,
+  p_metodo_envio               text,
+  p_costo_envio                numeric,
+  p_sucursal_correo_argentino  text,
+  p_codigo_postal_envio        text,
+  p_metodo_pago                text,
+  p_items                      jsonb,
+  p_destinatario_nombre        text DEFAULT NULL,
+  p_destinatario_dni           text DEFAULT NULL,
+  p_destinatario_cod_area      text DEFAULT NULL,
+  p_destinatario_telefono      text DEFAULT NULL,
+  p_tipo_servicio_envio        text DEFAULT NULL,
+  p_cupon_id                   uuid DEFAULT NULL,
+  p_descuento_cupon            numeric DEFAULT 0,
+  p_cuotas                     smallint DEFAULT 1,
+  p_recargo_financiero         numeric DEFAULT 0
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  nuevo_pedido     pedidos%ROWTYPE;
+  v_item           jsonb;
+  v_cupon_activo   boolean;
+  v_limite_total   integer;
+  v_limite_cliente integer;
+  v_usos_totales   integer;
+  v_usos_cliente   integer;
+BEGIN
+  IF p_cupon_id IS NOT NULL THEN
+    SELECT activo, limite_usos_total, limite_usos_por_cliente
+      INTO v_cupon_activo, v_limite_total, v_limite_cliente
+      FROM cupones WHERE id = p_cupon_id FOR UPDATE;
+
+    IF NOT FOUND OR NOT v_cupon_activo THEN
+      RAISE EXCEPTION 'cupon_invalido';
+    END IF;
+
+    IF v_limite_total IS NOT NULL THEN
+      SELECT count(*) INTO v_usos_totales FROM canjes_cupon WHERE cupon_id = p_cupon_id;
+      IF v_usos_totales >= v_limite_total THEN
+        RAISE EXCEPTION 'cupon_limite_usos_alcanzado';
+      END IF;
+    END IF;
+
+    IF v_limite_cliente IS NOT NULL THEN
+      SELECT count(*) INTO v_usos_cliente FROM canjes_cupon WHERE cupon_id = p_cupon_id AND cliente_id = p_user_id;
+      IF v_usos_cliente >= v_limite_cliente THEN
+        RAISE EXCEPTION 'cupon_limite_cliente_alcanzado';
+      END IF;
+    END IF;
+  END IF;
+
+  INSERT INTO pedidos (
+    user_id, total, subtotal_lista, notas,
+    metodo_envio, costo_envio, sucursal_correo_argentino,
+    codigo_postal_envio, metodo_pago,
+    destinatario_nombre, destinatario_dni, destinatario_cod_area, destinatario_telefono,
+    tipo_servicio_envio, cupon_id, descuento_cupon,
+    cuotas, recargo_financiero
+  ) VALUES (
+    p_user_id, p_total, p_subtotal_lista, p_notas,
+    p_metodo_envio, p_costo_envio, p_sucursal_correo_argentino,
+    p_codigo_postal_envio, p_metodo_pago,
+    p_destinatario_nombre, p_destinatario_dni, p_destinatario_cod_area, p_destinatario_telefono,
+    p_tipo_servicio_envio, p_cupon_id, p_descuento_cupon,
+    p_cuotas, p_recargo_financiero
+  )
+  RETURNING * INTO nuevo_pedido;
+
+  INSERT INTO detalles_pedido (
+    pedido_id, producto_id, nombre_producto,
+    cantidad, precio_unitario, precio_lista, descuento, subtotal,
+    combo_id, combo_nombre
+  )
+  SELECT
+    nuevo_pedido.id,
+    (item->>'producto_id')::uuid,
+    item->>'nombre_producto',
+    (item->>'cantidad')::int,
+    (item->>'precio_unitario')::numeric,
+    (item->>'precio_lista')::numeric,
+    COALESCE((item->>'descuento')::numeric, 0),
+    (item->>'subtotal')::numeric,
+    (item->>'combo_id')::uuid,
+    item->>'combo_nombre'
+  FROM jsonb_array_elements(p_items) AS item;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    PERFORM descontar_stock((v_item->>'producto_id')::uuid, (v_item->>'cantidad')::int);
+  END LOOP;
+
+  IF p_cupon_id IS NOT NULL THEN
+    INSERT INTO canjes_cupon (cupon_id, cliente_id, pedido_id, descuento_aplicado)
+    VALUES (p_cupon_id, p_user_id, nuevo_pedido.id, p_descuento_cupon);
+  END IF;
+
+  RETURN row_to_json(nuevo_pedido)::jsonb;
+END;
+$$;
+
+-- 26c. obtener_estadisticas_inventario: excluir combos de todos los
+--      agregados de stock/valor — si no, el stock de los componentes se
+--      cuenta DOS veces (una en su propia fila, otra en la fila del combo,
+--      que "tiene" un stock aparente vía el cálculo de
+--      productos.repository.ts).
+CREATE OR REPLACE FUNCTION obtener_estadisticas_inventario()
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  resultado jsonb;
+BEGIN
+  WITH RECURSIVE cat_raiz AS (
+    SELECT id, nombre, id AS raiz_id, nombre AS raiz_nombre
+    FROM categories
+    WHERE id_padre IS NULL
+
+    UNION ALL
+
+    SELECT c.id, c.nombre, cr.raiz_id, cr.raiz_nombre
+    FROM categories c
+    JOIN cat_raiz cr ON c.id_padre = cr.id
+  )
+  SELECT jsonb_build_object(
+    'resumen', (
+      SELECT jsonb_build_object(
+        'totalProductos',    COUNT(*),
+        'totalStock',        COALESCE(SUM(stock), 0),
+        'valorInventario',   COALESCE(SUM(precio * stock), 0),
+        'productosEnOferta', COUNT(*) FILTER (WHERE en_oferta = true),
+        'productosSinStock', COUNT(*) FILTER (WHERE stock = 0),
+        'proximosAVencer',   COUNT(*) FILTER (
+                               WHERE fecha_vencimiento IS NOT NULL
+                                 AND fecha_vencimiento::date BETWEEN CURRENT_DATE
+                                 AND CURRENT_DATE + INTERVAL '30 days'
+                             ),
+        'ahorroOferta', COALESCE(
+          SUM((precio - COALESCE(precio_oferta, precio)) * stock)
+            FILTER (WHERE en_oferta = true AND precio_oferta IS NOT NULL),
+          0
+        ),
+        'totalCategorias', (SELECT COUNT(*) FROM categories)
+      )
+      FROM products
+      WHERE es_combo = false
+    ),
+    'porCategoria', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'nombre',          agg.nombre,
+          'totalProductos',  agg.total_productos,
+          'totalStock',      agg.total_stock,
+          'valorInventario', agg.valor_inventario
+        ) ORDER BY agg.total_productos DESC
+      ), '[]'::jsonb)
+      FROM (
+        SELECT
+          COALESCE(cr.raiz_nombre, 'Sin categoría') AS nombre,
+          COUNT(p.id)                               AS total_productos,
+          COALESCE(SUM(p.stock), 0)                 AS total_stock,
+          COALESCE(SUM(p.precio * p.stock), 0)       AS valor_inventario
+        FROM products p
+        LEFT JOIN cat_raiz cr ON p.categoria_id = cr.id
+        WHERE p.es_combo = false
+        GROUP BY cr.raiz_nombre
+      ) agg
+    ),
+    'distribucionPrecios', (
+      SELECT jsonb_agg(fila ORDER BY orden)
+      FROM (
+        SELECT 1 AS orden, '< $500'           AS rango, COUNT(*) AS cantidad FROM products WHERE precio < 500 AND es_combo = false
+        UNION ALL
+        SELECT 2, '$500 - $1.000',    COUNT(*) FROM products WHERE precio BETWEEN 500   AND 999.99  AND es_combo = false
+        UNION ALL
+        SELECT 3, '$1.000 - $2.500',  COUNT(*) FROM products WHERE precio BETWEEN 1000  AND 2499.99 AND es_combo = false
+        UNION ALL
+        SELECT 4, '$2.500 - $5.000',  COUNT(*) FROM products WHERE precio BETWEEN 2500  AND 4999.99 AND es_combo = false
+        UNION ALL
+        SELECT 5, '$5.000 - $10.000', COUNT(*) FROM products WHERE precio BETWEEN 5000  AND 9999.99 AND es_combo = false
+        UNION ALL
+        SELECT 6, '> $10.000',        COUNT(*) FROM products WHERE precio >= 10000 AND es_combo = false
+      ) sub
+      CROSS JOIN LATERAL jsonb_build_object('rango', rango, 'cantidad', cantidad) AS fila
+    ),
+    'ofertaVsNormal', (
+      SELECT jsonb_build_object(
+        'enOferta', COUNT(*) FILTER (WHERE en_oferta = true),
+        'normal',   COUNT(*) FILTER (WHERE en_oferta = false)
+      )
+      FROM products
+      WHERE es_combo = false
+    ),
+    'descuentoPromedio', (
+      SELECT COALESCE(ROUND(AVG(porcentaje_oferta)::numeric, 1), 0)
+      FROM products
+      WHERE en_oferta = true AND porcentaje_oferta IS NOT NULL AND es_combo = false
+    ),
+    'vencimientosPorMes', (
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object('mes', mes_iso, 'cantidad', cantidad)
+        ORDER BY mes_iso
+      ), '[]'::jsonb)
+      FROM (
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', fecha_vencimiento::date), 'YYYY-MM') AS mes_iso,
+          COUNT(*) AS cantidad
+        FROM products
+        WHERE fecha_vencimiento IS NOT NULL
+          AND fecha_vencimiento::date BETWEEN CURRENT_DATE
+          AND CURRENT_DATE + INTERVAL '6 months'
+          AND es_combo = false
+        GROUP BY DATE_TRUNC('month', fecha_vencimiento::date)
+      ) sub
+    )
+  ) INTO resultado;
+
+  RETURN resultado;
+END;
+$$;
+
+
+-- --------------------------------------------------------
+-- 27. Alta de "cliente físico" por DNI en vez de CUIT: la mayoría de la
+--     gente no sabe su CUIT de memoria en el mostrador, pero sí su DNI.
+--     puntos.service.ts::crearClienteFisico ahora valida y guarda DNI puro
+--     (7-8 dígitos, documento_tipo='DNI') — ver
+--     perfil.repository.ts::crearClienteFisico.
+--
+--     fusionar_cliente_fisico: ya no filtra por documento_tipo='CUIT'.
+--     perfil.service.ts::actualizar ahora dispara la fusión tanto si la
+--     cuenta real usa DNI como si usa CUIT — en ambos casos normaliza a DNI
+--     puro antes de llamar acá (extraerDniDeCuit si es CUIT). Esta función
+--     matchea por DNI puro directo (dni = p_dni, clientes físicos nuevos) O
+--     por un CUIT que lo codifique (dni LIKE '__DDDDDDDD_', clientes
+--     físicos viejos dados de alta con CUIT antes de este cambio) — mismo
+--     criterio que ya usa perfil.repository.ts::encontrarPorDni() del lado
+--     de la búsqueda, ahora también acá del lado de la fusión.
+-- --------------------------------------------------------
+CREATE OR REPLACE FUNCTION fusionar_cliente_fisico(
+  p_user_id_real uuid,
+  p_dni          text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_fisico      perfiles%ROWTYPE;
+  v_nuevo_saldo integer;
+BEGIN
+  IF p_dni IS NULL OR length(trim(p_dni)) = 0 THEN
+    RETURN NULL;
+  END IF;
+
+  -- Si dos requests concurrentes compiten por el mismo perfil físico, la
+  -- segunda espera acá y, al reevaluar el WHERE tras el lock, ya no lo
+  -- encuentra (la primera ya seteó fusionado_en) — no hace falta más lógica.
+  SELECT * INTO v_fisico
+    FROM perfiles
+    WHERE (dni = p_dni OR dni LIKE '__' || LPAD(p_dni, 8, '0') || '_')
+      AND es_cliente_fisico
+      AND fusionado_en IS NULL
+      AND user_id <> p_user_id_real
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  UPDATE puntos_movimientos SET cliente_id = p_user_id_real WHERE cliente_id = v_fisico.user_id;
+  UPDATE canjes_premio      SET cliente_id = p_user_id_real WHERE cliente_id = v_fisico.user_id;
+  UPDATE canjes_cupon       SET cliente_id = p_user_id_real WHERE cliente_id = v_fisico.user_id;
+
+  UPDATE perfiles SET puntos_saldo = puntos_saldo + v_fisico.puntos_saldo
+    WHERE user_id = p_user_id_real
+    RETURNING puntos_saldo INTO v_nuevo_saldo;
+
+  UPDATE perfiles
+    SET fusionado_en = now(), fusionado_con_user_id = p_user_id_real, puntos_saldo = 0
+    WHERE user_id = v_fisico.user_id;
+
+  RETURN jsonb_build_object('fusiono', true, 'puntos_sumados', v_fisico.puntos_saldo, 'saldo_total', v_nuevo_saldo);
+END;
+$$;

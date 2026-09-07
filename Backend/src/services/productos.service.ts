@@ -1,4 +1,5 @@
 import * as productosRepo from '../repositories/productos.repository';
+import * as comboItemsRepo from '../repositories/comboItems.repository';
 import { parsearCsvPrecios } from '../utils/parsearCsvPrecios';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
@@ -35,6 +36,9 @@ export async function obtenerPorId(id: string): Promise<Producto> {
   const producto = await productosRepo.encontrarPorId(id);
   if (!producto) {
     throw new AppError('Producto no encontrado', 404, 'PRODUCTO_NOT_FOUND');
+  }
+  if (producto.es_combo) {
+    producto.combo_items = await comboItemsRepo.encontrarPorComboId(producto.id);
   }
   return producto;
 }
@@ -84,6 +88,17 @@ export async function eliminar(id: string): Promise<void> {
   if (!existe) {
     throw new AppError('Producto no encontrado', 404, 'PRODUCTO_NOT_FOUND');
   }
+
+  const combosQueLoUsan = await comboItemsRepo.encontrarCombosQueUsanProducto(id);
+  if (combosQueLoUsan.length > 0) {
+    const nombres = [...new Set(combosQueLoUsan.map(c => c.combo_nombre))].join(', ');
+    throw new AppError(
+      `No se puede eliminar: este producto es componente de ${combosQueLoUsan.length === 1 ? 'combo' : 'combos'}: ${nombres}. Quitalo de ese combo primero.`,
+      409,
+      'PRODUCTO_COMPONENTE_DE_COMBO',
+    );
+  }
+
   await productosRepo.eliminar(id);
 }
 
@@ -208,18 +223,32 @@ export async function resolverItemsCarrito(items: ItemCarritoInput[]): Promise<{
     if (!producto) {
       throw new AppError(`Producto no encontrado: ${item.producto_id}`, 404, 'PRODUCTO_NOT_FOUND');
     }
+    // Se guarda SIEMPRE bajo el id del item pedido (combo o no) — así el
+    // pre-check de stock de pedidos.service.ts::crear (que itera dto.items,
+    // no itemsConfirmados) sigue encontrando productos.get(item.producto_id)
+    // para un combo y comparando contra su stock ya calculado (ver
+    // productos.repository.ts). No hace falta tocar ese loop.
     productos.set(producto.id, producto);
 
-    const pares     = producto.es_2x1 ? Math.floor(item.cantidad / 2) : 0;
-    const descuento = pares * producto.precio;
+    const pares          = producto.es_2x1 ? Math.floor(item.cantidad / 2) : 0;
+    const descuentoTotal = pares * producto.precio;
+    const precioUnitario = producto.en_oferta && producto.precio_oferta != null
+      ? producto.precio_oferta
+      : producto.precio;
+
+    if (producto.es_combo) {
+      const lineas = await explotarCombo(producto, item.cantidad, precioUnitario, descuentoTotal);
+      itemsConfirmados.push(...lineas);
+      continue;
+    }
 
     itemsConfirmados.push({
       producto_id:     producto.id,
       nombre_producto: producto.nombre,
       cantidad:        item.cantidad,
-      precio_unitario: producto.en_oferta && producto.precio_oferta != null ? producto.precio_oferta : producto.precio,
+      precio_unitario: precioUnitario,
       precio_lista:    producto.precio,
-      descuento,
+      descuento:       descuentoTotal,
     });
   }
 
@@ -227,6 +256,75 @@ export async function resolverItemsCarrito(items: ItemCarritoInput[]): Promise<{
   const subtotalLista = itemsConfirmados.reduce((s, i) => s + i.precio_lista    * i.cantidad, 0);
 
   return { itemsConfirmados, total, subtotalLista, productos };
+}
+
+// Descompone UN item de carrito de combo en N líneas — una por cada
+// producto que lo compone — para que crear_pedido_completo/descontar_stock
+// nunca vean el id del combo, solo productos reales con stock real (evita
+// tocar descontar_stock/restaurar_stock, que no están en este repo).
+//
+// precio_unitario de cada línea queda IGUAL al precio de catálogo real del
+// componente (nunca una fracción inventada); todo el descuento/recargo que
+// trae el combo respecto de comprar los componentes sueltos se concentra en
+// `descuento`, mismo criterio que ya usa la promo 2x1 más arriba
+// (precio_unitario intacto, descuento aparte).
+async function explotarCombo(
+  combo: Producto,
+  cantidadCombos: number,
+  precioUnitarioCombo: number,
+  descuentoCombo: number,
+): Promise<ItemPedidoConfirmado[]> {
+  const componentes = await comboItemsRepo.encontrarPorComboId(combo.id);
+  if (componentes.length === 0) {
+    throw new AppError(`El combo "${combo.nombre}" no tiene componentes configurados`, 409, 'COMBO_SIN_COMPONENTES');
+  }
+
+  // Lo que el cliente paga en total por TODAS las unidades de combo
+  // pedidas (ya neto de la oferta/2x1 del combo, si tiene) — esto es lo
+  // único que hay que repartir entre los componentes reales.
+  const subtotalCombo = precioUnitarioCombo * cantidadCombos - descuentoCombo;
+
+  // Peso de reparto = valor de LISTA total que representa cada componente
+  // dentro de todos los combos pedidos (precio de lista, no el efectivo —
+  // así el reparto no depende de si el componente está también en oferta
+  // por su cuenta).
+  const pesos     = componentes.map(c => c.producto!.precio * c.cantidad * cantidadCombos);
+  const pesoTotal = pesos.reduce((s, w) => s + w, 0);
+
+  const lineas: ItemPedidoConfirmado[] = [];
+  let asignado = 0;
+
+  componentes.forEach((c, idx) => {
+    const producto        = c.producto!;
+    const cantidadReal    = c.cantidad * cantidadCombos;
+    const valorListaLinea = producto.precio * cantidadReal;
+    const esUltimo        = idx === componentes.length - 1;
+
+    // El último componente se lleva el RESTO exacto (no una proporción
+    // redondeada aparte) para que la suma de las N líneas cierre siempre,
+    // centavo a centavo, contra subtotalCombo — sin este ajuste, redondear
+    // cada proporción por separado podía dejar sobrando/faltando un
+    // centavo. Si pesoTotal es 0 (todos los componentes en $0, caso
+    // degenerado), se reparte por partes iguales para evitar NaN.
+    const proporcion = pesoTotal > 0 ? pesos[idx] / pesoTotal : 1 / componentes.length;
+    const subtotalLinea = esUltimo
+      ? subtotalCombo - asignado
+      : Math.round(subtotalCombo * proporcion * 100) / 100;
+    asignado += subtotalLinea;
+
+    lineas.push({
+      producto_id:     producto.id,
+      nombre_producto: producto.nombre,
+      cantidad:        cantidadReal,
+      precio_unitario: producto.precio,
+      precio_lista:    producto.precio,
+      descuento:       Math.round((valorListaLinea - subtotalLinea) * 100) / 100,
+      combo_id:        combo.id,
+      combo_nombre:    combo.nombre,
+    });
+  });
+
+  return lineas;
 }
 
 function validarDatosCreacion(dto: CrearProductoDTO): void {

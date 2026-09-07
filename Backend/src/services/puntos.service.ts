@@ -129,31 +129,35 @@ export async function acreditarManual(dto: AcreditarPuntosManualDTO): Promise<nu
 
 // Alta manual de un cliente que compró en el local y no tiene cuenta online.
 // Crea un usuario real de Supabase Auth por detrás (sin contraseña, con un
-// email sintético derivado del CUIT — nunca real, nunca se le manda nada) para
+// email sintético derivado del DNI — nunca real, nunca se le manda nada) para
 // poder reusar toda la infraestructura de puntos existente, que exige
-// cliente_id NOT NULL REFERENCES auth.users(id). Si esta persona se registra
-// de verdad más adelante con el mismo CUIT, perfil.service.ts::actualizar
-// fusiona automáticamente este perfil con la cuenta real.
+// cliente_id NOT NULL REFERENCES auth.users(id). Se pide DNI (no CUIT) porque
+// es lo que la mayoría de la gente sabe de memoria en el mostrador — ver
+// perfilRepo.encontrarPorDni(), que ya sabe encontrar este perfil aunque más
+// adelante la cuenta real de esa persona guarde un CUIT que lo codifique. Si
+// esta persona se registra de verdad más adelante (con DNI o con un CUIT que
+// codifique el mismo DNI), perfil.service.ts::actualizar fusiona
+// automáticamente este perfil con la cuenta real.
 export async function crearClienteFisico(dto: CrearClienteFisicoDTO, adminUserId: string): Promise<ClienteBusquedaDNI> {
   if (!dto.nombre?.trim())   throw new AppError('El nombre es obligatorio', 400, 'CLIENTE_FISICO_NOMBRE_REQUERIDO');
   if (!dto.apellido?.trim()) throw new AppError('El apellido es obligatorio', 400, 'CLIENTE_FISICO_APELLIDO_REQUERIDO');
   if (!dto.telefono?.trim()) throw new AppError('El teléfono es obligatorio', 400, 'CLIENTE_FISICO_TELEFONO_REQUERIDO');
-  validarDocumento('CUIT', dto.dni);
-  const cuit = dto.dni.replace(/\D/g, '');
+  validarDocumento('DNI', dto.dni);
+  const dni = dto.dni.replace(/\D/g, '');
 
   // Re-chequeo server-side: el frontend solo ofrece este alta después de una
   // búsqueda que ya dio negativo, pero no hay que confiar solo en eso — el
   // índice único parcial de la DB es la garantía real ante una carrera.
-  const existentes = await perfilRepo.encontrarPorDni(cuit);
+  const existentes = await perfilRepo.encontrarPorDni(dni);
   if (existentes.length > 0) {
-    throw new AppError('Ya existe un cliente con ese CUIT.', 409, 'CLIENTE_FISICO_CUIT_DUPLICADO');
+    throw new AppError('Ya existe un cliente con ese DNI.', 409, 'CLIENTE_FISICO_DNI_DUPLICADO');
   }
 
-  const emailSintetico = `cliente-fisico-${cuit}@apotheka.invalid`;
+  const emailSintetico = `cliente-fisico-${dni}@apotheka.invalid`;
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: emailSintetico,
     email_confirm: true,
-    user_metadata: { es_cliente_fisico: true, cuit, creado_por_admin_id: adminUserId },
+    user_metadata: { es_cliente_fisico: true, dni, creado_por_admin_id: adminUserId },
   });
 
   if (authError || !authData?.user) {
@@ -164,7 +168,7 @@ export async function crearClienteFisico(dto: CrearClienteFisicoDTO, adminUserId
     const perfil = await perfilRepo.crearClienteFisico(authData.user.id, {
       nombre:   dto.nombre.trim(),
       apellido: dto.apellido.trim(),
-      dni:      cuit,
+      dni,
       telefono: dto.telefono.trim(),
       email:    dto.email?.trim() || null,
       creadoPorAdminId: adminUserId,
@@ -187,7 +191,7 @@ export async function crearClienteFisico(dto: CrearClienteFisicoDTO, adminUserId
       console.error('[crearClienteFisico] usuario de Auth huérfano, requiere borrado manual:', authData.user.id, rollbackErr);
     });
     if ((err as { code?: string })?.code === '23505') {
-      throw new AppError('Ya existe un cliente con ese CUIT.', 409, 'CLIENTE_FISICO_CUIT_DUPLICADO');
+      throw new AppError('Ya existe un cliente con ese DNI.', 409, 'CLIENTE_FISICO_DNI_DUPLICADO');
     }
     throw new AppError('Error al crear el cliente físico. Intentá de nuevo.', 500, 'CLIENTE_FISICO_ERROR');
   }

@@ -25,7 +25,9 @@ export interface Producto {
   es_venta_libre: boolean;
   peso_gramos: number;
   alicuota_iva: number;
+  es_combo: boolean;
   categoria?: Categoria;
+  combo_items?: ComboItem[];
 }
 
 export function precioEfectivo(p: Producto): number {
@@ -84,6 +86,7 @@ export interface CrearProductoDTO {
   precio_oferta?: number | null;
   porcentaje_oferta?: number | null;
   es_2x1?: boolean;
+  es_combo?: boolean;
   descripcion?: string;
   stock?: number;
   categoria_id?: string;
@@ -103,6 +106,7 @@ export interface ActualizarProductoDTO {
   precio_oferta?: number | null;
   porcentaje_oferta?: number | null;
   es_2x1?: boolean;
+  es_combo?: boolean;
   descripcion?: string;
   stock?: number;
   categoria_id?: string;
@@ -152,6 +156,8 @@ export interface DetallePedido {
   precio_lista: number;
   descuento: number;
   subtotal: number;
+  combo_id?: string | null;
+  combo_nombre?: string | null;
 }
 
 export type MetodoEnvio = 'retiro_farmacia' | 'domicilio' | 'retiro_sucursal';
@@ -580,4 +586,23 @@ export interface CrearProductoDestacadoDTO {
 
 export interface ActualizarProductoDestacadoDTO {
   orden: number;
+}
+
+export interface ComboItem {
+  id: string;
+  combo_id: string;
+  producto_id: string;
+  cantidad: number;
+  creado_en: string;
+  producto?: Producto;
+}
+
+export interface CrearComboItemDTO {
+  combo_id: string;
+  producto_id: string;
+  cantidad: number;
+}
+
+export interface ActualizarComboItemDTO {
+  cantidad: number;
 }

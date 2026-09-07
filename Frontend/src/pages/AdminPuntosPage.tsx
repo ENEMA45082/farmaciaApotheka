@@ -12,7 +12,7 @@ import {
 } from '../api/puntos.api';
 import type { Premio, CanjePremioConDetalle, ClienteBusquedaDNI } from '../types';
 import { AdminLayout } from '../components/admin/AdminLayout';
-import { esCuitValido } from '../utils/validarDocumento';
+import { esDniValido } from '../utils/validarDocumento';
 
 function nombreCliente(c: ClienteBusquedaDNI): string {
   const partes = [c.nombre, c.apellido].filter(Boolean);
@@ -130,7 +130,7 @@ export function AdminPuntosPage() {
     setErrorAlta(null);
 
     if (!dniBusqueda.trim()) {
-      setErrorBusqueda('Ingresá un CUIT para buscar.');
+      setErrorBusqueda('Ingresá un DNI para buscar.');
       return;
     }
 
@@ -159,8 +159,8 @@ export function AdminPuntosPage() {
       setErrorAlta('Nombre, apellido y teléfono son obligatorios.');
       return;
     }
-    if (!esCuitValido(formAlta.dni)) {
-      setErrorAlta('El CUIT no es válido (tiene que tener 11 dígitos y el dígito verificador correcto).');
+    if (!esDniValido(formAlta.dni)) {
+      setErrorAlta('El DNI no es válido (tiene que tener 7 u 8 dígitos).');
       return;
     }
 
@@ -284,20 +284,20 @@ export function AdminPuntosPage() {
         <div className="admin-form-card">
           <h2>Cargar puntos a un cliente</h2>
           <p style={{ color: 'var(--text-light)', fontSize: '0.85rem', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-            Buscá al cliente por CUIT para acreditarle puntos a mano — por ejemplo, cuando compra en el local y quiere registrar sus puntos.
+            Buscá al cliente por DNI para acreditarle puntos a mano — por ejemplo, cuando compra en el local y quiere registrar sus puntos.
           </p>
 
           <form onSubmit={handleBuscarCliente} className="admin-form">
             <div className="admin-form-grid">
               <div className="form-group">
-                <label htmlFor="cliente-dni">CUIT del cliente</label>
+                <label htmlFor="cliente-dni">DNI del cliente</label>
                 <input
                   id="cliente-dni"
                   type="text"
                   inputMode="numeric"
                   value={dniBusqueda}
                   onChange={e => setDniBusqueda(e.target.value)}
-                  placeholder="Ej: 30712345678"
+                  placeholder="Ej: 30712345"
                 />
               </div>
             </div>
@@ -319,7 +319,7 @@ export function AdminPuntosPage() {
           {clienteNoEncontrado && !clienteSeleccionado && (
             <form onSubmit={handleCrearClienteFisico} className="admin-form" style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
               <p style={{ marginTop: 0 }}>
-                No hay ninguna cuenta con ese CUIT. Si compró en el local, registralo acá para poder cargarle puntos.
+                No hay ninguna cuenta con ese DNI. Si compró en el local, registralo acá para poder cargarle puntos.
               </p>
 
               {errorAlta && <div className="admin-error">{errorAlta}</div>}
@@ -346,9 +346,9 @@ export function AdminPuntosPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="alta-cuit">CUIT *</label>
+                  <label htmlFor="alta-dni">DNI *</label>
                   <input
-                    id="alta-cuit"
+                    id="alta-dni"
                     type="text"
                     inputMode="numeric"
                     value={formAlta.dni}
@@ -389,7 +389,7 @@ export function AdminPuntosPage() {
 
           {clientesEncontrados.length > 1 && !clienteSeleccionado && (
             <div className="admin-table-wrapper" style={{ marginTop: '1rem' }}>
-              <p>Se encontró más de un cliente con ese CUIT. Elegí a cuál cargarle los puntos:</p>
+              <p>Se encontró más de un cliente con ese DNI. Elegí a cuál cargarle los puntos:</p>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -422,7 +422,7 @@ export function AdminPuntosPage() {
               <p style={{ marginTop: 0 }}>
                 Cliente: <strong>{nombreCliente(clienteSeleccionado)}</strong>
                 {clienteSeleccionado.email && ` (${clienteSeleccionado.email})`}
-                {clienteSeleccionado.dni && ` — CUIT ${clienteSeleccionado.dni}`}
+                {clienteSeleccionado.dni && ` — Doc. ${clienteSeleccionado.dni}`}
                 {clienteSeleccionado.es_cliente_fisico && (
                   <span style={{ marginLeft: '0.5rem', color: 'var(--text-light)', fontSize: '0.8rem' }}>
                     (cliente físico — sin cuenta online)

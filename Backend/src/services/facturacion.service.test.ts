@@ -82,6 +82,7 @@ function producto(alicuota_iva: number): Producto {
     es_venta_libre: true,
     peso_gramos: 500,
     alicuota_iva,
+    es_combo: false,
   };
 }
 

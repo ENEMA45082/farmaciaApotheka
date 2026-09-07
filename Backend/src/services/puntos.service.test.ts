@@ -102,7 +102,7 @@ function clienteFisicoDTO(overrides: Partial<{ nombre: string; apellido: string;
   return {
     nombre:   'Juan',
     apellido: 'Pérez',
-    dni:      '20-12345678-6', // válido: ver Backend/src/utils/validarDocumento.test.ts
+    dni:      '12345678', // válido: ver Backend/src/utils/validarDocumento.test.ts
     telefono: '3511234567',
     email:    null,
     ...overrides,
@@ -210,17 +210,17 @@ describe('crearClienteFisico', () => {
     expect(createUser).not.toHaveBeenCalled();
   });
 
-  it('rechaza un CUIT con dígito verificador inválido', async () => {
-    await expect(crearClienteFisico(clienteFisicoDTO({ dni: '20123456780' }), ADMIN_ID))
+  it('rechaza un DNI con menos de 7 dígitos', async () => {
+    await expect(crearClienteFisico(clienteFisicoDTO({ dni: '123456' }), ADMIN_ID))
       .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_DOCUMENTO' });
     expect(createUser).not.toHaveBeenCalled();
   });
 
-  it('rechaza si ya existe un perfil con ese CUIT', async () => {
+  it('rechaza si ya existe un perfil con ese DNI', async () => {
     encontrarPorDniPerfil.mockResolvedValue([{ user_id: 'existente' }]);
 
     await expect(crearClienteFisico(clienteFisicoDTO(), ADMIN_ID))
-      .rejects.toMatchObject({ statusCode: 409, code: 'CLIENTE_FISICO_CUIT_DUPLICADO' });
+      .rejects.toMatchObject({ statusCode: 409, code: 'CLIENTE_FISICO_DNI_DUPLICADO' });
     expect(createUser).not.toHaveBeenCalled();
   });
 
@@ -241,22 +241,22 @@ describe('crearClienteFisico', () => {
     expect(deleteUser).toHaveBeenCalledWith('auth-user-1');
   });
 
-  it('camino feliz: crea el usuario de Auth con el email sintético derivado del CUIT y el perfil', async () => {
+  it('camino feliz: crea el usuario de Auth con el email sintético derivado del DNI y el perfil', async () => {
     createUser.mockResolvedValue({ data: { user: { id: 'auth-user-1' } }, error: null });
     crearClienteFisicoRepo.mockResolvedValue({
-      user_id: 'auth-user-1', nombre: 'Juan', apellido: 'Pérez', dni: '20123456786',
-      documento_tipo: 'CUIT', genero: null, fecha_nacimiento: null, telefono: '3511234567',
+      user_id: 'auth-user-1', nombre: 'Juan', apellido: 'Pérez', dni: '12345678',
+      documento_tipo: 'DNI', genero: null, fecha_nacimiento: null, telefono: '3511234567',
       foto_url: null, creado_en: '', actualizado_en: '', es_cliente_fisico: true,
     });
 
     const resultado = await crearClienteFisico(clienteFisicoDTO(), ADMIN_ID);
 
     expect(createUser).toHaveBeenCalledWith(expect.objectContaining({
-      email: 'cliente-fisico-20123456786@apotheka.invalid',
-      user_metadata: expect.objectContaining({ es_cliente_fisico: true, cuit: '20123456786', creado_por_admin_id: ADMIN_ID }),
+      email: 'cliente-fisico-12345678@apotheka.invalid',
+      user_metadata: expect.objectContaining({ es_cliente_fisico: true, dni: '12345678', creado_por_admin_id: ADMIN_ID }),
     }));
     expect(crearClienteFisicoRepo).toHaveBeenCalledWith('auth-user-1', expect.objectContaining({
-      nombre: 'Juan', apellido: 'Pérez', dni: '20123456786', telefono: '3511234567', creadoPorAdminId: ADMIN_ID,
+      nombre: 'Juan', apellido: 'Pérez', dni: '12345678', telefono: '3511234567', creadoPorAdminId: ADMIN_ID,
     }));
     expect(resultado).toMatchObject({ user_id: 'auth-user-1', es_cliente_fisico: true, puntos_saldo: 0 });
   });

@@ -24,6 +24,13 @@ export function esCuitValido(cuit: string): boolean {
   return digitoEsperado !== null && digitoEsperado === Number(soloDigitos[10]);
 }
 
+// El DNI argentino no tiene dígito verificador, a diferencia del CUIT — solo
+// se valida la longitud (7 dígitos para DNIs viejos, 8 para la mayoría).
+export function esDniValido(dni: string): boolean {
+  const soloDigitos = dni.replace(/\D/g, '');
+  return soloDigitos.length >= 7 && soloDigitos.length <= 8;
+}
+
 // El bloque central de un CUIT (posiciones 3 a 10) es el DNI de la persona,
 // rellenado a la izquierda con un cero si el DNI tiene 7 dígitos.
 export function extraerDniDeCuit(cuit: string): string {

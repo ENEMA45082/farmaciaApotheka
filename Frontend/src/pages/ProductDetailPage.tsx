@@ -120,6 +120,19 @@ export function ProductDetailPage() {
           <motion.p className="product-detail__stock" variants={staggerItem}>
             {producto.stock > 0 ? `Stock disponible: ${producto.stock}` : 'Sin stock'}
           </motion.p>
+          {producto.es_combo && producto.combo_items && producto.combo_items.length > 0 && (
+            <motion.div className="product-detail__combo-items" variants={staggerItem}>
+              <h2 className="product-detail__combo-titulo">Este combo incluye:</h2>
+              <ul className="product-detail__combo-lista">
+                {producto.combo_items.map(ci => (
+                  <li key={ci.id} className="product-detail__combo-item">
+                    <img src={ci.producto?.imagen_url ?? '/placeholder.png'} alt="" width={40} height={40} />
+                    <span>{ci.cantidad} × {ci.producto?.nombre}</span>
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+          )}
           <motion.div className="product-detail__actions" variants={staggerItem}>
             <motion.button
               className="btn btn--primary"

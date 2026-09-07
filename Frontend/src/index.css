@@ -1149,6 +1149,11 @@ img { max-width: 100%; display: block; }
 .product-detail__description { color: var(--text-light); line-height: 1.6; }
 .product-detail__price { font-size: 1.8rem; font-weight: 800; color: var(--navy); }
 .product-detail__stock { font-size: 0.9rem; color: var(--text-light); }
+.product-detail__combo-items { display: flex; flex-direction: column; gap: 0.5rem; }
+.product-detail__combo-titulo { font-size: 1rem; font-weight: 700; color: var(--navy); margin: 0; }
+.product-detail__combo-lista { display: flex; flex-direction: column; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
+.product-detail__combo-item { display: flex; align-items: center; gap: 0.6rem; font-size: 0.9rem; }
+.product-detail__combo-item img { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
 .product-detail__actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
 .compartir-opciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .btn--con-icono { display: inline-flex; align-items: center; gap: 0.4rem; }

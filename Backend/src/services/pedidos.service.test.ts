@@ -46,6 +46,7 @@ function producto(overrides: Partial<Producto> = {}): Producto {
     es_venta_libre: true,
     peso_gramos: 100,
     alicuota_iva: 21,
+    es_combo: false,
     ...overrides,
   };
 }

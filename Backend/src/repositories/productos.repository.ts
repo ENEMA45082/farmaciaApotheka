@@ -28,6 +28,7 @@ export function mapearProducto(row: Record<string, unknown>): Producto {
     es_venta_libre:    row.es_venta_libre !== false,
     peso_gramos:       Number(row.peso_gramos ?? 0),
     alicuota_iva:      Number(row.alicuota_iva ?? 21),
+    es_combo:          Boolean(row.es_combo),
     categoria: row.categoria
       ? {
           id:       (row.categoria as Record<string, unknown>).id as string,
@@ -37,6 +38,48 @@ export function mapearProducto(row: Record<string, unknown>): Producto {
         }
       : undefined,
   };
+}
+
+// Stock "real" de un combo = MIN(FLOOR(stock_componente / cantidad_en_combo))
+// sobre todos sus combo_items. Nunca se guarda sincronizado en products.stock
+// — se recalcula acá, en 1 sola query batcheada por página de resultados
+// (nunca 1 query por combo).
+async function calcularStockCombos(comboIds: string[]): Promise<Map<string, number>> {
+  if (comboIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('combo_items')
+    .select('combo_id, cantidad, producto:products!combo_items_producto_id_fkey(stock)')
+    .in('combo_id', comboIds);
+
+  if (error) throw error;
+
+  const disponiblesPorCombo = new Map<string, number[]>();
+  for (const fila of (data ?? []) as unknown as { combo_id: string; cantidad: number; producto: { stock: number } | null }[]) {
+    const stockComponente = Number(fila.producto?.stock ?? 0);
+    const disponibles = Math.floor(stockComponente / Number(fila.cantidad));
+    const lista = disponiblesPorCombo.get(fila.combo_id) ?? [];
+    lista.push(disponibles);
+    disponiblesPorCombo.set(fila.combo_id, lista);
+  }
+
+  // Un combo sin componentes configurados (o cuyo query no trajo filas)
+  // computa stock 0 — no puede venderse hasta que se le carguen al menos
+  // los componentes con stock real. Evita un caso especial para "combo
+  // recién creado, todavía sin composición".
+  return new Map(comboIds.map(id => {
+    const valores = disponiblesPorCombo.get(id);
+    return [id, valores && valores.length > 0 ? Math.min(...valores) : 0];
+  }));
+}
+
+async function aplicarStockDeCombos(productos: Producto[]): Promise<void> {
+  const comboIds = productos.filter(p => p.es_combo).map(p => p.id);
+  if (comboIds.length === 0) return;
+  const stockPorCombo = await calcularStockCombos(comboIds);
+  for (const p of productos) {
+    if (p.es_combo) p.stock = stockPorCombo.get(p.id) ?? 0;
+  }
 }
 
 export async function encontrarTodos(filtros: FiltrosProducto): Promise<{ datos: Producto[]; total: number }> {
@@ -107,6 +150,12 @@ export async function encontrarTodos(filtros: FiltrosProducto): Promise<{ datos:
 
   if (filtros.precio_min !== undefined) query = query.gte('precio', filtros.precio_min);
   if (filtros.precio_max !== undefined) query = query.lte('precio', filtros.precio_max);
+  // stock_min/stock_max filtran sobre la columna cruda products.stock, ANTES
+  // del cálculo de aplicarStockDeCombos() de más abajo — para combos ese
+  // valor crudo no se mantiene sincronizado, así que estos dos filtros no
+  // son precisos para combos. Limitación aceptada: arreglarlo de raíz
+  // requeriría una subquery agregada dentro del propio query de products,
+  // mucho más compleja que el resto de este archivo.
   if (filtros.stock_min  !== undefined) query = query.gte('stock', filtros.stock_min);
   if (filtros.stock_max  !== undefined) query = query.lte('stock', filtros.stock_max);
 
@@ -128,8 +177,11 @@ export async function encontrarTodos(filtros: FiltrosProducto): Promise<{ datos:
 
   if (error) throw error;
 
+  const datos = (data ?? []).map(mapearProducto);
+  await aplicarStockDeCombos(datos);
+
   return {
-    datos: (data ?? []).map(mapearProducto),
+    datos,
     total: count ?? 0,
   };
 }
@@ -153,7 +205,14 @@ export async function encontrarPorId(id: string): Promise<Producto | null> {
     .single();
 
   if (error || !data) return null;
-  return mapearProducto(data);
+  const producto = mapearProducto(data);
+
+  if (producto.es_combo) {
+    const stockPorCombo = await calcularStockCombos([producto.id]);
+    producto.stock = stockPorCombo.get(producto.id) ?? 0;
+  }
+
+  return producto;
 }
 
 export async function crear(dto: CrearProductoDTO): Promise<Producto> {
@@ -176,6 +235,7 @@ export async function crear(dto: CrearProductoDTO): Promise<Producto> {
       es_venta_libre:    dto.es_venta_libre     ?? true,
       peso_gramos:       dto.peso_gramos        ?? 0,
       alicuota_iva:      dto.alicuota_iva       ?? 21,
+      es_combo:          dto.es_combo           ?? false,
     })
     .select('*, categoria:categories(*)')
     .single();
@@ -202,6 +262,7 @@ export async function actualizar(id: string, dto: ActualizarProductoDTO): Promis
   if (dto.es_venta_libre   !== undefined) cambios.es_venta_libre   = dto.es_venta_libre;
   if (dto.peso_gramos      !== undefined) cambios.peso_gramos      = dto.peso_gramos;
   if (dto.alicuota_iva     !== undefined) cambios.alicuota_iva     = dto.alicuota_iva;
+  if (dto.es_combo         !== undefined) cambios.es_combo         = dto.es_combo;
 
   const { data, error } = await supabase
     .from('products')
