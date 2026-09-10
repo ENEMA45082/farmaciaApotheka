@@ -1,7 +1,7 @@
 const PROMOS_PAGO = [
   { id: 'visa', archivo: '/pagos/visa-logo.png', alt: 'Visa' },
   { id: 'mastercard', archivo: '/pagos/mastercard-logo.png', alt: 'Mastercard' },
-  { id: 'amex', archivo: '/pagos/amex-logo.png', alt: 'American Express' },
+  { id: 'amex', archivo: '/pagos/amex-logo-8a3x2q.svg', alt: 'American Express', icono: true },
   { id: 'mercadopago', archivo: '/pagos/mercadopago-promo.png', alt: 'Mercado Pago: pagos con QR, rápido y seguro' },
   { id: 'modo', archivo: '/pagos/modo-promo.png', alt: 'MODO: conectá tus bancos' },
 ];
@@ -20,7 +20,10 @@ export function MediosDePago() {
       <div className="medios-pago__mascara">
         <div className="medios-pago__track">
           {ITEMS.map((promo, i) => (
-            <div className="medios-pago__item" key={`${promo.id}-${i}`}>
+            <div
+              className={`medios-pago__item${promo.icono ? ' medios-pago__item--icono' : ''}`}
+              key={`${promo.id}-${i}`}
+            >
               <img src={promo.archivo} alt={promo.alt} className="medios-pago__img" />
             </div>
           ))}

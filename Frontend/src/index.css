@@ -223,6 +223,11 @@ img { max-width: 100%; display: block; }
 }
 .medios-pago__item:hover { transform: translateY(-3px); }
 
+/* amex-logo-8a3x2q.svg es el ícono cuadrado oficial ("blue box"), sin margen
+   blanco propio como las otras tarjetas promocionales (esas ya traen padding
+   incluido en el PNG). Le damos padding acá para que no quede pegado al borde. */
+.medios-pago__item--icono { padding: 1.75rem 2.25rem; }
+
 .medios-pago__img { height: 100%; width: auto; display: block; object-fit: contain; }
 
 /* -12.5%: el track tiene 8 copias de la lista (ver MediosDePago.tsx), un
@@ -236,6 +241,7 @@ img { max-width: 100%; display: block; }
   .medios-pago { padding: 1.4rem 0 1.6rem; margin-top: 1rem; }
   .medios-pago__track { gap: 1.1rem; animation-duration: 20s; }
   .medios-pago__item { height: 100px; border-radius: 10px; }
+  .medios-pago__item--icono { padding: 1.1rem 1.4rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
