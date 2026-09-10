@@ -1,6 +1,7 @@
 const PROMOS_PAGO = [
-  { id: 'visa', archivo: '/pagos/visa-promo.png', alt: 'Visa: miércoles y sábados, 3 cuotas sin interés' },
-  { id: 'mastercard', archivo: '/pagos/mastercard-promo.png', alt: 'Mastercard: miércoles y sábados, 3 cuotas sin interés' },
+  { id: 'visa', archivo: '/pagos/visa-logo.png', alt: 'Visa' },
+  { id: 'mastercard', archivo: '/pagos/mastercard-logo.png', alt: 'Mastercard' },
+  { id: 'amex', archivo: '/pagos/amex-logo.png', alt: 'American Express' },
   { id: 'mercadopago', archivo: '/pagos/mercadopago-promo.png', alt: 'Mercado Pago: pagos con QR, rápido y seguro' },
   { id: 'modo', archivo: '/pagos/modo-promo.png', alt: 'MODO: conectá tus bancos' },
 ];
