@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import * as productosService from '../services/productos.service';
 import { AppError } from '../errors/AppError';
-import type { CrearProductoDTO, ActualizarProductoDTO, FiltrosProducto, ItemConfirmarPrecio, AuthRequest } from '../types';
+import type { CrearProductoDTO, ActualizarProductoDTO, FiltrosProducto, ItemAplicarPrecio, AuthRequest } from '../types';
 
 export async function listar(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -108,14 +108,14 @@ export async function previewImportarPrecios(
   }
 }
 
-export async function confirmarImportarPrecios(
+export async function aplicarCambiosPrecio(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const { items } = req.body as { items: ItemConfirmarPrecio[] };
-    const resultado = await productosService.confirmarImportarPrecios(items ?? []);
+    const { items } = req.body as { items: ItemAplicarPrecio[] };
+    const resultado = await productosService.aplicarCambiosPrecio(items ?? []);
     res.json(resultado);
   } catch (err) {
     next(err);

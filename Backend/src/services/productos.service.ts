@@ -1,6 +1,7 @@
 import * as productosRepo from '../repositories/productos.repository';
 import * as comboItemsRepo from '../repositories/comboItems.repository';
 import { parsearCsvPrecios } from '../utils/parsearCsvPrecios';
+import { normalizarCodigoBarras, nombresParecidos, precioOfertaTrasCambio } from '../utils/precioImportacion';
 import { AppError } from '../errors/AppError';
 import { validarUUID } from '../utils/validarUUID';
 import type {
@@ -9,9 +10,11 @@ import type {
   CrearProductoDTO,
   ActualizarProductoDTO,
   FiltrosProducto,
+  CoincidenciaPrecio,
+  ProductoSinCoincidencia,
   PreviewImportarPreciosResponse,
-  ItemConfirmarPrecio,
-  ResultadoConfirmarPrecios,
+  ItemAplicarPrecio,
+  ResultadoAplicarPrecios,
   ItemCarritoInput,
   ItemPedidoConfirmado,
 } from '../types';
@@ -102,103 +105,162 @@ export async function eliminar(id: string): Promise<void> {
   await productosRepo.eliminar(id);
 }
 
+// El cotejo va del sistema hacia el CSV (no al revés): el CSV de droguería
+// tiene ~14.000 filas y solo una fracción existe acá, así que se leen los
+// productos propios (pocas consultas paginadas) y se buscan en un Map del CSV.
 export async function previewImportarPrecios(
   buffer: Buffer
 ): Promise<PreviewImportarPreciosResponse> {
-  const { filas } = parsearCsvPrecios(buffer);
+  const csv       = parsearCsvPrecios(buffer);
+  const productos = await productosRepo.listarParaImportacion();
 
-  const codigos = filas.map(f => f.codigoBarras);
-  const mapa = await productosRepo.encontrarPorCodigosBarras(codigos);
+  const filaPorClave     = new Map(csv.filas.map(f => [normalizarCodigoBarras(f.codigoBarras), f]));
+  const ambiguoPorClave  = new Map(csv.duplicadosAmbiguos.map(d => [normalizarCodigoBarras(d.codigoBarras), d]));
+  const clavesEncontradas = new Set<string>();
 
-  const actualizaciones: PreviewImportarPreciosResponse['actualizaciones'] = [];
-  const no_encontrados: PreviewImportarPreciosResponse['no_encontrados']   = [];
+  const coincidencias: CoincidenciaPrecio[]         = [];
+  const sinCoincidencia: ProductoSinCoincidencia[]  = [];
+  let sinCambio = 0;
 
-  for (const fila of filas) {
-    const encontrado = mapa.get(fila.codigoBarras);
-    if (encontrado) {
-      actualizaciones.push({
-        codigo_barras: fila.codigoBarras,
-        nombre:        encontrado.nombre,
-        precio_actual: encontrado.precio,
-        precio_nuevo:  fila.precio,
-      });
-    } else {
-      no_encontrados.push({
-        codigo_barras: fila.codigoBarras,
-        nombre:        fila.nombre,
-        precio_csv:    fila.precio,
-      });
-    }
-  }
+  for (const p of productos) {
+    const base = {
+      producto_id:          p.id,
+      codigo_barras:        p.codigo_barras,
+      nombre:               p.nombre,
+      precio_actual:        p.precio,
+      en_oferta:            p.en_oferta,
+      precio_oferta_actual: p.en_oferta ? p.precio_oferta : null,
+    };
 
-  return { actualizaciones, no_encontrados };
-}
-
-export async function confirmarImportarPrecios(
-  items: ItemConfirmarPrecio[]
-): Promise<ResultadoConfirmarPrecios> {
-  if (items.length === 0) {
-    return { actualizados: 0, creados: 0, fallidos: [] };
-  }
-  if (items.length > 500) {
-    throw new AppError('No se pueden procesar más de 500 items por vez', 400, 'ITEMS_LIMIT_EXCEEDED');
-  }
-
-  for (const item of items) {
-    if (item.precio_nuevo < 0) {
-      throw new AppError(
-        `Precio inválido para ${item.codigo_barras}: ${item.precio_nuevo}`,
-        400,
-        'PRODUCTO_PRECIO_NEGATIVO',
-      );
-    }
-  }
-
-  const codigos = items.map(i => i.codigo_barras);
-  const mapa    = await productosRepo.encontrarPorCodigosBarras(codigos);
-
-  const resultados: { ok: boolean; creado?: boolean; codigo_barras: string; razon?: string }[] = [];
-  for (const item of items) {
-    const encontrado = mapa.get(item.codigo_barras);
-
-    if (!encontrado) {
-      const nombre = item.nombre?.trim();
-      if (!nombre) {
-        resultados.push({ ok: false, codigo_barras: item.codigo_barras, razon: 'No encontrado y sin nombre para crearlo' });
-        continue;
-      }
-      try {
-        await productosRepo.crear({
-          nombre,
-          precio:        item.precio_nuevo,
-          codigo_barras: item.codigo_barras,
-        });
-        resultados.push({ ok: true, creado: true, codigo_barras: item.codigo_barras });
-      } catch {
-        resultados.push({ ok: false, codigo_barras: item.codigo_barras, razon: 'Error al crear el producto' });
-      }
+    const clave = p.codigo_barras ? normalizarCodigoBarras(p.codigo_barras) : '';
+    if (!clave) {
+      sinCoincidencia.push({ ...base, motivo: 'sin_codigo' });
       continue;
     }
 
-    try {
-      const ok = await productosRepo.actualizarPrecioPorId(encontrado.id, item.precio_nuevo);
-      resultados.push(
-        ok
-          ? { ok: true,  codigo_barras: item.codigo_barras }
-          : { ok: false, codigo_barras: item.codigo_barras, razon: 'No se pudo actualizar' }
+    const fila = filaPorClave.get(clave);
+    if (fila) {
+      clavesEncontradas.add(clave);
+      // El precio de la base puede traer más decimales que el del CSV.
+      if (Math.abs(fila.precio - p.precio) < 0.005) {
+        sinCambio++;
+        continue;
+      }
+      coincidencias.push({
+        producto_id:          p.id,
+        codigo_barras:        p.codigo_barras!,
+        nombre:               p.nombre,
+        nombre_csv:           fila.nombre,
+        nombre_distinto:      !nombresParecidos(p.nombre, fila.nombre),
+        precio_actual:        p.precio,
+        precio_nuevo:         fila.precio,
+        en_oferta:            p.en_oferta,
+        precio_oferta_actual: base.precio_oferta_actual,
+        precio_oferta_nuevo:  precioOfertaTrasCambio(p, fila.precio),
+      });
+      continue;
+    }
+
+    const ambiguo = ambiguoPorClave.get(clave);
+    if (ambiguo) {
+      sinCoincidencia.push({
+        ...base,
+        motivo:     'duplicado_en_csv',
+        precios_csv: [...new Set(ambiguo.filas.map(f => f.precio))],
+      });
+      continue;
+    }
+
+    sinCoincidencia.push({ ...base, motivo: 'no_esta_en_csv' });
+  }
+
+  const porNombre = (a: { nombre: string }, b: { nombre: string }) => a.nombre.localeCompare(b.nombre, 'es');
+  coincidencias.sort(porNombre);
+  sinCoincidencia.sort(porNombre);
+
+  return {
+    resumen: {
+      filas_csv:           csv.totalFilas,
+      sin_codigo:          csv.filasSinCodigo,
+      codigo_invalido:     csv.filasCodigoInvalido,
+      precio_invalido:     csv.filasPrecioInvalido,
+      mal_formadas:        csv.filasMalFormadas,
+      duplicados_ambiguos: csv.duplicadosAmbiguos.length,
+      con_cambio:          coincidencias.length,
+      sin_cambio:          sinCambio,
+      solo_en_csv:         csv.filas.length - clavesEncontradas.size,
+      sin_coincidencia:    sinCoincidencia.length,
+    },
+    coincidencias,
+    sin_coincidencia: sinCoincidencia,
+  };
+}
+
+const MAX_ITEMS_APLICAR_PRECIO = 1000;
+const CONCURRENCIA_APLICAR_PRECIO = 10;
+
+// Aplica los precios que el admin aceptó (modal de cambios) o tipeó a mano
+// (modal de sin coincidencia). Va por id de producto, no por código de barras,
+// para que también sirva con productos que no tienen código. Si el producto
+// está en oferta por %, se recalcula el precio de oferta manteniendo el %.
+export async function aplicarCambiosPrecio(
+  items: ItemAplicarPrecio[]
+): Promise<ResultadoAplicarPrecios> {
+  if (items.length === 0) {
+    return { actualizados: 0, fallidos: [] };
+  }
+  if (items.length > MAX_ITEMS_APLICAR_PRECIO) {
+    throw new AppError(
+      `No se pueden procesar más de ${MAX_ITEMS_APLICAR_PRECIO} items por vez`,
+      400,
+      'ITEMS_LIMIT_EXCEEDED',
+    );
+  }
+
+  for (const item of items) {
+    if (!(item.precio_nuevo > 0)) {
+      throw new AppError(
+        `Precio inválido para el producto ${item.producto_id}: ${item.precio_nuevo}`,
+        400,
+        'PRODUCTO_PRECIO_INVALIDO',
       );
-    } catch {
-      resultados.push({ ok: false, codigo_barras: item.codigo_barras, razon: 'Error de base de datos' });
     }
   }
 
-  const actualizados = resultados.filter(r => r.ok && !r.creado).length;
-  const creados       = resultados.filter(r => r.ok && r.creado).length;
-  const fallidos       = resultados
-    .filter((r): r is { ok: false; codigo_barras: string; razon: string } => !r.ok)
-    .map(r => ({ codigo_barras: r.codigo_barras, razon: r.razon }));
+  // Si el mismo producto viene dos veces, gana el último.
+  const precioPorId = new Map(items.map(i => [i.producto_id, i.precio_nuevo]));
+  const productos   = await productosRepo.encontrarPreciosPorIds([...precioPorId.keys()]);
 
-  return { actualizados, creados, fallidos };
+  const fallidos: ResultadoAplicarPrecios['fallidos'] = [];
+  let actualizados = 0;
+
+  const pendientes = [...precioPorId.entries()];
+  for (let i = 0; i < pendientes.length; i += CONCURRENCIA_APLICAR_PRECIO) {
+    await Promise.all(
+      pendientes.slice(i, i + CONCURRENCIA_APLICAR_PRECIO).map(async ([id, precioNuevo]) => {
+        const producto = productos.get(id);
+        if (!producto) {
+          fallidos.push({ producto_id: id, razon: 'Producto no encontrado' });
+          return;
+        }
+
+        const precioOferta = precioOfertaTrasCambio(producto, precioNuevo);
+        const cambios = precioOferta === null
+          ? { precio: precioNuevo }
+          : { precio: precioNuevo, precio_oferta: precioOferta };
+
+        try {
+          const ok = await productosRepo.actualizarPrecioYOferta(id, cambios);
+          if (ok) actualizados++;
+          else fallidos.push({ producto_id: id, razon: 'No se pudo actualizar' });
+        } catch {
+          fallidos.push({ producto_id: id, razon: 'Error de base de datos' });
+        }
+      })
+    );
+  }
+
+  return { actualizados, fallidos };
 }
 
 // Resuelve items de carrito ({producto_id, cantidad}, lo único confiable que

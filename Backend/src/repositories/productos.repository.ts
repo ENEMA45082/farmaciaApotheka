@@ -6,6 +6,7 @@ import type {
   CrearProductoDTO,
   ActualizarProductoDTO,
   FiltrosProducto,
+  ProductoParaImportacion,
 } from '../types';
 
 export function mapearProducto(row: Record<string, unknown>): Producto {
@@ -297,44 +298,78 @@ export async function contarPorCategorias(categoriaIds: string[]): Promise<numbe
 }
 
 const BATCH_SIZE = 100;
+const PAGINA_IMPORTACION = 1000;
+const COLUMNAS_IMPORTACION =
+  'id, nombre, codigo_barras, precio, en_oferta, precio_oferta, porcentaje_oferta, es_2x1';
 
-export async function encontrarPorCodigosBarras(
-  codigos: string[]
-): Promise<Map<string, { id: string; nombre: string; precio: number }>> {
-  if (codigos.length === 0) return new Map();
+function mapearProductoImportacion(row: Record<string, unknown>): ProductoParaImportacion {
+  return {
+    id:                row.id as string,
+    nombre:            row.nombre as string,
+    codigo_barras:     (row.codigo_barras as string | null) ?? null,
+    precio:            Number(row.precio),
+    en_oferta:         Boolean(row.en_oferta),
+    precio_oferta:     row.precio_oferta != null ? Number(row.precio_oferta) : null,
+    porcentaje_oferta: row.porcentaje_oferta != null ? Number(row.porcentaje_oferta) : null,
+    es_2x1:            Boolean(row.es_2x1),
+  };
+}
 
-  const mapa = new Map<string, { id: string; nombre: string; precio: number }>();
+// Todos los productos, para cotejarlos contra el CSV de precios. Supabase
+// corta cada consulta en 1000 filas, así que se pagina con .range(); el
+// orden por id mantiene estable la paginación entre páginas.
+export async function listarParaImportacion(): Promise<ProductoParaImportacion[]> {
+  const productos: ProductoParaImportacion[] = [];
 
-  for (let i = 0; i < codigos.length; i += BATCH_SIZE) {
-    const lote = codigos.slice(i, i + BATCH_SIZE);
+  for (let desde = 0; ; desde += PAGINA_IMPORTACION) {
     const { data, error } = await supabase
       .from('products')
-      .select('id, nombre, precio, codigo_barras')
-      .in('codigo_barras', lote);
+      .select(COLUMNAS_IMPORTACION)
+      .order('id')
+      .range(desde, desde + PAGINA_IMPORTACION - 1);
+
+    if (error) throw error;
+
+    const filas = data ?? [];
+    productos.push(...filas.map(mapearProductoImportacion));
+    if (filas.length < PAGINA_IMPORTACION) break;
+  }
+
+  return productos;
+}
+
+export async function encontrarPreciosPorIds(
+  ids: string[]
+): Promise<Map<string, ProductoParaImportacion>> {
+  const mapa = new Map<string, ProductoParaImportacion>();
+
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const { data, error } = await supabase
+      .from('products')
+      .select(COLUMNAS_IMPORTACION)
+      .in('id', ids.slice(i, i + BATCH_SIZE));
 
     if (error) throw error;
 
     for (const row of data ?? []) {
-      if (row.codigo_barras) {
-        mapa.set(row.codigo_barras, {
-          id:     row.id,
-          nombre: row.nombre,
-          precio: Number(row.precio),
-        });
-      }
+      const producto = mapearProductoImportacion(row);
+      mapa.set(producto.id, producto);
     }
   }
 
   return mapa;
 }
 
-export async function actualizarPrecioPorId(
+// precio y precio_oferta van en la misma sentencia: si se actualizaran por
+// separado, un corte entre las dos dejaría la oferta más cara que el precio
+// de lista.
+export async function actualizarPrecioYOferta(
   id: string,
-  precio: number
+  cambios: { precio: number; precio_oferta?: number }
 ): Promise<boolean> {
   const { error } = await supabase
     .from('products')
-    .update({ precio })
+    .update(cambios)
     .eq('id', id);
 
   return !error;

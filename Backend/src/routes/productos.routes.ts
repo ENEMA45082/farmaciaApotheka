@@ -6,7 +6,7 @@ import {
   crearProductoSchema,
   actualizarProductoSchema,
   filtrosProductoQuerySchema,
-  confirmarImportarPreciosSchema,
+  aplicarCambiosPrecioSchema,
 } from '../schemas/productos.schema';
 
 const router = Router();
@@ -19,10 +19,10 @@ router.post(
 );
 
 router.post(
-  '/confirmar-importar-precios',
+  '/aplicar-cambios-precio',
   requiereAdmin,
-  validar(confirmarImportarPreciosSchema),
-  productosController.confirmarImportarPrecios
+  validar(aplicarCambiosPrecioSchema),
+  productosController.aplicarCambiosPrecio
 );
 
 router.get('/', autenticacionOpcional, validar(filtrosProductoQuerySchema, 'query'), productosController.listar);

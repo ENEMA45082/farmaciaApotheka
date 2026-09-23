@@ -2971,6 +2971,50 @@ img { max-width: 100%; display: block; }
 .modal-cancelar-pedido__confirmar { background: #dc2626; border-color: #dc2626; }
 .modal-cancelar-pedido__confirmar:hover:not(:disabled) { background: #b91c1c; }
 
+/* Modales de importación de precios (admin): tabla ancha con scroll interno */
+.modal-precios {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  max-width: 1100px;
+  width: 100%;
+  max-height: calc(100vh - 2rem);
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  display: flex; flex-direction: column; gap: 0.85rem;
+}
+.modal-precios__ayuda { font-size: 0.88rem; color: #4b5563; margin: 0; }
+.modal-precios__toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+.modal-precios__tabla { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.modal-precios__tabla .admin-table th { position: sticky; top: 0; background: white; z-index: 1; }
+.modal-precios__vacio { text-align: center; color: #6b7280; padding: 1.5rem 0.75rem; }
+.modal-precios__lista-errores { margin: 0.4rem 0 0 1rem; font-size: 0.85rem; }
+.modal-precios__contador { margin-right: auto; align-self: center; font-size: 0.85rem; color: #4b5563; }
+.modal-precios .modal-cancelar-pedido__acciones { flex-wrap: wrap; }
+.modal-precios .admin-error { margin-bottom: 0; }
+.precios-control { padding: 0.45rem 0.7rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.88rem; background: white; }
+.precios-control[type="search"] { flex: 1 1 220px; min-width: 0; }
+.precios-nombre-csv { display: block; margin-top: 0.1rem; font-size: 0.78rem; color: #6b7280; }
+.precios-etiqueta { display: inline-block; margin-top: 0.2rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: #fef3c7; color: #92400e; font-size: 0.7rem; font-weight: 700; }
+.precios-etiqueta--neutra { margin-left: 0.4rem; background: #e5e7eb; color: #374151; }
+.precios-fila--alerta td { background: #fffbea; }
+.precios-fila--rechazada td:not(:first-child) { opacity: 0.45; }
+.precios-input { width: 8.5rem; padding: 0.4rem 0.55rem; border: 1px solid var(--border); border-radius: 6px; text-align: right; font-size: 0.9rem; }
+.precios-input--invalido { border-color: #dc2626; background: #fff3f3; }
+.pagination--compacta { padding: 0.25rem 0; }
+@media (max-width: 600px) {
+  .modal-precios { padding: 1rem; }
+}
+
+/* Resumen de la página de importación de precios */
+.import-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+.import-resumen__item { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
+.import-resumen__item strong { font-size: 1.4rem; color: var(--navy); }
+.import-resumen__item span { font-size: 0.8rem; color: #4b5563; }
+.import-aviso { margin-bottom: 1rem; padding: 0.6rem 1rem; background: #fef9c3; border: 1px solid #ca8a04; border-radius: var(--radius); font-size: 0.85rem; color: #713f12; }
+.import-aviso ul { margin: 0.3rem 0 0 1rem; }
+.import-acciones { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem; }
+
 /* ===== Banner "Iniciar sesión" (solo sin sesión) ===== */
 /* z-index 130: por debajo del whatsapp-fab (150) para que el FAB, si se
    superpone en la esquina, quede siempre visible y clickeable por encima. */

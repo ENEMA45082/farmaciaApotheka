@@ -124,36 +124,64 @@ export async function subirImagenes(archivos: File[]): Promise<string[]> {
   return data.urls;
 }
 
-export interface FilaPreviewPrecio {
+export interface CoincidenciaPrecio {
+  producto_id: string;
   codigo_barras: string;
   nombre: string;
+  nombre_csv: string;
+  nombre_distinto: boolean;
   precio_actual: number;
   precio_nuevo: number;
+  en_oferta: boolean;
+  precio_oferta_actual: number | null;
+  precio_oferta_nuevo: number | null;
 }
 
-export interface FilaNoEncontrada {
-  codigo_barras: string;
+export type MotivoSinCoincidencia = 'sin_codigo' | 'no_esta_en_csv' | 'duplicado_en_csv';
+
+export interface ProductoSinCoincidencia {
+  producto_id: string;
+  codigo_barras: string | null;
   nombre: string;
-  precio_csv: number;
+  precio_actual: number;
+  en_oferta: boolean;
+  precio_oferta_actual: number | null;
+  motivo: MotivoSinCoincidencia;
+  precios_csv?: number[];
+}
+
+export interface ResumenImportarPrecios {
+  filas_csv: number;
+  sin_codigo: number;
+  codigo_invalido: number;
+  precio_invalido: number;
+  mal_formadas: number;
+  duplicados_ambiguos: number;
+  con_cambio: number;
+  sin_cambio: number;
+  solo_en_csv: number;
+  sin_coincidencia: number;
 }
 
 export interface PreviewImportarPreciosResponse {
-  actualizaciones: FilaPreviewPrecio[];
-  no_encontrados: FilaNoEncontrada[];
+  resumen: ResumenImportarPrecios;
+  coincidencias: CoincidenciaPrecio[];
+  sin_coincidencia: ProductoSinCoincidencia[];
 }
 
-export interface ItemConfirmarPrecio {
-  codigo_barras: string;
+export interface ItemAplicarPrecio {
+  producto_id: string;
   precio_nuevo: number;
-  nombre?: string;
 }
 
-export interface ResultadoConfirmarPrecios {
+export interface ResultadoAplicarPrecios {
   actualizados: number;
-  creados: number;
-  fallidos: { codigo_barras: string; razon: string }[];
+  fallidos: { producto_id: string; razon: string }[];
 }
 
+// suppressGlobalError en las dos: la página y los modales muestran el error
+// en el lugar (un archivo con columnas incorrectas, un producto que falló), y
+// sin esto también aparecería el ErrorModal genérico con el mismo mensaje.
 export async function previewImportarPrecios(
   archivo: File
 ): Promise<PreviewImportarPreciosResponse> {
@@ -162,17 +190,51 @@ export async function previewImportarPrecios(
   const { data } = await api.post<PreviewImportarPreciosResponse>(
     '/productos/preview-importar-precios',
     formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    { headers: { 'Content-Type': 'multipart/form-data' }, suppressGlobalError: true }
   );
   return data;
 }
 
-export async function confirmarImportarPrecios(
-  items: ItemConfirmarPrecio[]
-): Promise<ResultadoConfirmarPrecios> {
-  const { data } = await api.post<ResultadoConfirmarPrecios>(
-    '/productos/confirmar-importar-precios',
-    { items }
+async function enviarLoteCambiosPrecio(
+  items: ItemAplicarPrecio[]
+): Promise<ResultadoAplicarPrecios> {
+  const { data } = await api.post<ResultadoAplicarPrecios>(
+    '/productos/aplicar-cambios-precio',
+    { items },
+    { suppressGlobalError: true }
   );
   return data;
+}
+
+const TAMANIO_LOTE_PRECIOS = 500;
+
+export interface ResultadoAplicarPorLotes {
+  aplicados: string[];
+  fallidos: { producto_id: string; razon: string }[];
+  // Si un lote falla entero (red, permisos) se corta ahí: lo que ya se aplicó
+  // en lotes anteriores queda en `aplicados` y el resto no se intentó.
+  errorGeneral: unknown | null;
+}
+
+// El backend acepta hasta 1000 items por request; se manda de a 500 para que
+// aceptar miles de cambios de una vez no choque con ese tope.
+export async function aplicarCambiosPrecio(
+  items: ItemAplicarPrecio[]
+): Promise<ResultadoAplicarPorLotes> {
+  const aplicados: string[] = [];
+  const fallidos: ResultadoAplicarPorLotes['fallidos'] = [];
+
+  for (let i = 0; i < items.length; i += TAMANIO_LOTE_PRECIOS) {
+    const lote = items.slice(i, i + TAMANIO_LOTE_PRECIOS);
+    try {
+      const resultado = await enviarLoteCambiosPrecio(lote);
+      const idsFallidos = new Set(resultado.fallidos.map(f => f.producto_id));
+      aplicados.push(...lote.filter(it => !idsFallidos.has(it.producto_id)).map(it => it.producto_id));
+      fallidos.push(...resultado.fallidos);
+    } catch (e) {
+      return { aplicados, fallidos, errorGeneral: e };
+    }
+  }
+
+  return { aplicados, fallidos, errorGeneral: null };
 }

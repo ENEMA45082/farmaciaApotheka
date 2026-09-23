@@ -1,21 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Producto, ComboItem } from '../types';
+import type { Producto, ComboItem, ProductoParaImportacion } from '../types';
 
-const { encontrarPorId } = vi.hoisted(() => ({
+const { encontrarPorId, listarParaImportacion, encontrarPreciosPorIds, actualizarPrecioYOferta } = vi.hoisted(() => ({
   encontrarPorId: vi.fn(),
+  listarParaImportacion: vi.fn(),
+  encontrarPreciosPorIds: vi.fn(),
+  actualizarPrecioYOferta: vi.fn(),
 }));
 const { encontrarPorComboId } = vi.hoisted(() => ({
   encontrarPorComboId: vi.fn(),
 }));
 
-// Mock parcial (solo encontrarPorId) — comboItems.repository.ts importa
-// mapearProducto de este módulo, pero ninguno de estos tests hace que se
+// Mock parcial (solo las funciones que usan estos tests) — comboItems.repository.ts
+// importa mapearProducto de este módulo, pero ninguno de estos tests hace que se
 // invoque de verdad (solo se llama al mapear filas reales de Supabase), así
 // que no hace falta mockearlo acá.
-vi.mock('../repositories/productos.repository', () => ({ encontrarPorId }));
+vi.mock('../repositories/productos.repository', () => ({
+  encontrarPorId,
+  listarParaImportacion,
+  encontrarPreciosPorIds,
+  actualizarPrecioYOferta,
+}));
 vi.mock('../repositories/comboItems.repository', () => ({ encontrarPorComboId }));
 
-import { resolverItemsCarrito } from './productos.service';
+import { resolverItemsCarrito, previewImportarPrecios, aplicarCambiosPrecio } from './productos.service';
 
 function producto(overrides: Partial<Producto> = {}): Producto {
   return {
@@ -57,6 +65,9 @@ function comboItem(overrides: Partial<ComboItem> = {}): ComboItem {
 beforeEach(() => {
   encontrarPorId.mockReset();
   encontrarPorComboId.mockReset();
+  listarParaImportacion.mockReset();
+  encontrarPreciosPorIds.mockReset();
+  actualizarPrecioYOferta.mockReset();
 });
 
 describe('resolverItemsCarrito', () => {
@@ -169,5 +180,213 @@ describe('resolverItemsCarrito', () => {
 
     const sumaLineas = resultado.itemsConfirmados.reduce((s, i) => s + i.precio_unitario * i.cantidad - i.descuento, 0);
     expect(sumaLineas).toBeCloseTo(1000, 2);
+  });
+});
+
+function productoImportacion(overrides: Partial<ProductoParaImportacion> = {}): ProductoParaImportacion {
+  return {
+    id: 'prod-1',
+    nombre: 'Producto',
+    codigo_barras: '7791',
+    precio: 100,
+    en_oferta: false,
+    precio_oferta: null,
+    porcentaje_oferta: null,
+    es_2x1: false,
+    ...overrides,
+  };
+}
+
+function csvPrecios(...filas: string[]): Buffer {
+  return Buffer.from(['producto;codbarraprinc;precio;neto;precioPublico', ...filas].join('\r\n'), 'utf-8');
+}
+
+describe('previewImportarPrecios', () => {
+  it('separa coincidencias con cambio, sin cambio y sin coincidencia contra el CSV', async () => {
+    listarParaImportacion.mockResolvedValue([
+      productoImportacion({ id: 'a', nombre: 'Prod A', codigo_barras: '7791', precio: 100 }),
+      productoImportacion({ id: 'b', nombre: 'Prod B', codigo_barras: '7792', precio: 200 }),
+      productoImportacion({ id: 'c', nombre: 'Prod C', codigo_barras: '7793', precio: 300 }),
+      productoImportacion({ id: 'd', nombre: 'Prod D', codigo_barras: null, precio: 400 }),
+    ]);
+
+    const r = await previewImportarPrecios(csvPrecios(
+      'Prod A;7791;1;1;150',
+      'Prod B;7792;1;1;200',
+      'Solo en el CSV;9999;1;1;50',
+    ));
+
+    expect(r.coincidencias).toEqual([
+      expect.objectContaining({ producto_id: 'a', codigo_barras: '7791', precio_actual: 100, precio_nuevo: 150 }),
+    ]);
+    expect(r.sin_coincidencia).toEqual([
+      expect.objectContaining({ producto_id: 'c', motivo: 'no_esta_en_csv' }),
+      expect.objectContaining({ producto_id: 'd', motivo: 'sin_codigo', codigo_barras: null }),
+    ]);
+    expect(r.resumen).toMatchObject({
+      filas_csv: 3,
+      con_cambio: 1,
+      sin_cambio: 1,
+      solo_en_csv: 1,
+      sin_coincidencia: 2,
+      duplicados_ambiguos: 0,
+    });
+  });
+
+  it('no propone cambio si el precio solo difiere por decimales de la base', async () => {
+    listarParaImportacion.mockResolvedValue([productoImportacion({ precio: 100.004 })]);
+
+    const r = await previewImportarPrecios(csvPrecios('Producto;7791;1;1;100'));
+
+    expect(r.coincidencias).toEqual([]);
+    expect(r.resumen.sin_cambio).toBe(1);
+  });
+
+  it('compara los códigos sin ceros a la izquierda', async () => {
+    listarParaImportacion.mockResolvedValue([productoImportacion({ codigo_barras: '0012345', precio: 100 })]);
+
+    const r = await previewImportarPrecios(csvPrecios('Producto;12345;1;1;150'));
+
+    expect(r.coincidencias).toHaveLength(1);
+    expect(r.sin_coincidencia).toEqual([]);
+  });
+
+  it('trae el nuevo precio de oferta manteniendo el % de descuento', async () => {
+    listarParaImportacion.mockResolvedValue([
+      productoImportacion({ precio: 1000, en_oferta: true, precio_oferta: 800, porcentaje_oferta: 20 }),
+    ]);
+
+    const r = await previewImportarPrecios(csvPrecios('Producto;7791;1;1;2000'));
+
+    expect(r.coincidencias[0]).toMatchObject({ en_oferta: true, precio_oferta_actual: 800, precio_oferta_nuevo: 1600 });
+  });
+
+  it('marca "nombre distinto" solo si el nombre del CSV no se parece al del sistema', async () => {
+    listarParaImportacion.mockResolvedValue([
+      productoImportacion({ id: 'a', nombre: 'Aspirina 500 x 10', codigo_barras: '7791' }),
+      productoImportacion({ id: 'b', nombre: 'Treginax 100 mg cpr x 30', codigo_barras: '7792' }),
+    ]);
+
+    const r = await previewImportarPrecios(csvPrecios(
+      'IBUPIRAC 400 X 20;7791;1;1;150',
+      'TREGINAX 100 MG COMPRIMIDOS X 30;7792;1;1;150',
+    ));
+
+    const porId = Object.fromEntries(r.coincidencias.map(c => [c.producto_id, c.nombre_distinto]));
+    expect(porId).toEqual({ a: true, b: false });
+  });
+
+  it('manda a sin coincidencia un código repetido en el CSV con precios distintos', async () => {
+    listarParaImportacion.mockResolvedValue([productoImportacion({ codigo_barras: '7795' })]);
+
+    const r = await previewImportarPrecios(csvPrecios(
+      'APIDRA;7795;1;1;573076',
+      'APIDRA INST;7795;1;1;453569,92',
+    ));
+
+    expect(r.coincidencias).toEqual([]);
+    expect(r.sin_coincidencia).toEqual([
+      expect.objectContaining({ motivo: 'duplicado_en_csv', precios_csv: [573076, 453569.92] }),
+    ]);
+    expect(r.resumen).toMatchObject({ duplicados_ambiguos: 1, solo_en_csv: 0 });
+  });
+});
+
+describe('aplicarCambiosPrecio', () => {
+  it('actualiza solo el precio de un producto sin oferta', async () => {
+    encontrarPreciosPorIds.mockResolvedValue(new Map([['id-1', productoImportacion({ id: 'id-1' })]]));
+    actualizarPrecioYOferta.mockResolvedValue(true);
+
+    const r = await aplicarCambiosPrecio([{ producto_id: 'id-1', precio_nuevo: 150 }]);
+
+    expect(r).toEqual({ actualizados: 1, fallidos: [] });
+    expect(actualizarPrecioYOferta).toHaveBeenCalledWith('id-1', { precio: 150 });
+  });
+
+  it('recalcula el precio de oferta manteniendo el % en la misma actualización', async () => {
+    encontrarPreciosPorIds.mockResolvedValue(new Map([[
+      'id-1',
+      productoImportacion({ id: 'id-1', precio: 1000, en_oferta: true, precio_oferta: 800, porcentaje_oferta: 20 }),
+    ]]));
+    actualizarPrecioYOferta.mockResolvedValue(true);
+
+    await aplicarCambiosPrecio([{ producto_id: 'id-1', precio_nuevo: 2000 }]);
+
+    expect(actualizarPrecioYOferta).toHaveBeenCalledWith('id-1', { precio: 2000, precio_oferta: 1600 });
+  });
+
+  it('un producto que ya no existe va a fallidos sin frenar a los demás', async () => {
+    encontrarPreciosPorIds.mockResolvedValue(new Map([['id-1', productoImportacion({ id: 'id-1' })]]));
+    actualizarPrecioYOferta.mockResolvedValue(true);
+
+    const r = await aplicarCambiosPrecio([
+      { producto_id: 'id-x', precio_nuevo: 50 },
+      { producto_id: 'id-1', precio_nuevo: 150 },
+    ]);
+
+    expect(r.actualizados).toBe(1);
+    expect(r.fallidos).toEqual([{ producto_id: 'id-x', razon: 'Producto no encontrado' }]);
+    expect(actualizarPrecioYOferta).toHaveBeenCalledTimes(1);
+  });
+
+  it('informa el error de la base de un item sin frenar a los demás', async () => {
+    encontrarPreciosPorIds.mockResolvedValue(new Map([
+      ['id-1', productoImportacion({ id: 'id-1' })],
+      ['id-2', productoImportacion({ id: 'id-2' })],
+      ['id-3', productoImportacion({ id: 'id-3' })],
+    ]));
+    actualizarPrecioYOferta.mockImplementation(async (id: string) => {
+      if (id === 'id-1') return false;
+      if (id === 'id-2') throw new Error('caída de la base');
+      return true;
+    });
+
+    const r = await aplicarCambiosPrecio([
+      { producto_id: 'id-1', precio_nuevo: 10 },
+      { producto_id: 'id-2', precio_nuevo: 20 },
+      { producto_id: 'id-3', precio_nuevo: 30 },
+    ]);
+
+    expect(r.actualizados).toBe(1);
+    expect(r.fallidos).toEqual(expect.arrayContaining([
+      { producto_id: 'id-1', razon: 'No se pudo actualizar' },
+      { producto_id: 'id-2', razon: 'Error de base de datos' },
+    ]));
+    expect(r.fallidos).toHaveLength(2);
+  });
+
+  it('si el mismo producto viene dos veces, gana el último precio', async () => {
+    encontrarPreciosPorIds.mockResolvedValue(new Map([['id-1', productoImportacion({ id: 'id-1' })]]));
+    actualizarPrecioYOferta.mockResolvedValue(true);
+
+    await aplicarCambiosPrecio([
+      { producto_id: 'id-1', precio_nuevo: 10 },
+      { producto_id: 'id-1', precio_nuevo: 20 },
+    ]);
+
+    expect(actualizarPrecioYOferta).toHaveBeenCalledTimes(1);
+    expect(actualizarPrecioYOferta).toHaveBeenCalledWith('id-1', { precio: 20 });
+  });
+
+  it('no toca la base con una lista vacía', async () => {
+    const r = await aplicarCambiosPrecio([]);
+
+    expect(r).toEqual({ actualizados: 0, fallidos: [] });
+    expect(encontrarPreciosPorIds).not.toHaveBeenCalled();
+  });
+
+  it('rechaza más de 1000 items', async () => {
+    const items = Array.from({ length: 1001 }, (_, i) => ({ producto_id: `id-${i}`, precio_nuevo: 10 }));
+
+    await expect(aplicarCambiosPrecio(items)).rejects.toMatchObject({ code: 'ITEMS_LIMIT_EXCEEDED' });
+    expect(encontrarPreciosPorIds).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un precio en cero o negativo', async () => {
+    await expect(aplicarCambiosPrecio([{ producto_id: 'id-1', precio_nuevo: 0 }]))
+      .rejects.toMatchObject({ code: 'PRODUCTO_PRECIO_INVALIDO' });
+    await expect(aplicarCambiosPrecio([{ producto_id: 'id-1', precio_nuevo: -5 }]))
+      .rejects.toMatchObject({ code: 'PRODUCTO_PRECIO_INVALIDO' });
+    expect(actualizarPrecioYOferta).not.toHaveBeenCalled();
   });
 });

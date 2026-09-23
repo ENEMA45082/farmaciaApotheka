@@ -52,10 +52,9 @@ export const filtrosProductoQuerySchema = z.object({
   ordenar:           z.enum(['nombre_asc', 'nombre_desc', 'precio_asc', 'precio_desc']).optional(),
 });
 
-export const confirmarImportarPreciosSchema = z.object({
+export const aplicarCambiosPrecioSchema = z.object({
   items: z.array(z.object({
-    codigo_barras: z.string().min(1),
-    precio_nuevo:  z.number().nonnegative(),
-    nombre:        z.string().optional(),
-  })).max(500, 'Máximo 500 items por request'),
+    producto_id:  z.string().uuid(),
+    precio_nuevo: z.number().positive(),
+  })).max(1000, 'Máximo 1000 items por request'),
 });

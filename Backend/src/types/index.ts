@@ -572,34 +572,73 @@ export interface GuardarDireccionDTO {
   lng?: number | null;
 }
 
-export interface FilaPreviewPrecio {
-  codigo_barras: string;
+// --- Importación de precios por CSV ---
+
+export interface ProductoParaImportacion {
+  id: string;
   nombre: string;
-  precio_actual: number;
-  precio_nuevo: number;
+  codigo_barras: string | null;
+  precio: number;
+  en_oferta: boolean;
+  precio_oferta: number | null;
+  porcentaje_oferta: number | null;
+  es_2x1: boolean;
 }
 
-export interface FilaNoEncontrada {
+export interface CoincidenciaPrecio {
+  producto_id: string;
   codigo_barras: string;
   nombre: string;
-  precio_csv: number;
+  nombre_csv: string;
+  nombre_distinto: boolean;
+  precio_actual: number;
+  precio_nuevo: number;
+  en_oferta: boolean;
+  precio_oferta_actual: number | null;
+  precio_oferta_nuevo: number | null;
+}
+
+export type MotivoSinCoincidencia = 'sin_codigo' | 'no_esta_en_csv' | 'duplicado_en_csv';
+
+export interface ProductoSinCoincidencia {
+  producto_id: string;
+  codigo_barras: string | null;
+  nombre: string;
+  precio_actual: number;
+  en_oferta: boolean;
+  precio_oferta_actual: number | null;
+  motivo: MotivoSinCoincidencia;
+  // Solo con motivo 'duplicado_en_csv': los precios distintos que trae el CSV.
+  precios_csv?: number[];
+}
+
+export interface ResumenImportarPrecios {
+  filas_csv: number;
+  sin_codigo: number;
+  codigo_invalido: number;
+  precio_invalido: number;
+  mal_formadas: number;
+  duplicados_ambiguos: number;
+  con_cambio: number;
+  sin_cambio: number;
+  solo_en_csv: number;
+  sin_coincidencia: number;
 }
 
 export interface PreviewImportarPreciosResponse {
-  actualizaciones: FilaPreviewPrecio[];
-  no_encontrados: FilaNoEncontrada[];
+  resumen: ResumenImportarPrecios;
+  coincidencias: CoincidenciaPrecio[];
+  sin_coincidencia: ProductoSinCoincidencia[];
 }
 
-export interface ItemConfirmarPrecio {
-  codigo_barras: string;
+export interface ItemAplicarPrecio {
+  producto_id: string;
   precio_nuevo: number;
-  nombre?: string;
 }
 
-export interface ResultadoConfirmarPrecios {
+export interface ResultadoAplicarPrecios {
   actualizados: number;
-  creados: number;
-  fallidos: { codigo_barras: string; razon: string }[];
+  fallidos: { producto_id: string; razon: string }[];
 }
 
 import type { User } from '@supabase/supabase-js';
