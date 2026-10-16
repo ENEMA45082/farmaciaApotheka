@@ -60,7 +60,7 @@ img { max-width: 100%; display: block; }
 .home-hero-wrap { max-width: 1200px; margin: 0 auto; padding: 0 1rem; }
 .home-hero-wrap:has(.hero-carousel) { padding-top: 1.5rem; }
 
-.hero-carousel { position: relative; width: 100%; aspect-ratio: 8 / 3; max-height: 340px; overflow: hidden; background: #f0f0f0; border-radius: 16px; }
+.hero-carousel { position: relative; width: 100%; aspect-ratio: 8 / 3; overflow: hidden; background: #f0f0f0; border-radius: 16px; }
 .hero-carousel__slide { position: absolute; inset: 0; }
 .hero-carousel__slide a { display: block; width: 100%; height: 100%; }
 .hero-carousel__img { width: 100%; height: 100%; display: block; object-fit: cover; }
